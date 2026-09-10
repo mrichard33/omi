@@ -31,7 +31,13 @@ for this alone. **Node pin:** `>=22.19.0 <23` (`.nvmrc`; 24+ fails pretest).
 
 - **Install**: `pnpm install --frozen-lockfile` (postinstall rebuilds
   `better-sqlite3`, builds Windows-only OCR/audio/automation `.NET` helpers —
-  those steps no-op on Linux/macOS dev machines).
+  those steps no-op on Linux/macOS dev machines). The helpers target
+  `net10.0`, so they need the **.NET 10 SDK**
+  (`winget install Microsoft.DotNet.SDK.10`); without it postinstall only
+  prints a warning and the app later logs `binary not found` (OCR / PTT
+  muting / UI automation disabled). Build them manually with
+  `pnpm run build:ocr-helper`, `pnpm run build:audio-helper`, and
+  `powershell -File scripts/build-automation-helper.ps1`.
 - **Run**: `pnpm dev` (electron-vite dev server + Electron). Multiple parallel
   worktrees auto-isolate ports/profiles — see `docs/multi-worktree-dev.md`.
 - **Typecheck**: `pnpm typecheck` (`typecheck:node` + `typecheck:web`).

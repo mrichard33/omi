@@ -1,0 +1,6 @@
+{
+  "changes": [
+    "Focus, Tasks, Memory, Insights and Goals now work on the Free plan when you add your own Gemini API key in Settings — the background screen analysis finally sends it, instead of being rejected on every call.",
+    "When Omi's servers ask the app to slow down, live transcription now waits the time the server asks for before reconnecting, instead of retrying into repeated rejections."
+  ]
+}
