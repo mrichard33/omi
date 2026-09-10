@@ -45,6 +45,22 @@ describe('reconnectDelayJitteredMs', () => {
   it('stays capped at 32s(+jitter) even for a rate-limited drop', () => {
     expect(reconnectDelayJitteredMs(9, { rateLimited: true, rand: () => 0 })).toBe(32000)
   })
+
+  it('a server Retry-After is the floor — retrying earlier just spends a guaranteed 429', () => {
+    // Attempt 1 would be 5s; the edge said 45s.
+    expect(
+      reconnectDelayJitteredMs(1, { rateLimited: true, retryAfterMs: 45_000, rand: () => 0 })
+    ).toBe(45_000)
+    // A Retry-After shorter than the backoff never shortens it.
+    expect(
+      reconnectDelayJitteredMs(4, { rateLimited: true, retryAfterMs: 1_000, rand: () => 0 })
+    ).toBe(16_000)
+  })
+
+  it('caps an absurd Retry-After at 2 minutes and ignores a non-finite one', () => {
+    expect(reconnectDelayJitteredMs(1, { retryAfterMs: 86_400_000, rand: () => 0 })).toBe(120_000)
+    expect(reconnectDelayJitteredMs(1, { retryAfterMs: Number.NaN, rand: () => 0 })).toBe(2000)
+  })
 })
 
 describe('isRateLimitedDropError', () => {

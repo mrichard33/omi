@@ -1,4 +1,5 @@
 import { startTranscription, type TranscriptionHandle } from '../lib/transcriptionClient'
+import type { ListenError } from '../lib/omiListenClient'
 import { isConversationBoundary, onFinalizeRequest } from '../lib/liveConversation'
 import { transcriptWordCount } from '../lib/retentionRules'
 import { isInjectedLineId } from '../lib/voice/injectedTranscript'
@@ -297,13 +298,14 @@ export function startLiveMicSession(): LiveMicController {
             reconnectAttempt++
             setControllerHealth(controllerId, 'connecting')
             const rateLimited = isRateLimitedDropError((e as Error).message)
+            const { retryAfterMs } = e as ListenError
             captureLiveStore.setStatus('connecting')
             timers.push(
               setTimeout(
                 () => {
                   if (!cancelled) connect()
                 },
-                reconnectDelayJitteredMs(reconnectAttempt, { rateLimited })
+                reconnectDelayJitteredMs(reconnectAttempt, { rateLimited, retryAfterMs })
               )
             )
           } else {

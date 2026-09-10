@@ -240,7 +240,16 @@ export type ListenMessage =
   | { sessionId: string; kind: 'connected' }
   | { sessionId: string; kind: 'segments'; segments: BackendSegment[] }
   | { sessionId: string; kind: 'event'; event: ListenEvent }
-  | { sessionId: string; kind: 'error'; message: string; fatal: boolean }
+  | {
+      sessionId: string
+      kind: 'error'
+      message: string
+      fatal: boolean
+      /** HTTP status of a rejected handshake (e.g. 429 from the edge rate limit). */
+      status?: number
+      /** The rejection's Retry-After, in ms from now, when the server sent one. */
+      retryAfterMs?: number
+    }
   | { sessionId: string; kind: 'closed'; code: number; reason: string }
 
 // ───────────────────────── Capture window IPC ─────────────────────────

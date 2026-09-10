@@ -3,6 +3,9 @@ import type { BackendSegment, ListenEvent, ListenMode, ListenSource } from '../.
 import { getPreferences } from './preferences'
 import { getWindowsDeviceIdHash } from './clientDevice'
 
+/** A listen error, carrying the rejected handshake's status + Retry-After when known. */
+export type ListenError = Error & { status?: number; retryAfterMs?: number }
+
 export type OmiListenCallbacks = {
   /** Fires once both the v4/listen WS and the requested audio source are ready. */
   onConnected: () => void
@@ -77,7 +80,12 @@ export async function startOmiListen(
     } else if (msg.kind === 'event') {
       cb.onEvent(msg.event)
     } else if (msg.kind === 'error') {
-      cb.onError(new Error(msg.message), msg.fatal)
+      const err: ListenError = new Error(msg.message)
+      // A rejected handshake's status + Retry-After ride on the Error itself so they
+      // reach the reconnect loop through every layer that passes errors along.
+      if (msg.status !== undefined) err.status = msg.status
+      if (msg.retryAfterMs !== undefined) err.retryAfterMs = msg.retryAfterMs
+      cb.onError(err, msg.fatal)
     } else if (msg.kind === 'closed') {
       if (stopped) return
       if (readyNotified) {

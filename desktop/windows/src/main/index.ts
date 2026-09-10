@@ -108,6 +108,7 @@ import { registerScreenSynthHandlers } from './ipc/screenSynth'
 import { registerAiUserProfileHandlers } from './ipc/aiUserProfile'
 import { registerTaskHandlers } from './ipc/tasks'
 import { registerBackendDegradedIpc, resetBackendDegraded } from './observability/backendDegraded'
+import { registerRequestRateProbe } from './observability/requestRateProbe'
 import {
   resetPendingDeletes,
   scheduleBackgroundSync,
@@ -742,6 +743,8 @@ app.whenReady().then(async () => {
     }
     cb({ responseHeaders })
   })
+  // Name the routes spending the per-token edge budget that /v4/listen shares.
+  registerRequestRateProbe(session.defaultSession)
 
   // System-audio (loopback) capture for the Screen recording mode (which mixes
   // mic + system audio). getDisplayMedia() in the renderer routes here; we hand back a screen

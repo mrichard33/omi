@@ -168,6 +168,25 @@ describe('startLiveMicSession', () => {
     ctrl.stop()
   })
 
+  // The user-visible storm: a finalize restarts the socket, the edge 429s the
+  // handshake, and the old loop retried at 5s/5s/8s/16s regardless of what the
+  // server asked. With a Retry-After on the error, nothing reconnects before it.
+  it('after a 429 handshake rejection, waits out the Retry-After before reconnecting', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    const rejected = Object.assign(new Error('Unexpected server response: 429'), {
+      status: 429,
+      retryAfterMs: 40_000
+    })
+    latest().cb.onError(rejected)
+
+    await vi.advanceTimersByTimeAsync(39_999)
+    expect(calls).toHaveLength(1) // the old 5s floor reconnected (into another 429) at 5s
+    await vi.advanceTimersByTimeAsync(1)
+    expect(calls).toHaveLength(2)
+    ctrl.stop()
+  })
+
   it('does NOT reconnect on a quota/entitlement error — surfaces it immediately', async () => {
     const ctrl = startLiveMicSession()
     await vi.advanceTimersByTimeAsync(0)
