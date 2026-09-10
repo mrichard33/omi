@@ -1,5 +1,33 @@
-import { describe, it, expect } from 'vitest'
-import { RequestRateWindow, routeKey } from './requestRateProbe'
+import { describe, it, expect, vi } from 'vitest'
+import { RequestRateWindow, registerRequestRateProbe, routeKey } from './requestRateProbe'
+
+describe('registerRequestRateProbe', () => {
+  it('counts token-bearing requests but not CORS preflights (no Authorization)', () => {
+    process.env.OMI_REQUEST_RATE_WARN = '2'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let onCompleted: (d: { method: string; url: string }) => void = () => undefined
+    const session = {
+      webRequest: {
+        onCompleted: (_filter: unknown, fn: typeof onCompleted) => {
+          onCompleted = fn
+        }
+      }
+    } as unknown as Parameters<typeof registerRequestRateProbe>[0]
+    registerRequestRateProbe(session)
+
+    onCompleted({ method: 'OPTIONS', url: 'https://api.omi.me/v1/goals/all' })
+    onCompleted({ method: 'OPTIONS', url: 'https://api.omi.me/v3/memories' })
+    expect(warn).not.toHaveBeenCalled() // two preflights spend nothing
+    onCompleted({ method: 'GET', url: 'https://api.omi.me/v1/goals/all' })
+    onCompleted({ method: 'GET', url: 'https://api.omi.me/v3/memories?limit=5' })
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0][0])).toContain('2 api.omi.me requests')
+    expect(String(warn.mock.calls[0][0])).not.toContain('OPTIONS')
+
+    warn.mockRestore()
+    delete process.env.OMI_REQUEST_RATE_WARN
+  })
+})
 
 describe('routeKey', () => {
   it('keeps method + plain path words, collapses ids, drops the query', () => {

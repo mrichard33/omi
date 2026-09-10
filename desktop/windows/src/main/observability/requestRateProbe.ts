@@ -91,9 +91,13 @@ export function noteApiRequest(key: string): void {
 }
 
 /** Count every completed Chromium-stack request to api.omi.me. Uses onCompleted,
- *  which nothing else in the app registers (Electron keeps one listener per event). */
-export function registerRequestRateProbe(session: Session): void {
+ *  which nothing else in the app registers (Electron keeps one listener per event).
+ *  CORS preflights are skipped: an OPTIONS carries no Authorization header, so it
+ *  never spends the per-token budget — counting it (roughly one per renderer
+ *  request) would double the reported rate. */
+export function registerRequestRateProbe(session: Pick<Session, 'webRequest'>): void {
   session.webRequest.onCompleted({ urls: ['https://api.omi.me/*'] }, (details) => {
+    if (details.method === 'OPTIONS') return
     noteApiRequest(routeKey(details.method, details.url))
   })
 }
