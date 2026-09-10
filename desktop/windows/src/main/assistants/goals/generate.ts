@@ -21,6 +21,7 @@ import {
   type BackendSession
 } from '../core/session'
 import { notifyProactive } from '../core/notify'
+import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
 import { getAppSettings, setAppSettings } from '../../appSettings'
 import { fetchGoalContext, hasSufficientContext, type GoalContextData } from './context'
 import { GOAL_SYSTEM_PROMPT, GOAL_SUGGESTION_SCHEMA, fillPrompt } from './prompt'
@@ -34,18 +35,6 @@ const RETRY_DELAYS_MS = [2_000, 8_000]
 
 /** The assistant id under which the "New Goal" toast is throttled/logged. */
 export const GOALS_ASSISTANT_ID = 'goals'
-
-/** Carries typed response metadata only — never a response body (it can echo the prompt, which
- *  carries the user's memories/conversations). */
-export class GeminiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(`gemini proxy HTTP ${status}`)
-    this.name = 'GeminiHttpError'
-  }
-}
 
 function isTransient(e: unknown): boolean {
   return e instanceof GeminiHttpError && e.retryable
@@ -128,8 +117,7 @@ async function attempt(
           signal
         }
       )
-      if (!res.ok)
-        throw new GeminiHttpError(res.status, res.headers?.get?.('x-omi-retryable') === 'true')
+      if (!res.ok) throw await geminiHttpErrorFrom(res)
       return extractText(await res.json())
     },
     external

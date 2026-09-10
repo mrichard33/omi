@@ -34,6 +34,7 @@
 //  - only toolCalls[0] is consumed by the caller; parallel calls are its concern.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
+import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
 import type { GeminiTool, ToolCall } from '../insight/models'
 
 /** Task-loop model pair. Windows surfaces no tier, so both are Flash and dedupe
@@ -47,17 +48,6 @@ export const TASK_THINKING_BUDGET = 1024
 export const TASK_REQUEST_TIMEOUT_MS = 300_000
 /** 3 attempts per model round. Mac's backoff, exactly: 2s then 8s. */
 const RETRY_DELAYS_MS = [2_000, 8_000]
-
-/** Carries typed response metadata only — never a body (which can echo the prompt/frame). */
-export class GeminiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(`gemini proxy HTTP ${status}`)
-    this.name = 'GeminiHttpError'
-  }
-}
 
 /** Replay only when the backend explicitly marks the response retryable. */
 function isTransient(e: unknown): boolean {
@@ -208,8 +198,7 @@ async function callModel(model: string, opts: TurnOpts): Promise<ToolTurn> {
           signal
         }
       )
-      if (!res.ok)
-        throw new GeminiHttpError(res.status, res.headers?.get?.('x-omi-retryable') === 'true')
+      if (!res.ok) throw await geminiHttpErrorFrom(res)
       return parseTurn(await res.json())
     },
     opts.external

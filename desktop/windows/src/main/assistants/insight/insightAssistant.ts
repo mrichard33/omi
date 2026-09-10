@@ -15,6 +15,7 @@ import { getInsightSettings } from '../../insight/state'
 import { notificationsActive, notifyProactive } from '../core/notify'
 import { readFrameImageBase64 } from '../core/frameImage'
 import { getBackendSession, getSessionEpoch } from '../core/session'
+import { describeAssistantError } from '../core/geminiProxy'
 import { runReadonlySelect, rewindFramesByIds } from '../../ipc/db'
 import type { AssistantResult, ProactiveAssistant } from '../core/coordinator'
 import type { RewindFrame } from '../../../shared/types'
@@ -134,7 +135,7 @@ export class InsightAssistant implements ProactiveAssistant {
       })
     } catch (e) {
       // Errors are just logged (no backoff — Mac); the next interval retries.
-      console.warn('[insight] pipeline error:', e instanceof Error ? e.name : 'Error')
+      console.warn('[insight] pipeline error:', describeAssistantError(e))
       return
     }
 

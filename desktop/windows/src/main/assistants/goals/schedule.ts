@@ -14,6 +14,7 @@
 // generateNow cadence); create stamps the day so the auto timer won't also fire.
 import { getAppSettings, setAppSettings } from '../../appSettings'
 import { getBackendSession } from '../core/session'
+import { describeAssistantError } from '../core/geminiProxy'
 import { activeGoalCount, fetchGoalContext, fetchGoals } from './context'
 import {
   buildCandidateWith,
@@ -115,7 +116,7 @@ export async function runGoalGenerationIfDue(): Promise<void> {
     )
     if (result.status === 'created') markGeneratedToday()
   } catch (e) {
-    console.warn('[goals] auto generation failed:', e instanceof Error ? e.name : 'Error')
+    console.warn('[goals] auto generation failed:', describeAssistantError(e))
   } finally {
     isGenerating = false
   }
@@ -136,7 +137,7 @@ export async function generateGoalCandidateNow(): Promise<CandidateResult> {
   try {
     return await generateGoalCandidate()
   } catch (error) {
-    console.warn('[goals] manual generation failed:', error instanceof Error ? error.name : 'Error')
+    console.warn('[goals] manual generation failed:', describeAssistantError(error))
     return { status: 'skipped', reason: 'invalid_suggestion' }
   }
 }

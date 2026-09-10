@@ -20,6 +20,7 @@ import { mayAnalyzeFrame } from '../core/privacy'
 import { readFrameImageBase64 } from '../core/frameImage'
 import { notifyProactive } from '../core/notify'
 import { getBackendSession, getSessionEpoch } from '../core/session'
+import { describeAssistantError } from '../core/geminiProxy'
 import type { AssistantResult, ProactiveAssistant } from '../core/coordinator'
 import type { FocusSessionStatus, RewindFrame } from '../../../shared/types'
 import { analyzeScreenshot } from './gemini'
@@ -190,7 +191,7 @@ export class FocusAssistant implements ProactiveAssistant {
       this.backoffEndsAt = Date.now() + errorBackoffMs(this.consecutiveErrors)
       console.warn(
         `[focus] analysis error (consecutive=${this.consecutiveErrors}):`,
-        e instanceof Error ? e.name : 'Error'
+        describeAssistantError(e)
       )
       return
     }

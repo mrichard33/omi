@@ -12,6 +12,7 @@
 // relayed session for the bearer token, and a timeout + session-abort wrapper.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
+import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
 import { FOCUS_RESPONSE_SCHEMA, parseScreenAnalysis, type ScreenAnalysis } from './models'
 
 // Focus stays on the PT model: small payloads, and the lane earns its cost
@@ -20,18 +21,6 @@ export const MODEL = 'gemini-2.5-flash'
 const REQUEST_TIMEOUT_MS = 30_000
 /** 3 attempts total. Mac's backoff, exactly: 2s then 8s. */
 const RETRY_DELAYS_MS = [2_000, 8_000]
-
-/** Carries typed response metadata only — never a response body (it can echo the prompt,
- *  which carries the user's profile and window contents). */
-export class GeminiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(`gemini proxy HTTP ${status}`)
-    this.name = 'GeminiHttpError'
-  }
-}
 
 /** Replay only when the backend explicitly marks the response retryable. */
 function isTransient(e: unknown): boolean {
@@ -147,8 +136,7 @@ async function attempt(
           signal
         }
       )
-      if (!res.ok)
-        throw new GeminiHttpError(res.status, res.headers?.get?.('x-omi-retryable') === 'true')
+      if (!res.ok) throw await geminiHttpErrorFrom(res)
       return extractText(await res.json())
     },
     external

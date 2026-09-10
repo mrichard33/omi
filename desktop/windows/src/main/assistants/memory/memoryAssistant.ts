@@ -15,6 +15,7 @@ import { getAppSettings } from '../../appSettings'
 import { mayAnalyzeFrame } from '../core/privacy'
 import { readFrameImageBase64 } from '../core/frameImage'
 import { getBackendSession, getSessionEpoch } from '../core/session'
+import { describeAssistantError } from '../core/geminiProxy'
 import { recentMemories } from '../../ipc/db'
 import type { AssistantResult, ProactiveAssistant } from '../core/coordinator'
 import type { RewindFrame } from '../../../shared/types'
@@ -125,7 +126,7 @@ export class MemoryAssistant implements ProactiveAssistant {
       result = await extractMemory(session, MEMORY_SYSTEM_PROMPT, userPrompt, imageBase64)
     } catch (e) {
       // Errors are just logged (no backoff — the next interval retries).
-      console.warn('[memory] extraction error:', e instanceof Error ? e.name : 'Error')
+      console.warn('[memory] extraction error:', describeAssistantError(e))
       return
     }
 

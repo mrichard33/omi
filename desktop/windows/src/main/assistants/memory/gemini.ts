@@ -7,6 +7,7 @@
 // API key lives on the server and never touches the device.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
+import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
 import {
   MEMORY_RESPONSE_SCHEMA,
   parseMemoryExtraction,
@@ -20,18 +21,6 @@ export const MODEL = 'gemini-2.5-flash-lite'
 const REQUEST_TIMEOUT_MS = 30_000
 /** 3 attempts total. Mac's backoff, exactly: 2s then 8s. */
 const RETRY_DELAYS_MS = [2_000, 8_000]
-
-/** Carries typed response metadata only — never a response body (it can echo the prompt,
- *  which carries the screen contents). */
-export class GeminiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(`gemini proxy HTTP ${status}`)
-    this.name = 'GeminiHttpError'
-  }
-}
 
 /** Replay only when the backend explicitly marks the response retryable. */
 function isTransient(e: unknown): boolean {
@@ -142,8 +131,7 @@ async function attempt(
           signal
         }
       )
-      if (!res.ok)
-        throw new GeminiHttpError(res.status, res.headers?.get?.('x-omi-retryable') === 'true')
+      if (!res.ok) throw await geminiHttpErrorFrom(res)
       return extractText(await res.json())
     },
     external

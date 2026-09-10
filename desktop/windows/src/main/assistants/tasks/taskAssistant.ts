@@ -27,6 +27,7 @@ import { getAppSettings } from '../../appSettings'
 import { mayAnalyzeFrame } from '../core/privacy'
 import { readFrameImageBase64 } from '../core/frameImage'
 import { getBackendSession, getSessionEpoch } from '../core/session'
+import { describeAssistantError } from '../core/geminiProxy'
 import { intervalElapsed } from '../insight/gating'
 import type { AssistantResult, ProactiveAssistant } from '../core/coordinator'
 import type { RewindFrame } from '../../../shared/types'
@@ -133,7 +134,9 @@ export class TaskAssistant implements ProactiveAssistant {
   async analyze(frame: RewindFrame): Promise<AssistantResult | null> {
     this.latestFrame = frame
     this.latestFrameApp = frame.app
-    if (!shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)) {
+    if (
+      !shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)
+    ) {
       return null
     }
     await this.runPipeline(frame)
@@ -163,7 +166,9 @@ export class TaskAssistant implements ProactiveAssistant {
 
     const frame = departingFrame ?? this.latestFrame
     if (!frame) return
-    if (!shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)) {
+    if (
+      !shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)
+    ) {
       return
     }
     await this.runPipeline(frame)
@@ -231,8 +236,8 @@ export class TaskAssistant implements ProactiveAssistant {
         })
       } catch (e) {
         // Transport already retried + ran the fallback model; a throw here means no
-        // tasks this cycle. Log the name only (never the body) and move on.
-        console.warn('[tasks] extraction error:', e instanceof Error ? e.name : 'Error')
+        // tasks this cycle. Log status/code only (never the body) and move on.
+        console.warn('[tasks] extraction error:', describeAssistantError(e))
         return
       }
 
@@ -277,7 +282,9 @@ export class TaskAssistant implements ProactiveAssistant {
       console.log('[tasks] analyzeNow skipped — privacy gate')
       return
     }
-    if (!shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)) {
+    if (
+      !shouldExtractForApp(frame.app, frame.windowTitle ?? '', getAppSettings().taskExcludedApps)
+    ) {
       console.log('[tasks] analyzeNow skipped — not a whitelisted app/window')
       return
     }

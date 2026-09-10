@@ -20,6 +20,7 @@
 //  - only toolCalls[0] is consumed; parallel calls after the first are dropped.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
+import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
 import {
   PHASE1_TOOL,
   PHASE2_TOOL,
@@ -42,17 +43,6 @@ const REQUEST_TIMEOUT_MS = 120_000
 const RETRY_DELAYS_MS = [2_000, 8_000]
 const PHASE1_MAX_ITERS = 7
 const PHASE2_MAX_ITERS = 5
-
-/** Carries typed response metadata only — never a body (which can echo the prompt/SQL). */
-export class GeminiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(`gemini proxy HTTP ${status}`)
-    this.name = 'GeminiHttpError'
-  }
-}
 
 /** Replay only when the backend explicitly marks the response retryable. */
 function isTransient(e: unknown): boolean {
@@ -208,8 +198,7 @@ async function callModel(model: string, opts: TurnOpts): Promise<ToolTurn> {
           signal
         }
       )
-      if (!res.ok)
-        throw new GeminiHttpError(res.status, res.headers?.get?.('x-omi-retryable') === 'true')
+      if (!res.ok) throw await geminiHttpErrorFrom(res)
       return parseTurn(await res.json())
     },
     opts.external

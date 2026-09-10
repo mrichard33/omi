@@ -11,6 +11,7 @@ vi.mock('electron', () => ({ net: { fetch: h.fetch } }))
 vi.mock('../core/session', () => ({ getAbortSignal: () => h.abortSignal }))
 
 import { analyzeScreenshot } from './gemini'
+import { describeAssistantError } from '../core/geminiProxy'
 import type { BackendSession } from '../core/session'
 
 const session = (): BackendSession => ({ apiBase: 'a', desktopApiBase: 'd', token: 't' })
@@ -62,6 +63,27 @@ describe('analyzeScreenshot — retry classification', () => {
     await expect(analyzeScreenshot(session(), 'sys', 'prompt', 'BASE64')).rejects.toMatchObject({
       name: 'AbortError'
     })
+    expect(h.fetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('analyzeScreenshot — proxy rejection', () => {
+  // The Free-plan failure this app shipped with: every call 402'd, and main.log
+  // showed only "GeminiHttpError". The thrown error must carry what the log needs.
+  it('surfaces a plan-gate 402 with its status and enum code, and does not retry it', async () => {
+    h.fetch.mockResolvedValue({
+      ok: false,
+      status: 402,
+      headers: { get: () => null },
+      json: async () => ({
+        detail: { error: 'plan_gated', plan_type: 'basic', reason: 'basic_not_entitled' }
+      })
+    })
+
+    const err = await analyzeScreenshot(session(), 'sys', 'prompt', 'BASE64').catch((e) => e)
+    expect(describeAssistantError(err)).toBe(
+      'GeminiHttpError status=402 code=plan_gated/basic_not_entitled retryable=false'
+    )
     expect(h.fetch).toHaveBeenCalledTimes(1)
   })
 })

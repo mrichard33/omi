@@ -9,7 +9,8 @@ const h = vi.hoisted(() => ({ fetch: vi.fn() }))
 vi.mock('electron', () => ({ net: { fetch: h.fetch } }))
 vi.mock('../core/session', () => ({ getAbortSignal: () => undefined }))
 
-import { sendInitialTurn, sendToolResponseTurn, GeminiHttpError, TASK_MODEL } from './geminiWire'
+import { sendInitialTurn, sendToolResponseTurn, TASK_MODEL } from './geminiWire'
+import { GeminiHttpError } from '../core/geminiProxy'
 import type { BackendSession } from '../core/session'
 import type { GeminiTool } from '../insight/models'
 
