@@ -1,14 +1,76 @@
-// The one typed error every Gemini-proxy caller (focus, tasks, memory, insight,
-// goals) throws on a non-2xx, plus the one formatter their catch sites log with.
+// What every Gemini-proxy caller (focus, tasks, memory, insight, goals) shares:
+// the request headers, the typed error thrown on a non-2xx, and the one formatter
+// their catch sites log with.
 //
-// Why shared: each analyzer used to carry its own copy of this class, and every
-// catch site logged only `e.name`, so a paid-plan 429, a plan-gate 402 and a
-// server 503 all read as a bare "GeminiHttpError" in main.log — undiagnosable.
-// One class + one formatter means a new caller can't reintroduce that.
+// Why shared: each analyzer used to build its own headers and carry its own copy
+// of the error class. None attached the user's BYOK Gemini key, so a Free-plan
+// user who had enrolled one was still 402 `plan_gated` on every call; and every
+// catch site logged only `e.name`, so that 402, a 429 and a 503 all read as a
+// bare "GeminiHttpError" in main.log. One module means a new caller can't
+// reintroduce either.
 //
 // LOGGING SECURITY: a proxy error body can echo the prompt (the user's profile and
 // window contents), so the body is NEVER kept. Only a short, enum-shaped code is
 // lifted from it (see readErrorCode) — the same tokens the backend already logs.
+// BYOK key values are never logged.
+import { ByokKeyStore } from '../../agentKernel/byokStore'
+import {
+  withByokHeaders,
+  type ByokEnrolledFingerprints,
+  type ByokKeys,
+  type ByokProvider
+} from '../../../shared/byok'
+
+/**
+ * The BYOK keys to send on a Gemini-proxy request, or `{}` to send none.
+ *
+ * The proxy funds a request from the user's own key only when it carries a
+ * validated `X-BYOK-Gemini` (backend `_enforce_managed_plan_gate`). And once a
+ * user is enrolled, the backend 403s any request whose BYOK headers omit or
+ * mismatch ANY enrolled provider (`utils/byok.py::_validated_byok_keys`). So it is
+ * all-or-none: send every enrolled provider's key, and only when Gemini is among
+ * them and each current key still matches its enrolled fingerprint. Otherwise send
+ * nothing — the request takes the ordinary Omi-funded path, as it always did.
+ */
+export function selectGeminiByokKeys(
+  keys: ByokKeys,
+  enrolled: ByokEnrolledFingerprints,
+  validated: readonly ByokProvider[]
+): ByokKeys {
+  if (!validated.includes('gemini')) return {}
+  const enrolledProviders = Object.keys(enrolled) as ByokProvider[]
+  if (!enrolledProviders.every((p) => validated.includes(p))) return {}
+  const out: ByokKeys = {}
+  for (const p of enrolledProviders) out[p] = keys[p]
+  return out
+}
+
+// Lazy so this module stays import-pure (ByokKeyStore's default path needs
+// app.getPath('userData'), only ready after the app is).
+let byokStore: ByokKeyStore | null = null
+
+function geminiByokKeys(): ByokKeys {
+  try {
+    byokStore ??= new ByokKeyStore()
+    return selectGeminiByokKeys(
+      byokStore.getAllKeys(),
+      byokStore.getEnrolledFingerprints(),
+      byokStore.validatedProviders()
+    )
+  } catch {
+    // An unavailable key store must never fail the analyzer — fall back to the
+    // Omi-funded path (no BYOK headers).
+    return {}
+  }
+}
+
+/** Headers for one Gemini-proxy POST. BYOK keys are read fresh per request. */
+export function geminiProxyHeaders(token: string): Record<string, string> {
+  return withByokHeaders(
+    { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    geminiByokKeys()
+  )
+}
 
 /** Enum-shaped tokens only: `plan_gated`, `basic_not_entitled`, `RESOURCE_EXHAUSTED`. */
 const CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,47}$/

@@ -20,7 +20,7 @@
 //  - only toolCalls[0] is consumed; parallel calls after the first are dropped.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
-import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
+import { GeminiHttpError, geminiHttpErrorFrom, geminiProxyHeaders } from '../core/geminiProxy'
 import {
   PHASE1_TOOL,
   PHASE2_TOOL,
@@ -190,10 +190,7 @@ async function callModel(model: string, opts: TurnOpts): Promise<ToolTurn> {
         `${opts.session.desktopApiBase}/v1/proxy/gemini/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${opts.session.token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: geminiProxyHeaders(opts.session.token),
           body: JSON.stringify(buildBody(opts)),
           signal
         }

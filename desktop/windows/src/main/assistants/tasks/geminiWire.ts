@@ -34,7 +34,7 @@
 //  - only toolCalls[0] is consumed by the caller; parallel calls are its concern.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
-import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
+import { GeminiHttpError, geminiHttpErrorFrom, geminiProxyHeaders } from '../core/geminiProxy'
 import type { GeminiTool, ToolCall } from '../insight/models'
 
 /** Task-loop model pair. Windows surfaces no tier, so both are Flash and dedupe
@@ -190,10 +190,7 @@ async function callModel(model: string, opts: TurnOpts): Promise<ToolTurn> {
         `${opts.session.desktopApiBase}/v1/proxy/gemini/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${opts.session.token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: geminiProxyHeaders(opts.session.token),
           body: JSON.stringify(buildBody(opts)),
           signal
         }

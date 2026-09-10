@@ -7,7 +7,7 @@
 // API key lives on the server and never touches the device.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
-import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
+import { GeminiHttpError, geminiHttpErrorFrom, geminiProxyHeaders } from '../core/geminiProxy'
 import {
   MEMORY_RESPONSE_SCHEMA,
   parseMemoryExtraction,
@@ -103,10 +103,7 @@ async function attempt(
         `${session.desktopApiBase}/v1/proxy/gemini/models/${MODEL}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: geminiProxyHeaders(session.token),
           body: JSON.stringify({
             contents: [
               {

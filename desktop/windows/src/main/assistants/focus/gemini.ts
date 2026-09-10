@@ -12,7 +12,7 @@
 // relayed session for the bearer token, and a timeout + session-abort wrapper.
 import { net } from 'electron'
 import { getAbortSignal, type BackendSession } from '../core/session'
-import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
+import { GeminiHttpError, geminiHttpErrorFrom, geminiProxyHeaders } from '../core/geminiProxy'
 import { FOCUS_RESPONSE_SCHEMA, parseScreenAnalysis, type ScreenAnalysis } from './models'
 
 // Focus stays on the PT model: small payloads, and the lane earns its cost
@@ -107,10 +107,7 @@ async function attempt(
         `${session.desktopApiBase}/v1/proxy/gemini/models/${MODEL}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: geminiProxyHeaders(session.token),
           body: JSON.stringify({
             contents: [
               {

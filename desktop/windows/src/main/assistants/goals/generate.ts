@@ -6,7 +6,8 @@
 // Rust proxy, `responseMimeType: application/json` + `responseSchema`, [2s,8s]
 // transient retry, session-abort). insight/gemini.ts is a multi-turn TOOL loop —
 // the wrong shape for a single structured completion — so we reuse focus's
-// single-shot template rather than that one. No new Gemini client, no BYOK key.
+// single-shot template rather than that one. No new Gemini client; headers (incl.
+// an enrolled BYOK Gemini key) come from core/geminiProxy like every analyzer.
 //
 // TASK LINKING: Mac links `linked_task_ids` to the new goal by setting each
 // action item's `goalId`. The live backend has NO such field (UpdateActionItem
@@ -21,7 +22,7 @@ import {
   type BackendSession
 } from '../core/session'
 import { notifyProactive } from '../core/notify'
-import { GeminiHttpError, geminiHttpErrorFrom } from '../core/geminiProxy'
+import { GeminiHttpError, geminiHttpErrorFrom, geminiProxyHeaders } from '../core/geminiProxy'
 import { getAppSettings, setAppSettings } from '../../appSettings'
 import { fetchGoalContext, hasSufficientContext, type GoalContextData } from './context'
 import { GOAL_SYSTEM_PROMPT, GOAL_SUGGESTION_SCHEMA, fillPrompt } from './prompt'
@@ -102,10 +103,7 @@ async function attempt(
         `${session.desktopApiBase}/v1/proxy/gemini/models/${MODEL}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.token}`,
-            'Content-Type': 'application/json'
-          },
+          headers: geminiProxyHeaders(session.token),
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             systemInstruction: { parts: [{ text: GOAL_SYSTEM_PROMPT }] },
