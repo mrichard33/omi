@@ -1,7 +1,8 @@
 // Pure helpers for the always-on mic session's reconnect + from-segments rescue
-// (see liveMicSession). Kept side-effect-free so the backoff schedule and the
+// (see liveMicSession; meetingSession reuses the reconnect half for its system
+// lane). Kept side-effect-free so the backoff schedule and the
 // segment mapping are exhaustively unit-testable in node.
-import { isQuotaExhaustedMessage } from '../lib/transcriptionClient'
+import { classifyTranscriptionStop } from '../../../shared/transcriptionStop'
 import type { BackendSegment, SyncSegment } from '../../../shared/types'
 
 // Reconnect budget. A dropped /v4/listen resumes the SAME conversation (via
@@ -57,21 +58,26 @@ const PERMANENT_SOURCE_ERROR_NAMES = new Set([
 ])
 
 /** Whether a transcription error is worth reconnecting for. Quota/entitlement
- *  exhaustion (1008 / trial_expired), a missing sign-in, and a permanent
- *  mic/loopback source failure are terminal — reconnecting just re-hits the
- *  same wall, so surface them at once instead of burning the whole backoff
- *  budget (~55s) first. Everything else (network drops, timeouts, transient
- *  server closes) is retryable. `name` is the source error's DOMException name
- *  when available (omitted for backend/network drops, which have none). */
+ *  exhaustion (trial_expired), a spent daily voice-transcription budget, a
+ *  missing sign-in, and a permanent mic/loopback source failure are terminal —
+ *  reconnecting just re-hits the same wall, so surface them at once instead of
+ *  burning the whole backoff budget (~55s) first. Everything else (network
+ *  drops, timeouts, idle closes, transient server closes) is retryable. `name`
+ *  is the source error's DOMException name when available (omitted for
+ *  backend/network drops, which have none). */
 export function isRetryableDropError(message: string, name?: string): boolean {
   if (name && PERMANENT_SOURCE_ERROR_NAMES.has(name)) return false
-  return !isQuotaExhaustedMessage(message) && !/not signed in|requires sign-in/i.test(message)
+  const kind = classifyTranscriptionStop(message)
+  if (kind === 'quota' || kind === 'daily_limit') return false
+  return !/not signed in|requires sign-in/i.test(message)
 }
 
 /** Whether a retryable drop was a backend rate-limit. The ws handshake surfaces a
- *  429 rejection as "Unexpected server response: 429", so match a standalone 429. */
+ *  429 rejection as "Unexpected server response: 429", so match a standalone 429;
+ *  transcribe-stream instead accepts the socket and closes it with 1008 "Rate
+ *  limit exceeded. Retry in Ns." (backend/routers/chat.py). */
 export function isRateLimitedDropError(message: string): boolean {
-  return /\b429\b/.test(message)
+  return /\b429\b|rate limit exceeded/i.test(message)
 }
 
 /**
