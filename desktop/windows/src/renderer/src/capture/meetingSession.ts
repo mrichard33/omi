@@ -24,6 +24,7 @@
 // conversation, via either the continuous session or this meeting's mic lane), so
 // saving mic lines here too would duplicate it.
 import { startTranscription, type TranscriptionHandle } from '../lib/transcriptionClient'
+import { classifyTranscriptionStop } from '../../../shared/transcriptionStop'
 import {
   isRateLimitedDropError,
   isRetryableDropError,
@@ -67,6 +68,9 @@ export async function startMeetingSession(args: {
   let systemHandle: TranscriptionHandle | null = null
   let systemReconnectAttempt = 0
   let systemReconnectTimer: ReturnType<typeof setTimeout> | null = null
+  // When the current system-lane socket connected (0 = none); see the per-session
+  // budget cut in onSystemLaneError.
+  let systemConnectedAt = 0
   // Cancels an in-flight reconnect startup on stop(), so a late socket/loopback
   // doesn't linger for the connect timeout after the meeting ended.
   const reconnectAbort = new AbortController()
@@ -111,17 +115,32 @@ export async function startMeetingSession(args: {
       }
       systemHandle = null
     }
-    if (
+    // PER-SESSION BUDGET CUT: a backend without the budget-slice fix (#1 in this
+    // fork — FC-stream-budget-slice-treated-as-daily-cap), including Omi's hosted
+    // api.omi.me, closes every transcribe-stream session after ~120s of audio
+    // with "Daily transcription budget exhausted". Audio sent never exceeds wall
+    // time, so a lane that lived ≥100s may have hit that per-session cut: reconnect
+    // at once, outside the attempt budget. A genuinely spent daily budget is
+    // refused within ~1s of the next connect (connect-time reservation), so that
+    // short-lived lane falls through to the terminal daily-limit stop below.
+    // Remove once every serving backend extends reservations in slices.
+    const livedMs = systemConnectedAt ? Date.now() - systemConnectedAt : 0
+    systemConnectedAt = 0
+    let delayMs: number
+    if (classifyTranscriptionStop(e.message) === 'daily_limit' && livedMs >= 100_000) {
+      delayMs = 250
+    } else if (
       !isRetryableDropError(e.message, e.name) ||
       systemReconnectAttempt >= MAX_RECONNECT_ATTEMPTS
     ) {
       args.onError(`system: ${e.message}`)
       return
+    } else {
+      systemReconnectAttempt++
+      delayMs = reconnectDelayJitteredMs(systemReconnectAttempt, {
+        rateLimited: isRateLimitedDropError(e.message)
+      })
     }
-    systemReconnectAttempt++
-    const delayMs = reconnectDelayJitteredMs(systemReconnectAttempt, {
-      rateLimited: isRateLimitedDropError(e.message)
-    })
     console.warn(`[meeting-session] system lane dropped, reconnecting in ${delayMs}ms:`, e.message)
     systemReconnectTimer = setTimeout(() => {
       systemReconnectTimer = null
@@ -155,7 +174,9 @@ export async function startMeetingSession(args: {
           systemReconnectAttempt = 0 // a delivered segment proves the lane is healthy
         },
         onInterim: () => {},
-        onBackend: () => {},
+        onBackend: () => {
+          if (source === 'system') systemConnectedAt = Date.now()
+        },
         onError: (e) => {
           console.warn(`[meeting-session] ${source} lane error:`, e.message)
           if (source === 'system') onSystemLaneError(e)

@@ -7,6 +7,7 @@ const stops: Record<'mic' | 'system', ReturnType<typeof vi.fn>> = {
 }
 type LaneCb = {
   onLine: (l: { id: string; text: string; speaker?: string }) => void
+  onBackend: (backend: 'omi') => void
   onError: (e: Error) => void
 }
 const laneCbs: Partial<Record<'mic' | 'system', LaneCb>> = {}
@@ -34,6 +35,8 @@ vi.mock('../lib/transcriptionClient', () => ({
 
 const IDLE_CLOSE =
   'Omi transcription stopped: Omi transcribe-stream closed (1008) Idle timeout: no audio for 60s'
+const DAILY_LIMIT_CLOSE =
+  "Omi transcription stopped: Omi's daily voice transcription limit is used up — it frees up again over a rolling 24 hours"
 // Longer than any single jittered backoff step (32s cap + 1s jitter).
 const PAST_BACKOFF_MS = 34_000
 
@@ -282,6 +285,40 @@ describe('startMeetingSession', () => {
 
     expect(onError).toHaveBeenCalledOnce()
     expect(onError.mock.calls[0][0]).toMatch(/^system: .*daily voice transcription limit/)
+    expect(laneStarts.system).toBe(1)
+    await session.stop()
+  })
+
+  it('reconnects after the per-session budget cut on a long-lived lane', async () => {
+    // A backend without the budget-slice fix (Omi's hosted api.omi.me) closes every
+    // transcribe-stream session after ~120s of audio with "Daily transcription
+    // budget exhausted", even with daily budget left. A lane that lived that long
+    // reopens at once instead of ending the meeting capture.
+    vi.useFakeTimers()
+    const onError = vi.fn()
+    const session = await startMeetingSession({ appName: 'Google Meet', onError })
+    laneCbs.system?.onBackend('omi')
+    await vi.advanceTimersByTimeAsync(121_000)
+
+    laneCbs.system?.onError(new Error(DAILY_LIMIT_CLOSE))
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(laneStarts.system).toBe(2)
+    await session.stop()
+  })
+
+  it('still stops on a budget close right after connect (daily budget genuinely spent)', async () => {
+    vi.useFakeTimers()
+    const onError = vi.fn()
+    const session = await startMeetingSession({ appName: 'Google Meet', onError })
+    laneCbs.system?.onBackend('omi')
+    await vi.advanceTimersByTimeAsync(800)
+
+    laneCbs.system?.onError(new Error(DAILY_LIMIT_CLOSE))
+    await vi.advanceTimersByTimeAsync(PAST_BACKOFF_MS)
+
+    expect(onError).toHaveBeenCalledOnce()
     expect(laneStarts.system).toBe(1)
     await session.stop()
   })

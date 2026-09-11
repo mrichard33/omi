@@ -1,0 +1,5 @@
+{
+  "changes": [
+    "Meeting capture keeps transcribing the other side of long calls. When Omi's server ends a call-audio session after about two minutes of speech, Omi reconnects on its own instead of stopping with a \"daily limit\" notice."
+  ]
+}
