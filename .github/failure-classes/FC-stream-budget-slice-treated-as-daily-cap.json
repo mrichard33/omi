@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "FC-stream-budget-slice-treated-as-daily-cap",
+  "violated_contract": "A /v2/voice-message/transcribe-stream session may only be closed for budget when the uid's rolling daily voice_duration budget is actually exhausted. The connect-time reservation (MAX_SESSION_DURATION_S) is an admission slice, not the session's allowance: capping a stream at one slice cut every long-lived client (Windows meeting and screen system-audio lanes) after ~2 minutes of audio with a false 'Daily transcription budget exhausted' 1008 close.",
+  "canonical_prevention": "When a stream's cumulative audio outgrows its reservation, atomically reserve another slice with try_reserve_session_budget (Lua force=2) and close only when that reservation is denied; settle the cumulative reservation against accepted audio at the end. Pin with a transcribe-stream test that streams past one slice with budget left and asserts the connection stays open and settles the cumulative reservation.",
+  "canonical_prevention_artifact": [
+    "backend/tests/unit/test_desktop_transcribe.py"
+  ],
+  "evidence_prs": [],
+  "scope_hints": [
+    "backend/routers/chat.py",
+    "backend/utils/voice_duration_limiter.py"
+  ],
+  "status": "open"
+}
