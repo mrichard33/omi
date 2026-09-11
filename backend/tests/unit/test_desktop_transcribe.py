@@ -2293,8 +2293,13 @@ class TestWsMidSessionBudgetEnforcement:
                 mock_dg_socket.finish = MagicMock()
                 return mock_dg_socket
 
-            # User has only 500ms of budget remaining
-            with patch.object(module, 'try_reserve_session_budget', return_value=(True, 500, 7200000, 0)):
+            # User has only 500ms of budget remaining: the connect slice takes all of
+            # it, so the mid-session extension is denied (limiter returns allowed=0).
+            with patch.object(
+                module,
+                'try_reserve_session_budget',
+                side_effect=[(True, 500, 7200000, 0), (False, 0, 7200000, 0)],
+            ):
                 with patch.object(
                     module, 'get_stt_service_for_language', return_value=(module.STTService.parakeet, 'en', 'parakeet')
                 ):
@@ -2355,8 +2360,12 @@ class TestWsMidSessionBudgetEnforcement:
                 mock_dg_socket.finish = MagicMock()
                 return mock_dg_socket
 
-            # User has 1500ms of budget remaining
-            with patch.object(module, 'try_reserve_session_budget', return_value=(True, 1500, 7200000, 0)):
+            # User has 1500ms of budget remaining: the extension after frame 1 is denied.
+            with patch.object(
+                module,
+                'try_reserve_session_budget',
+                side_effect=[(True, 1500, 7200000, 0), (False, 0, 7200000, 0)],
+            ):
                 with patch.object(
                     module, 'get_stt_service_for_language', return_value=(module.STTService.parakeet, 'en', 'parakeet')
                 ):
@@ -2374,6 +2383,46 @@ class TestWsMidSessionBudgetEnforcement:
                                     ws.receive_json()
                             # Frame 1 accepted (1000ms); settle reserved 1500 → actual 1000
                             mock_record.assert_called_once_with('test-uid', 1500, 1000)
+        finally:
+            _cleanup_chat_client(saved)
+
+    def test_ws_extends_reservation_past_one_session_slice(self):
+        """A stream longer than one reserved slice takes another slice instead of closing.
+
+        Regression: the connect-time slice (MAX_SESSION_DURATION_S) was treated as
+        the whole allowance, so every Windows meeting system-audio lane was closed
+        with 'Daily transcription budget exhausted' after ~2 minutes of audio even
+        though the rolling daily budget had plenty left.
+        """
+        client, module, saved = _make_chat_client()
+        try:
+            mock_dg_socket = MagicMock()
+            mock_dg_socket.is_connection_dead = False
+            mock_dg_socket.death_reason = None
+
+            async def mock_process_audio_parakeet(stream_transcript, **kwargs):
+                mock_dg_socket.send = MagicMock(return_value=True)
+                mock_dg_socket.finalize = MagicMock()
+                mock_dg_socket.finish = MagicMock()
+                return mock_dg_socket
+
+            # Each slice is 1500ms; the daily budget still has plenty left.
+            with patch.object(
+                module, 'try_reserve_session_budget', return_value=(True, 1500, 1500, 7198500)
+            ) as mock_reserve:
+                with patch.object(
+                    module, 'get_stt_service_for_language', return_value=(module.STTService.parakeet, 'en', 'parakeet')
+                ):
+                    with patch.object(module, 'process_audio_parakeet', side_effect=mock_process_audio_parakeet):
+                        with patch.object(module, 'settle_reserved_duration') as mock_settle:
+                            with client.websocket_connect('/v2/voice-message/transcribe-stream') as ws:
+                                # Three 1000ms frames = 3000ms, twice the first slice.
+                                for _ in range(3):
+                                    ws.send_bytes(b'\x00' * 32000)
+                            # Connect slice + one extension; all 3000ms accepted and settled.
+                            assert mock_reserve.call_count == 2
+                            mock_reserve.assert_called_with('test-uid', module.MAX_SESSION_DURATION_S * 1000)
+                            mock_settle.assert_called_once_with('test-uid', 3000, 3000)
         finally:
             _cleanup_chat_client(saved)
 

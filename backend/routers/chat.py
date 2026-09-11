@@ -1651,6 +1651,34 @@ async def transcribe_voice_message_stream(
         settle_reserved_duration(uid, budget_reserved_ms, 0)
         usage_recorded = True
 
+    async def extend_budget_reservation(prospective_ms: int) -> bool:
+        """Atomically reserve further session slices until they cover ``prospective_ms``.
+
+        One slice is an admission unit, not the user's daily allowance: a long
+        stream (Windows meeting/screen system audio rides this endpoint for the
+        whole meeting) takes another atomic slice each time it outgrows the
+        current one, so concurrent sessions still never admit the same budget.
+        Returns False only when the rolling daily budget is actually exhausted.
+        """
+        nonlocal budget_reserved_ms, budget_remaining_ms
+        while budget_remaining_ms is not None and prospective_ms > budget_remaining_ms:
+            try:
+                allowed, reserved_ms, _used_ms, _remaining_ms = await run_blocking(
+                    db_executor, try_reserve_session_budget, uid, MAX_SESSION_DURATION_S * 1000
+                )
+            except Exception:
+                budget_remaining_ms = None  # Fail-open, same as the connect-time reservation
+                return True
+            if not allowed:
+                return False
+            if reserved_ms <= 0:
+                # Limiter fail-open (Redis unavailable) admits without reserving.
+                budget_remaining_ms = None
+                return True
+            budget_reserved_ms += reserved_ms
+            budget_remaining_ms += reserved_ms
+        return True
+
     async def drain_stt_or_close() -> bool:
         """Finalize and await the selected provider's tail before sender teardown."""
         nonlocal stt_drained
@@ -1778,9 +1806,10 @@ async def transcribe_voice_message_stream(
 
             # In-session budget enforcement: check BEFORE incrementing received_audio_bytes
             # so that the triggering frame is not counted as consumed (it won't be sent upstream).
+            # Outgrowing the reserved slice takes another one; only a denied slice ends the session.
             if budget_remaining_ms is not None and bytes_per_second > 0:
                 prospective_ms = compute_pcm_duration_ms(received_audio_bytes + len(data), sample_rate, channels)
-                if prospective_ms > budget_remaining_ms:
+                if prospective_ms > budget_remaining_ms and not await extend_budget_reservation(prospective_ms):
                     logger.info(
                         f'transcribe-stream: budget exhausted mid-session uid={uid} elapsed={prospective_ms}ms remaining={budget_remaining_ms}ms'
                     )
