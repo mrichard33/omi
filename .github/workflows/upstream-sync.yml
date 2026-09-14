@@ -1,0 +1,145 @@
+name: Upstream sync (Reece fork)
+
+# Keep this fork's main mergeable with BasedHardware/omi.
+#
+# As of 2026-09-14 main is ~145 commits behind upstream and 13 ahead. Catching
+# up by hand is the kind of chore that gets skipped until the fork is too far
+# gone to merge at all, so it happens on a schedule instead: fetch upstream,
+# put it on a dated branch, open a PR, stop.
+#
+# IT NEVER AUTO-MERGES. This fork has custom commits on main, so a merge can
+# conflict with work somebody is relying on — and an unattended merge that
+# resolves a conflict badly is worse than a fork that is behind. The PR is the
+# point: it is where the conflicts become visible.
+#
+# Reece-specific files live on main (see docs/reece-fork.md), which means an
+# upstream merge can touch them. They are few and they are ours, so conflicts
+# on them resolve in our favour — but that judgement belongs to a person
+# reading the PR, not to this workflow.
+
+on:
+  schedule:
+    # Mondays 06:00 ET. Cron is UTC and GitHub does not do daylight saving, so
+    # this is 10:00 UTC — 06:00 EDT in summer, 05:00 EST in winter. An hour of
+    # drift on a weekly chore is not worth two cron lines.
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch to sync from"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # One sync at a time. Two runs racing would push the same branch from two
+  # checkouts and one would lose, silently.
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        id: fetch
+        env:
+          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/BasedHardware/omi.git 2>/dev/null || true
+          git fetch upstream "$UPSTREAM_REF"
+
+          BEHIND=$(git rev-list --count "HEAD..upstream/${UPSTREAM_REF}")
+          AHEAD=$(git rev-list --count "upstream/${UPSTREAM_REF}..HEAD")
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
+          echo "Behind upstream by $BEHIND, ahead by $AHEAD."
+
+      - name: Already current
+        if: steps.fetch.outputs.behind == '0'
+        run: |
+          echo "Nothing to sync — main already has everything upstream has."
+          echo "### Already current" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ahead by ${{ steps.fetch.outputs.ahead }} commits of our own." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the sync branch
+        if: steps.fetch.outputs.behind != '0'
+        id: branch
+        env:
+          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Re-run on the same day updates the branch rather than failing.
+          git checkout -B "$BRANCH"
+
+          # A conflict here is EXPECTED and is not a failure: it is the whole
+          # reason a person looks at the PR. Commit the conflicted state so the
+          # markers are visible in the diff, rather than dropping the run and
+          # leaving nobody any the wiser.
+          if git merge --no-edit "upstream/${UPSTREAM_REF}"; then
+            echo "conflicts=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "conflicts=true" >> "$GITHUB_OUTPUT"
+            git add -A
+            git commit -m "chore(sync): merge upstream/${UPSTREAM_REF} WITH CONFLICTS — resolve before merging"
+          fi
+
+          git push --force-with-lease origin "$BRANCH"
+
+      - name: Open or update the PR
+        if: steps.fetch.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+          BEHIND: ${{ steps.fetch.outputs.behind }}
+          AHEAD: ${{ steps.fetch.outputs.ahead }}
+          CONFLICTS: ${{ steps.branch.outputs.conflicts }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CONFLICTS" = "true" ]; then
+            TITLE="chore(sync): upstream → main (${BEHIND} commits, CONFLICTS)"
+            NOTE="**This merge has conflicts.** They are committed on the branch with the markers left in, so they show up in the diff. Resolve them on \`${BRANCH}\` and push before merging."
+          else
+            TITLE="chore(sync): upstream → main (${BEHIND} commits)"
+            NOTE="Merged cleanly. Read the diff before merging anyway — clean is not the same as safe on a fork with its own commits on main."
+          fi
+
+          BODY=$(cat <<EOF
+          Automated weekly sync from [BasedHardware/omi](https://github.com/BasedHardware/omi).
+
+          - Behind upstream by **${BEHIND}** commits before this merge
+          - Ahead by **${AHEAD}** commits of our own
+
+          ${NOTE}
+
+          This PR is never merged automatically. See \`docs/reece-fork.md\`.
+          EOF
+          )
+
+          EXISTING=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number' || echo "")
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
+            echo "Updated PR #$EXISTING"
+          else
+            gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$BODY"
+          fi
+
+          echo "### Sync PR ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "$TITLE" >> "$GITHUB_STEP_SUMMARY"
