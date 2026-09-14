@@ -121,17 +121,16 @@ jobs:
             NOTE="Merged cleanly. Read the diff before merging anyway — clean is not the same as safe on a fork with its own commits on main."
           fi
 
-          BODY=$(cat <<EOF
-          Automated weekly sync from [BasedHardware/omi](https://github.com/BasedHardware/omi).
-
-          - Behind upstream by **${BEHIND}** commits before this merge
-          - Ahead by **${AHEAD}** commits of our own
-
-          ${NOTE}
-
-          This PR is never merged automatically. See \`docs/reece-fork.md\`.
-          EOF
-          )
+          # NOT a heredoc. Every line inside a YAML block scalar is indented,
+          # and a heredoc terminator has to sit at column 0 — an indented EOF is
+          # never matched and the step dies with "delimited by end-of-file".
+          # printf keeps the indentation out of the argument entirely.
+          BODY=$(printf '%s\n\n%s\n%s\n\n%s\n\n%s\n' \
+            "Automated weekly sync from [BasedHardware/omi](https://github.com/BasedHardware/omi)." \
+            "- Behind upstream by **${BEHIND}** commits before this merge" \
+            "- Ahead by **${AHEAD}** commits of our own" \
+            "${NOTE}" \
+            "This PR is never merged automatically. See \`docs/reece-fork.md\`.")
 
           EXISTING=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number' || echo "")
           if [ -n "$EXISTING" ]; then
