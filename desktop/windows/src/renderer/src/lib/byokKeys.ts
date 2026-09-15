@@ -41,15 +41,17 @@ export async function refreshByokKeys(): Promise<void> {
 }
 
 /**
- * Attach X-BYOK-* headers to `headers` when BYOK is active (all four keys
- * present), else return `headers` unchanged. Never mutates the input.
+ * Attach an X-BYOK-* header for each configured key when BYOK is active (at
+ * least one LLM key present), else return `headers` unchanged. The backend
+ * requires a header for every enrolled provider and ignores the rest. Never
+ * mutates the input.
  */
 export function withByokHeadersIfActive<T extends Record<string, string>>(headers: T): T {
   if (!isByokActive(cached)) return headers
   return withByokHeaders(headers, cached) as T
 }
 
-/** True when the cached key set is complete (all four providers). */
+/** True when the cached key set has at least one LLM provider key. */
 export function isByokActiveCached(): boolean {
   return isByokActive(cached)
 }
