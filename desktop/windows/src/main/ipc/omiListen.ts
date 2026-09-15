@@ -21,12 +21,15 @@ function getByokStore(): ByokKeyStore {
 }
 
 /**
- * The listen socket is the Deepgram STT lane. When the user has a full BYOK key
- * set, attach the four X-BYOK-* headers so transcription runs on their own
- * Deepgram key (matching the macOS client). All-or-none per request: the backend
- * 403s a partial set from an enrolled user, and silently drops headers from a
- * non-enrolled user — so we only attach when all four keys are present. Keys are
- * read fresh per connection (no caching) and never logged.
+ * The listen socket is the STT lane. When BYOK is active (any LLM key set — see
+ * `isByokActive`), attach an X-BYOK-* header for every configured key so the
+ * session runs on the user's keys (Deepgram only when a Deepgram key is set;
+ * otherwise managed STT). Backend rule (`backend/utils/byok.py`): a BYOK-active
+ * user must send a header for EVERY enrolled provider or the upgrade is refused
+ * (WS 4003); headers for non-enrolled providers are ignored. Note that on a
+ * BYOK session the backend also structures the conversation with the user's
+ * OpenAI key, so a bad key fails conversation saving, not transcription. Keys
+ * are read fresh per connection (no caching) and never logged.
  */
 function byokSttHeaders(base: Record<string, string>): Record<string, string> {
   try {
@@ -276,6 +279,19 @@ function stopKeepalive(s: Session): void {
   }
 }
 
+const SERVICE_STATUS_LOG_FIELDS = ['status', 'reason', 'provider', 'outcome', 'retryable'] as const
+
+/** Log-safe summary of a backend `service_status` event: only the bounded
+ *  primitive fields, each truncated — never the raw payload. */
+export function serviceStatusLogFields(event: Record<string, unknown>): string {
+  return SERVICE_STATUS_LOG_FIELDS.flatMap((key) => {
+    const value = event[key]
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? [`${key}=${String(value).slice(0, 64)}`]
+      : []
+  }).join(' ')
+}
+
 /** The one way a session dies early: mark closed, drop buffers, remove from the
  *  map, close the socket. Shared by replace/supersede/stop so Session cleanup
  *  can't drift between call sites. */
@@ -287,7 +303,13 @@ function killSession(id: string, s: Session, why: string): void {
   stopKeepalive(s)
   sessions.delete(id)
   try {
-    s.ws.close()
+    // A client-initiated stop of an OPEN socket is a normal closure, so say so:
+    // `/v4/listen` only finalizes a desktop conversation at teardown when the
+    // close code is 1000 (backend/routers/listen/runtime.py), and a bare close()
+    // sends an empty close frame the server sees as 1005. A socket that never
+    // opened just aborts its handshake.
+    if (s.ws.readyState === WebSocket.OPEN) s.ws.close(1000, 'client stop')
+    else s.ws.close()
   } catch {
     /* ignore */
   }
@@ -418,6 +440,13 @@ function startSession(args: ListenStartArgs, owner: WebContents): void {
     if (json && typeof json === 'object' && 'type' in (json as object)) {
       const obj = json as Record<string, unknown>
       const event: ListenEvent = { type: String(obj.type), raw: obj }
+      if (event.type === 'service_status') {
+        // A terminal STT failure (then close 1011 transcription_service_unavailable)
+        // explains itself only here; keep the why in main.log.
+        console.log(
+          `[omi-listen] service_status ${args.sessionId} mode=${mode} ${serviceStatusLogFields(obj)}`
+        )
+      }
       emit(session.ownerId, { sessionId: args.sessionId, kind: 'event', event })
     }
   })
