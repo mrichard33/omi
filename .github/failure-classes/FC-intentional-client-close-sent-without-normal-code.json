@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "FC-intentional-client-close-sent-without-normal-code",
+  "violated_contract": "When a client deliberately ends a live session whose server owes work on a normal closure (for example /v4/listen finalizing a desktop conversation only on close code 1000), the client must signal that intent with an explicit normal close code. A bare close() sends an empty close frame the server reads as 1005, so the owed finalization is skipped and the artifact stays invisible (in_progress) even though the session ended as designed.",
+  "canonical_prevention": "Route every intentional client teardown through one owner that closes an OPEN socket with 1000 (leaving not-yet-open sockets to abort their handshake), and cover it with a behavioral test that drives a stop through the production IPC handler against a fake socket and asserts the close code, plus the not-open case.",
+  "canonical_prevention_artifact": [
+    "desktop/windows/src/main/ipc/omiListen.ts",
+    "desktop/windows/src/main/ipc/omiListen.finalize.test.ts"
+  ],
+  "evidence_prs": [],
+  "scope_hints": [
+    "desktop/windows/src/main/ipc/omiListen*.ts"
+  ],
+  "status": "open"
+}

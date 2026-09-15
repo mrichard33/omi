@@ -33,12 +33,17 @@ const h = vi.hoisted(() => {
     send(data: unknown): void {
       this.sent.push(data)
     }
-    close(): void {
+    closeCode: number | undefined
+    close(code?: number): void {
+      this.closeCode = code
       this.readyState = FakeWebSocket.CLOSED
     }
     simulateOpen(): void {
       this.readyState = FakeWebSocket.OPEN
       for (const fn of this.listeners.get('open') ?? []) fn()
+    }
+    simulateMessage(text: string): void {
+      for (const fn of this.listeners.get('message') ?? []) fn(Buffer.from(text), false)
     }
     simulateClose(code = 1006, reason = ''): void {
       this.readyState = FakeWebSocket.CLOSED
@@ -60,7 +65,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { isListenSessionOwnedBy, registerOmiListenHandlers } from './omiListen'
+import {
+  isListenSessionOwnedBy,
+  registerOmiListenHandlers,
+  serviceStatusLogFields
+} from './omiListen'
 
 const ipc = {
   start: (sessionId: string, ownerId = 1, mode = 'ptt') =>
@@ -188,5 +197,64 @@ describe('PTT stream lane', () => {
 
     ipc.stop('dropped-lane', 41)
     expect(isListenSessionOwnedBy('dropped-lane', 41)).toBe(false)
+  })
+})
+
+describe('listen socket close code and STT status', () => {
+  // `/v4/listen` finalizes a desktop conversation at teardown only on close code
+  // 1000 (backend/routers/listen/runtime.py); a bare close() arrives as 1005.
+  it('a client stop of an OPEN conversation socket closes with 1000', () => {
+    ipc.start('conv-stop', 51, 'conversation')
+    const ws = lastWs()
+    ws.simulateOpen()
+    ipc.stop('conv-stop', 51)
+    expect(ws.readyState).toBe(h.FakeWebSocket.CLOSED)
+    expect(ws.closeCode).toBe(1000)
+  })
+
+  it('stopping a socket that never opened aborts the handshake without a code', () => {
+    ipc.start('conv-early', 52, 'conversation')
+    const ws = lastWs()
+    ipc.stop('conv-early', 52)
+    expect(ws.readyState).toBe(h.FakeWebSocket.CLOSED)
+    expect(ws.closeCode).toBeUndefined()
+  })
+
+  it('logs the bounded service_status fields for an STT failure', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      ipc.start('conv-stt', 53, 'conversation')
+      const ws = lastWs()
+      ws.simulateOpen()
+      ws.simulateMessage(
+        JSON.stringify({
+          type: 'service_status',
+          status: 'stt_failed',
+          reason: 'initialization_failed',
+          provider: 'modulate',
+          outcome: 'terminal',
+          retryable: true,
+          detail: { raw: 'not logged' }
+        })
+      )
+      const line = log.mock.calls
+        .map((call) => String(call[0]))
+        .find((l) => l.includes('service_status conv-stt'))
+      expect(line).toBe(
+        '[omi-listen] service_status conv-stt mode=conversation status=stt_failed reason=initialization_failed provider=modulate outcome=terminal retryable=true'
+      )
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('serviceStatusLogFields drops non-primitive fields and truncates long values', () => {
+    expect(
+      serviceStatusLogFields({
+        status: 'stt_failed',
+        provider: { k: 'v' },
+        reason: 'r'.repeat(100)
+      })
+    ).toBe(`status=stt_failed reason=${'r'.repeat(64)}`)
   })
 })
