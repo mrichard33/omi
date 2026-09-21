@@ -97,6 +97,9 @@ starting this from scratch.
 - `docs/bar-gotchas.md` — **read before touching bar window/animation code**:
   the top-edge companion bar has real, non-obvious pathologies (OS show-fade,
   clip-reveal, orb remount blink, eaten hardware clicks).
+- `docs/listen-reconnect.md` — **read before touching the mic lane's reconnect,
+  backoff or circuit breaker**: why reaching OPEN is not health, why a clean 1000
+  close must not strike, and why the meeting lane keeps a different ladder.
 - `docs/conversation-sync.md` — offline-retry outbox design.
 - `docs/multi-worktree-dev.md` — parallel-worktree port/profile isolation, dev
   env var reference.
