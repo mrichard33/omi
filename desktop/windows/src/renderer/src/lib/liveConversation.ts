@@ -1,9 +1,8 @@
-import type { ListenEvent, LiveStoreOp, TranscriptLine } from '../../../shared/types'
+import type { ListenEvent, LiveStatus, LiveStoreOp, TranscriptLine } from '../../../shared/types'
 
-/** `paused` is the reconnect breaker holding off after repeated backend failures:
- *  recoverable and self-resuming, unlike `error`, which is terminal for this
- *  session (quota, sign-in, a dead microphone). */
-export type LiveStatus = 'idle' | 'connecting' | 'live' | 'paused' | 'error'
+// Re-exported so the many renderer modules that already import LiveStatus from
+// here keep working; the single declaration lives in shared/types.
+export type { LiveStatus }
 
 // Singleton store for the CURRENT in-progress conversation's live transcript. The
 // capture window's mic session writes it (via captureLiveStore, which mirrors each

@@ -327,12 +327,22 @@ export type CaptureCommand =
   | { type: 'meeting-capture-start'; meetingId: string; attemptId: number; appName: string }
   | { type: 'meeting-capture-stop'; meetingId: string; attemptId: number }
 
+/** The live capture lane's status, shared by the capture window's store and every
+ *  UI window that mirrors it. `paused` is the reconnect breaker holding off after
+ *  repeated backend failures: recoverable and self-resuming, unlike `error`, which
+ *  is terminal for this session (quota, sign-in, a dead microphone).
+ *
+ *  It lives here, not in the renderer, because it crosses the window boundary as a
+ *  LiveStoreOp — it was previously spelled out at three separate sites, and adding
+ *  `paused` had to be done three times to compile. */
+export type LiveStatus = 'idle' | 'connecting' | 'live' | 'paused' | 'error'
+
 /** A mutation to the shared live-conversation store, emitted by the capture
  *  window as it owns the always-on mic session. UI windows apply these via
  *  liveConversation.applyRemoteOp so the LiveConversation view mirrors the store. */
 export type LiveStoreOp =
   | { op: 'reset' }
-  | { op: 'status'; status: 'idle' | 'connecting' | 'live' | 'paused' | 'error'; error?: string }
+  | { op: 'status'; status: LiveStatus; error?: string }
   | { op: 'append'; line: TranscriptLine }
   // The current conversation was finalized/saved; the UI window turns these
   // segments into a pending (optimistically-titled) conversation row.

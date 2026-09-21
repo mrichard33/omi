@@ -4,7 +4,7 @@
 // input string), never re-transcribed from the speaker. Pure so formatting is
 // unit-testable; ContinuousSessionHost applies the result to the live store.
 
-import type { TranscriptLine } from '../../../../shared/types'
+import type { LiveStatus, TranscriptLine } from '../../../../shared/types'
 
 export const ASSISTANT_SPEAKER = 'Omi'
 
@@ -23,9 +23,7 @@ export function isInjectedLineId(id: string | undefined): boolean {
  *  running, so the line lands in a real conversation record). When idle or
  *  errored there is no record to join — injecting would strand the line in a
  *  dead store and leak it into the NEXT session's view. */
-export function shouldInjectIntoLive(
-  status: 'idle' | 'connecting' | 'live' | 'paused' | 'error'
-): boolean {
+export function shouldInjectIntoLive(status: LiveStatus): boolean {
   // `paused` is excluded with idle/error: the breaker is open, so the backend has
   // no session to attach the line to and the retained transcript has already been
   // rescued under a conversation id this store no longer uses.
