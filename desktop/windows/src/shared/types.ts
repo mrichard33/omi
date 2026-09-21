@@ -332,7 +332,7 @@ export type CaptureCommand =
  *  liveConversation.applyRemoteOp so the LiveConversation view mirrors the store. */
 export type LiveStoreOp =
   | { op: 'reset' }
-  | { op: 'status'; status: 'idle' | 'connecting' | 'live' | 'error'; error?: string }
+  | { op: 'status'; status: 'idle' | 'connecting' | 'live' | 'paused' | 'error'; error?: string }
   | { op: 'append'; line: TranscriptLine }
   // The current conversation was finalized/saved; the UI window turns these
   // segments into a pending (optimistically-titled) conversation row.

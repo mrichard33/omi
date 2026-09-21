@@ -23,7 +23,12 @@ export function isInjectedLineId(id: string | undefined): boolean {
  *  running, so the line lands in a real conversation record). When idle or
  *  errored there is no record to join — injecting would strand the line in a
  *  dead store and leak it into the NEXT session's view. */
-export function shouldInjectIntoLive(status: 'idle' | 'connecting' | 'live' | 'error'): boolean {
+export function shouldInjectIntoLive(
+  status: 'idle' | 'connecting' | 'live' | 'paused' | 'error'
+): boolean {
+  // `paused` is excluded with idle/error: the breaker is open, so the backend has
+  // no session to attach the line to and the retained transcript has already been
+  // rescued under a conversation id this store no longer uses.
   return status === 'connecting' || status === 'live'
 }
 

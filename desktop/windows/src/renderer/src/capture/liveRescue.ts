@@ -1,14 +1,22 @@
-// Pure helpers for the always-on mic session's reconnect + from-segments rescue
-// (see liveMicSession; meetingSession reuses the reconnect half for its system
-// lane). Kept side-effect-free so the backoff schedule and the
-// segment mapping are exhaustively unit-testable in node.
+// Pure helpers for the always-on mic session's from-segments rescue and for the
+// MEETING system lane's reconnect. Kept side-effect-free so the backoff schedule
+// and the segment mapping are exhaustively unit-testable in node.
+//
+// The always-on mic lane no longer uses the reconnect half: since 2026-09-21 it
+// runs on listenRetryPolicy, whose ladder is far longer (5s..300s) and which can
+// stand down entirely. The meeting lane deliberately keeps THIS curve — a meeting
+// is bounded and in the foreground, so failing in ~2.5 minutes and saying so beats
+// sitting "capturing" on a dead lane for half an hour. The two lanes also ride
+// different endpoints behind different server limits (transcribe-stream vs
+// /v4/listen), and FC-shared-backoff-conflated-independent-budgets is exactly the
+// rule against keying one cooldown to two independently governed budgets.
 import { classifyTranscriptionStop } from '../../../shared/transcriptionStop'
 import type { BackendSegment, SyncSegment } from '../../../shared/types'
 
-// Reconnect budget. A dropped /v4/listen resumes the SAME conversation (via
-// client_conversation_id) with capped exponential backoff before giving up — a
-// brief network blip must not end the recording. (Previously any close was
-// terminal: 3 attempts, no resume, then error-stop.)
+// Reconnect budget for the MEETING system lane. A dropped lane resumes with capped
+// exponential backoff before giving up — a brief network blip must not end the
+// capture. (Previously any close was terminal: 3 attempts, no resume, then
+// error-stop.)
 export const MAX_RECONNECT_ATTEMPTS = 10
 const RECONNECT_MAX_MS = 32_000
 // A 429 is the server explicitly saying "slow down", so a rate-limited drop backs
