@@ -138,7 +138,8 @@ export async function startMeetingSession(args: {
     } else {
       systemReconnectAttempt++
       delayMs = reconnectDelayJitteredMs(systemReconnectAttempt, {
-        rateLimited: isRateLimitedDropError(e.message)
+        rateLimited: isRateLimitedDropError(e.message),
+        retryAfterMs: (e as { retryAfterMs?: number }).retryAfterMs
       })
     }
     console.warn(`[meeting-session] system lane dropped, reconnecting in ${delayMs}ms:`, e.message)

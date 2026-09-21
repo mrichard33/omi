@@ -25,6 +25,9 @@ const RATE_LIMIT_FLOOR_MS = 5_000
 // Up-to jitter added to every reconnect delay, decorrelating retries during an
 // account-wide 429 storm so the lanes don't all wake at the same instant.
 const RECONNECT_JITTER_MS = 1_000
+// A server-sent Retry-After is honored up to this cap, so a bogus or huge value
+// can't park the lane for longer than the reconnect budget can absorb.
+const RETRY_AFTER_CAP_MS = 120_000
 
 /** Capped exponential backoff for the Nth reconnect attempt (1-based): 2s, 4s, 8s,
  *  16s, 32s, then 32s — matching the macOS reference (min(2^n, 32s), no jitter).
@@ -34,17 +37,23 @@ export function reconnectDelayMs(attempt: number): number {
   return Math.min(RECONNECT_MAX_MS, 2 ** n * 1000)
 }
 
-/** Reconnect delay actually used by the live loop: the capped-exponential base plus
- *  decorrelating jitter, with a longer floor when the drop was a 429 so we don't
- *  hammer a server that just rate-limited us. `rand` is injectable for tests. */
+/** Reconnect delay actually used by the meeting system lane: the capped-exponential
+ *  base plus decorrelating jitter, with a longer floor when the drop was a 429 so we
+ *  don't hammer a server that just rate-limited us. A server-sent Retry-After (ms) is
+ *  the floor when present — retrying before it just spends another request on a
+ *  guaranteed rejection, and this lane's handshake rides the same per-token edge
+ *  budget as /v4/listen. `rand` is injectable for tests. */
 export function reconnectDelayJitteredMs(
   attempt: number,
-  opts: { rateLimited?: boolean; rand?: () => number } = {}
+  opts: { rateLimited?: boolean; retryAfterMs?: number; rand?: () => number } = {}
 ): number {
   const rand = opts.rand ?? Math.random
-  const base = opts.rateLimited
+  let base = opts.rateLimited
     ? Math.min(RECONNECT_MAX_MS, Math.max(reconnectDelayMs(attempt), RATE_LIMIT_FLOOR_MS))
     : reconnectDelayMs(attempt)
+  if (opts.retryAfterMs !== undefined && Number.isFinite(opts.retryAfterMs)) {
+    base = Math.max(base, Math.min(RETRY_AFTER_CAP_MS, Math.max(0, opts.retryAfterMs)))
+  }
   return Math.round(base + rand() * RECONNECT_JITTER_MS)
 }
 
