@@ -1,14 +1,22 @@
-// Pure helpers for the always-on mic session's reconnect + from-segments rescue
-// (see liveMicSession; meetingSession reuses the reconnect half for its system
-// lane). Kept side-effect-free so the backoff schedule and the
-// segment mapping are exhaustively unit-testable in node.
+// Pure helpers for the always-on mic session's from-segments rescue and for the
+// MEETING system lane's reconnect. Kept side-effect-free so the backoff schedule
+// and the segment mapping are exhaustively unit-testable in node.
+//
+// The always-on mic lane no longer uses the reconnect half: since 2026-09-21 it
+// runs on listenRetryPolicy, whose ladder is far longer (5s..300s) and which can
+// stand down entirely. The meeting lane deliberately keeps THIS curve — a meeting
+// is bounded and in the foreground, so failing in ~2.5 minutes and saying so beats
+// sitting "capturing" on a dead lane for half an hour. The two lanes also ride
+// different endpoints behind different server limits (transcribe-stream vs
+// /v4/listen), and FC-shared-backoff-conflated-independent-budgets is exactly the
+// rule against keying one cooldown to two independently governed budgets.
 import { classifyTranscriptionStop } from '../../../shared/transcriptionStop'
 import type { BackendSegment, SyncSegment } from '../../../shared/types'
 
-// Reconnect budget. A dropped /v4/listen resumes the SAME conversation (via
-// client_conversation_id) with capped exponential backoff before giving up — a
-// brief network blip must not end the recording. (Previously any close was
-// terminal: 3 attempts, no resume, then error-stop.)
+// Reconnect budget for the MEETING system lane. A dropped lane resumes with capped
+// exponential backoff before giving up — a brief network blip must not end the
+// capture. (Previously any close was terminal: 3 attempts, no resume, then
+// error-stop.)
 export const MAX_RECONNECT_ATTEMPTS = 10
 const RECONNECT_MAX_MS = 32_000
 // A 429 is the server explicitly saying "slow down", so a rate-limited drop backs
@@ -17,6 +25,9 @@ const RATE_LIMIT_FLOOR_MS = 5_000
 // Up-to jitter added to every reconnect delay, decorrelating retries during an
 // account-wide 429 storm so the lanes don't all wake at the same instant.
 const RECONNECT_JITTER_MS = 1_000
+// A server-sent Retry-After is honored up to this cap, so a bogus or huge value
+// can't park the lane for longer than the reconnect budget can absorb.
+const RETRY_AFTER_CAP_MS = 120_000
 
 /** Capped exponential backoff for the Nth reconnect attempt (1-based): 2s, 4s, 8s,
  *  16s, 32s, then 32s — matching the macOS reference (min(2^n, 32s), no jitter).
@@ -26,17 +37,23 @@ export function reconnectDelayMs(attempt: number): number {
   return Math.min(RECONNECT_MAX_MS, 2 ** n * 1000)
 }
 
-/** Reconnect delay actually used by the live loop: the capped-exponential base plus
- *  decorrelating jitter, with a longer floor when the drop was a 429 so we don't
- *  hammer a server that just rate-limited us. `rand` is injectable for tests. */
+/** Reconnect delay actually used by the meeting system lane: the capped-exponential
+ *  base plus decorrelating jitter, with a longer floor when the drop was a 429 so we
+ *  don't hammer a server that just rate-limited us. A server-sent Retry-After (ms) is
+ *  the floor when present — retrying before it just spends another request on a
+ *  guaranteed rejection, and this lane's handshake rides the same per-token edge
+ *  budget as /v4/listen. `rand` is injectable for tests. */
 export function reconnectDelayJitteredMs(
   attempt: number,
-  opts: { rateLimited?: boolean; rand?: () => number } = {}
+  opts: { rateLimited?: boolean; retryAfterMs?: number; rand?: () => number } = {}
 ): number {
   const rand = opts.rand ?? Math.random
-  const base = opts.rateLimited
+  let base = opts.rateLimited
     ? Math.min(RECONNECT_MAX_MS, Math.max(reconnectDelayMs(attempt), RATE_LIMIT_FLOOR_MS))
     : reconnectDelayMs(attempt)
+  if (opts.retryAfterMs !== undefined && Number.isFinite(opts.retryAfterMs)) {
+    base = Math.max(base, Math.min(RETRY_AFTER_CAP_MS, Math.max(0, opts.retryAfterMs)))
+  }
   return Math.round(base + rand() * RECONNECT_JITTER_MS)
 }
 

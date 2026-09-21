@@ -1,0 +1,6 @@
+{
+  "changes": [
+    "When Omi's transcription service is having trouble, the app now backs off instead of reconnecting every few seconds — which is what was getting the connection rate-limited and leaving long stretches of listening with almost nothing transcribed. After repeated failures it waits ten minutes, saves what it captured, and picks up again on its own; the live view says \"Paused — retrying shortly\" while it waits.",
+    "Conversations are no longer left unsaved when a recording ends. The app now closes the transcription connection the way the server expects, so the conversation is finalized and appears in your list straight away instead of surfacing an hour later, or not at all."
+  ]
+}

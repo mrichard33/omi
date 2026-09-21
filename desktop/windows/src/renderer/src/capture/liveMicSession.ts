@@ -5,14 +5,14 @@ import { isInjectedLineId } from '../lib/voice/injectedTranscript'
 import { syncLocalConversation } from '../lib/sync/conversationSync'
 import { captureLiveStore } from './liveStore'
 import {
-  MAX_RECONNECT_ATTEMPTS,
-  reconnectDelayJitteredMs,
   isRetryableDropError,
-  isRateLimitedDropError,
   toSyncSegments,
   segmentsToTranscript,
   createSegmentRetainer
 } from './liveRescue'
+import { HEALTHY_SESSION_MS, createListenRetryPolicy } from './listenRetryPolicy'
+import { trackEvent } from '../lib/analytics'
+import type { ListenError } from '../lib/omiListenClient'
 import type { LocalConversation } from '../../../shared/types'
 
 // After this much silence (no new finalized speech) the current conversation is
@@ -141,11 +141,16 @@ export function startLiveMicSession(): LiveMicController {
   let silenceTimer: ReturnType<typeof setTimeout> | null = null
   const timers: ReturnType<typeof setTimeout>[] = []
 
-  // Per-conversation state, reset by startConversation() at each boundary.
+  // Per-conversation state, reset by resetConversation() at each boundary.
   let clientConversationId = crypto.randomUUID()
   let conversationStartedAt = Date.now()
-  let reconnectAttempt = 0
   let retainer = createSegmentRetainer()
+  // The reconnect budget spans conversations: the backend, not the conversation,
+  // is what fails, and a boundary crossed successfully already counts as healthy.
+  const retry = createListenRetryPolicy()
+  // Latched so a pause emits its telemetry once, and the matching recovery only
+  // after a pause actually happened.
+  let circuitOpen = false
 
   const clearSilence = (): void => {
     if (silenceTimer) clearTimeout(silenceTimer)
@@ -179,8 +184,8 @@ export function startLiveMicSession(): LiveMicController {
     captureLiveStore.saved(captureLiveStore.getSegments())
   }
 
-  // Reconnect exhausted: the backend was unreachable, so its own conversation was
-  // never finalized. Persist what we captured and push it through the sync outbox
+  // The reconnect breaker opened: the backend is unreachable and will not be asked
+  // again for ten minutes, so its own conversation was never finalized. Persist what we captured and push it through the sync outbox
   // as a from-segments upload so the recording isn't lost. Inserted as
   // 'unconfirmed' so the outbox runs its dedupe-against-cloud BEFORE posting — if
   // the backend DID manage to finalize a conversation from the pre-drop audio we
@@ -232,6 +237,29 @@ export function startLiveMicSession(): LiveMicController {
   // Open (or reconnect) the socket for the CURRENT conversation, re-sending the
   // same clientConversationId so a reconnect resumes it.
   const connect = (): void => {
+    // Per-SOCKET, not per-session: connect() builds a fresh closure each attempt,
+    // so these describe only the socket this call opens.
+    let connectedAt = 0
+    let delivered = false
+    let healthyTimer: ReturnType<typeof setTimeout> | null = null
+
+    // Proof the lane actually works. Clears the reconnect budget and, if the
+    // breaker had opened, closes it and reports the recovery.
+    const markHealthy = (): void => {
+      delivered = true
+      retry.noteHealthy()
+      if (circuitOpen) {
+        circuitOpen = false
+        trackEvent('fallback_triggered', {
+          component: 'live_capture',
+          from: 'from_segments',
+          to: 'v4_listen',
+          reason: 'circuit_open',
+          outcome: 'recovered'
+        })
+      }
+    }
+
     setControllerHealth(controllerId, 'connecting')
     captureLiveStore.setStatus('connecting')
     void startTranscription(
@@ -239,7 +267,7 @@ export function startLiveMicSession(): LiveMicController {
       {
         onLine: (line) => {
           if (cancelled) return
-          reconnectAttempt = 0 // a delivered segment proves the socket is healthy
+          markHealthy() // a delivered transcript is data across the WHOLE path
           setControllerHealth(controllerId, 'ready')
           captureLiveStore.setStatus('live')
           captureLiveStore.appendLine(line)
@@ -249,12 +277,26 @@ export function startLiveMicSession(): LiveMicController {
         onInterim: () => {},
         onBackend: () => {
           if (cancelled) return
-          reconnectAttempt = 0
+          // Connecting is NOT health, and treating it as such is the bug this
+          // lane shipped with: during the 2026-09-21 storm the hosted STT service
+          // accepted the handshake in ~200ms and closed it seconds later with
+          // 1011, so resetting here pinned the ladder on its first rung and the
+          // lane reconnected every ~8s for 47 minutes, straight into the edge
+          // rate limiter. The budget now only clears once a segment arrives, or
+          // once this socket has simply stayed up long enough to count.
+          connectedAt = Date.now()
+          if (healthyTimer) clearTimeout(healthyTimer)
+          healthyTimer = setTimeout(() => {
+            if (!cancelled) markHealthy()
+          }, HEALTHY_SESSION_MS)
+          timers.push(healthyTimer)
           setControllerHealth(controllerId, 'ready')
           captureLiveStore.setStatus('live')
         },
         onSegments: (segs) => {
-          if (!cancelled) retainer.add(segs) // retained for the exhausted-reconnect rescue
+          if (cancelled) return
+          retainer.add(segs) // retained for the breaker-pause rescue
+          if (segs.length > 0) markHealthy()
         },
         onEvent: (ev) => {
           if (cancelled) return
@@ -289,29 +331,66 @@ export function startLiveMicSession(): LiveMicController {
             captureLiveStore.setStatus('error', (e as Error).message)
             return
           }
-          if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
+          if (healthyTimer) clearTimeout(healthyTimer)
+          const err = e as ListenError
+          const decision = retry.onFailure({
+            message: err.message,
+            closeCode: err.closeCode,
+            status: err.status,
+            retryAfterMs: err.retryAfterMs,
+            connectedForMs: connectedAt ? Date.now() - connectedAt : 0,
+            // THIS socket's own delivery, not the conversation's: the retainer
+            // outlives a reconnect, so reading it would let one early segment
+            // excuse every later failure.
+            deliveredSegments: delivered
+          })
+
+          if (decision.action === 'retry') {
             // Transient drop (or connect failure) — reconnect and RESUME the same
-            // conversation. The retainer + live store are preserved across this. A
-            // 429 handshake rejection backs off from a longer floor (don't hammer a
-            // server that just rate-limited us); jitter decorrelates lanes in a storm.
-            reconnectAttempt++
+            // conversation. The retainer + live store are preserved across this.
+            window.omi.listenRetryNotice({
+              kind: 'retry',
+              attempt: decision.attempt,
+              delayMs: decision.delayMs,
+              reason: decision.reason
+            })
             setControllerHealth(controllerId, 'connecting')
-            const rateLimited = isRateLimitedDropError((e as Error).message)
             captureLiveStore.setStatus('connecting')
             timers.push(
-              setTimeout(
-                () => {
-                  if (!cancelled) connect()
-                },
-                reconnectDelayJitteredMs(reconnectAttempt, { rateLimited })
-              )
+              setTimeout(() => {
+                if (!cancelled) connect()
+              }, decision.delayMs)
             )
-          } else {
-            // Exhausted — rescue the recording via from-segments, then surface the error.
-            rescue()
-            setControllerHealth(controllerId, 'failed')
-            captureLiveStore.setStatus('error', (e as Error).message)
+            return
           }
+
+          // The breaker opened. Rescue what was captured, then stand down for ten
+          // minutes rather than keep hammering a backend that is plainly down —
+          // it is the fast retries themselves that earn the 429s.
+          rescue()
+          circuitOpen = true
+          trackEvent('fallback_triggered', {
+            component: 'live_capture',
+            from: 'v4_listen',
+            to: 'from_segments',
+            reason: 'circuit_open',
+            outcome: 'exhausted'
+          })
+          window.omi.listenRetryNotice({
+            kind: 'paused',
+            failures: decision.failures,
+            resumeAtMs: decision.resumeAtMs
+          })
+          // Roll the conversation: the retained transcript has just been rescued
+          // under the current id, so resuming it would post the same speech twice.
+          resetConversation()
+          setControllerHealth(controllerId, 'failed')
+          captureLiveStore.setStatus('paused', err.message)
+          timers.push(
+            setTimeout(() => {
+              if (!cancelled) connect()
+            }, decision.delayMs)
+          )
         }
       },
       'conversation',
@@ -333,12 +412,21 @@ export function startLiveMicSession(): LiveMicController {
       .catch(() => {})
   }
 
-  // Begin a fresh conversation: new resumable id, cleared retainer, reset backoff.
-  function startConversation(): void {
+  // New resumable id and a cleared retainer. Deliberately does NOT touch the
+  // reconnect budget: the breaker rolls the conversation when it opens, and that
+  // is the one case where the lane is anything but healthy.
+  function resetConversation(): void {
     clientConversationId = crypto.randomUUID()
     conversationStartedAt = Date.now()
-    reconnectAttempt = 0
     retainer = createSegmentRetainer()
+  }
+
+  // Begin a fresh conversation after a boundary the lane crossed successfully —
+  // which is itself proof it works, so the budget clears here.
+  function startConversation(): void {
+    resetConversation()
+    retry.noteHealthy()
+    circuitOpen = false
     connect()
   }
 

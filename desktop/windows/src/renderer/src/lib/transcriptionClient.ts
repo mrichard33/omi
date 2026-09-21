@@ -1,5 +1,5 @@
 import { auth } from './firebase'
-import { startOmiListen, type OmiListenHandle } from './omiListenClient'
+import { startOmiListen, type ListenError, type OmiListenHandle } from './omiListenClient'
 import type {
   BackendSegment,
   ListenMode,
@@ -84,6 +84,15 @@ function closedMessage(mode: TranscriptionMode, code: number, reason: string): s
   return `Omi ${endpoint} closed (${code})${reason ? ` ${reason}` : ''}`
 }
 
+/**
+ * A lane that died after connecting. `closeCode` is the raw WS close code when the
+ * lane ended on a close frame — the reconnect policy needs 1011 (a transient server
+ * fault) told apart from a clean 1000/1001 teardown, and `message` alone cannot do
+ * that: closedMessage() folds quota and daily-limit closes into fixed human strings.
+ * Absent when the loss came from a typed quota event rather than a close.
+ */
+type TranscriptionLoss = { message: string; closeCode?: number }
+
 type OmiStartOutcome = {
   handle: OmiListenHandle | null
   error: Error | null
@@ -99,7 +108,7 @@ function startupAbortError(): Error {
 async function startWithOmi(
   source: ListenSource,
   cb: TranscriptionCallbacks,
-  onLost: (reason: string) => void,
+  onLost: (stop: TranscriptionLoss) => void,
   mode: TranscriptionMode,
   clientConversationId?: string,
   signal?: AbortSignal
@@ -176,7 +185,7 @@ async function startWithOmi(
             fail(new Error(QUOTA_MESSAGE))
           } else if (outcome === 'omi') {
             // Already connected and committed: tell the caller the session is over.
-            onLost('Omi free quota exhausted')
+            onLost({ message: 'Omi free quota exhausted' })
           }
         },
         onClosed: (code, reason) => {
@@ -184,7 +193,7 @@ async function startWithOmi(
           // 1000, etc.). Omi will emit no more transcripts, so end the session.
           // (Pre-connect closes arrive via onError and drive the initial failure.)
           if (outcome !== 'omi') return
-          onLost(closedMessage(mode, code, reason))
+          onLost({ message: closedMessage(mode, code, reason), closeCode: code })
         },
         onError: (err, fatal) => {
           if (outcome === 'pending' && fatal) {
@@ -197,7 +206,7 @@ async function startWithOmi(
             // Quota backstop: a 'trial_expired' close (in case the typed event
             // didn't arrive first). End the session rather than erroring twice.
             if (classifyTranscriptionStop(err.message) === 'quota') {
-              onLost(QUOTA_MESSAGE)
+              onLost({ message: QUOTA_MESSAGE })
               return
             }
             cb.onError(err)
@@ -259,8 +268,10 @@ export async function startTranscription(
   const startup = await startWithOmi(
     source,
     cb,
-    (reason) => {
-      cb.onError(new Error(`Omi transcription stopped: ${reason}`))
+    (stop) => {
+      const err: ListenError = new Error(`Omi transcription stopped: ${stop.message}`)
+      if (stop.closeCode !== undefined) err.closeCode = stop.closeCode
+      cb.onError(err)
     },
     mode,
     clientConversationId,

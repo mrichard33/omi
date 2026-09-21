@@ -236,11 +236,39 @@ export type ListenStartArgs = {
   clientConversationId?: string
 }
 
+/**
+ * One reconnect decision from the capture renderer, forwarded to the main process
+ * purely so it lands in main.log. Only NUMBERS and a closed set of reason words —
+ * no free text, so nothing the user said can ride this channel onto disk.
+ */
+export type ListenRetryNotice =
+  | {
+      kind: 'retry'
+      attempt: number
+      delayMs: number
+      reason:
+        | 'rate_limited'
+        | 'service_unavailable'
+        | 'abnormal_close'
+        | 'connect_error'
+        | 'clean_restart'
+    }
+  | { kind: 'paused'; failures: number; resumeAtMs: number }
+
 export type ListenMessage =
   | { sessionId: string; kind: 'connected' }
   | { sessionId: string; kind: 'segments'; segments: BackendSegment[] }
   | { sessionId: string; kind: 'event'; event: ListenEvent }
-  | { sessionId: string; kind: 'error'; message: string; fatal: boolean }
+  | {
+      sessionId: string
+      kind: 'error'
+      message: string
+      fatal: boolean
+      /** HTTP status of a rejected handshake (e.g. 429 from the edge rate limit). */
+      status?: number
+      /** The rejection's Retry-After, in ms from now, when the server sent one. */
+      retryAfterMs?: number
+    }
   | { sessionId: string; kind: 'closed'; code: number; reason: string }
 
 // ───────────────────────── Capture window IPC ─────────────────────────
@@ -299,12 +327,22 @@ export type CaptureCommand =
   | { type: 'meeting-capture-start'; meetingId: string; attemptId: number; appName: string }
   | { type: 'meeting-capture-stop'; meetingId: string; attemptId: number }
 
+/** The live capture lane's status, shared by the capture window's store and every
+ *  UI window that mirrors it. `paused` is the reconnect breaker holding off after
+ *  repeated backend failures: recoverable and self-resuming, unlike `error`, which
+ *  is terminal for this session (quota, sign-in, a dead microphone).
+ *
+ *  It lives here, not in the renderer, because it crosses the window boundary as a
+ *  LiveStoreOp — it was previously spelled out at three separate sites, and adding
+ *  `paused` had to be done three times to compile. */
+export type LiveStatus = 'idle' | 'connecting' | 'live' | 'paused' | 'error'
+
 /** A mutation to the shared live-conversation store, emitted by the capture
  *  window as it owns the always-on mic session. UI windows apply these via
  *  liveConversation.applyRemoteOp so the LiveConversation view mirrors the store. */
 export type LiveStoreOp =
   | { op: 'reset' }
-  | { op: 'status'; status: 'idle' | 'connecting' | 'live' | 'error'; error?: string }
+  | { op: 'status'; status: LiveStatus; error?: string }
   | { op: 'append'; line: TranscriptLine }
   // The current conversation was finalized/saved; the UI window turns these
   // segments into a pending (optimistically-titled) conversation row.
@@ -747,6 +785,10 @@ export type OmiBridgeApi = {
    *  endpointing so the trailing transcript segment is emitted promptly. No-op for
    *  'conversation' sessions (v4/listen manages its own endpointing). */
   listenFinalize: (sessionId: string) => void
+  /** Report one reconnect decision so it reaches main.log. Fire-and-forget:
+   *  only the main process's console is tee'd to disk, and this lane's whole
+   *  diagnosis comes from that file. */
+  listenRetryNotice: (notice: ListenRetryNotice) => void
   /** Subscribe to status/segment/event messages from every listen session. */
   onListenMessage: (cb: (msg: ListenMessage) => void) => () => void
   // --- Capture window bridge (Phase 2) ---

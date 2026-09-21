@@ -1,6 +1,8 @@
-import type { ListenEvent, LiveStoreOp, TranscriptLine } from '../../../shared/types'
+import type { ListenEvent, LiveStatus, LiveStoreOp, TranscriptLine } from '../../../shared/types'
 
-export type LiveStatus = 'idle' | 'connecting' | 'live' | 'error'
+// Re-exported so the many renderer modules that already import LiveStatus from
+// here keep working; the single declaration lives in shared/types.
+export type { LiveStatus }
 
 // Singleton store for the CURRENT in-progress conversation's live transcript. The
 // capture window's mic session writes it (via captureLiveStore, which mirrors each

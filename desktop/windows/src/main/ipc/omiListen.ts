@@ -6,11 +6,62 @@ import {
   type ListenEvent,
   type ListenMessage,
   type ListenMode,
+  type ListenRetryNotice,
   type ListenStartArgs
 } from '../../shared/types'
 import { ByokKeyStore } from '../agentKernel/byokStore'
 import { isByokActive, withByokHeaders } from '../../shared/byok'
 import { decodeUidFromIdToken } from '../auth/omiAuth'
+import { noteBackendStatus } from '../observability/backendDegraded'
+
+/**
+ * An HTTP `Retry-After` (delta-seconds or an HTTP-date) as ms from `now`, or
+ * undefined when absent/unparseable. Negative dates clamp to 0.
+ */
+export function parseRetryAfterMs(
+  value: string | string[] | undefined,
+  now: number = Date.now()
+): number | undefined {
+  const raw = (Array.isArray(value) ? value[0] : value)?.trim()
+  if (!raw) return undefined
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000
+  const at = Date.parse(raw)
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now)
+}
+
+const RETRY_REASONS = new Set([
+  'rate_limited',
+  'service_unavailable',
+  'abnormal_close',
+  'connect_error',
+  'clean_restart'
+])
+
+/**
+ * One reconnect decision as a log line. The reconnect loop lives in the capture
+ * RENDERER, whose console never reaches disk — only main-process console is tee'd
+ * to main.log (see mainLog.ts), and main.log is the only artifact anyone has when
+ * this lane misbehaves in the field. So the decision is sent here to be printed.
+ *
+ * Everything is clamped and the reason is checked against a closed set: this
+ * channel crosses from a window that handles transcripts, and nothing but numbers
+ * and enum words may reach the log file.
+ */
+export function formatRetryNotice(notice: ListenRetryNotice, locale?: string): string | null {
+  if (notice?.kind === 'retry') {
+    const delayMs = Math.max(0, Math.round(Number(notice.delayMs) || 0))
+    const attempt = Math.max(1, Math.round(Number(notice.attempt) || 1))
+    const reason = RETRY_REASONS.has(notice.reason) ? notice.reason : 'other'
+    return `[omi-listen] retry in ${Math.round(delayMs / 1000)}s (attempt ${attempt}, reason=${reason})`
+  }
+  if (notice?.kind === 'paused') {
+    const failures = Math.max(0, Math.round(Number(notice.failures) || 0))
+    const at = Number(notice.resumeAtMs)
+    const when = Number.isFinite(at) ? new Date(at).toLocaleTimeString(locale) : 'unknown'
+    return `[omi-listen] paused after ${failures} failures; next attempt at ${when}`
+  }
+  return null
+}
 
 // Lazy so this module stays import-pure (ByokKeyStore's default path needs
 // app.getPath('userData'), only ready after the app is).
@@ -21,12 +72,15 @@ function getByokStore(): ByokKeyStore {
 }
 
 /**
- * The listen socket is the Deepgram STT lane. When the user has a full BYOK key
- * set, attach the four X-BYOK-* headers so transcription runs on their own
- * Deepgram key (matching the macOS client). All-or-none per request: the backend
- * 403s a partial set from an enrolled user, and silently drops headers from a
- * non-enrolled user — so we only attach when all four keys are present. Keys are
- * read fresh per connection (no caching) and never logged.
+ * The listen socket is the STT lane. When BYOK is active (any LLM key set — see
+ * `isByokActive`), attach an X-BYOK-* header for every configured key so the
+ * session runs on the user's keys (Deepgram only when a Deepgram key is set;
+ * otherwise managed STT). Backend rule (`backend/utils/byok.py`): a BYOK-active
+ * user must send a header for EVERY enrolled provider or the upgrade is refused
+ * (WS 4003); headers for non-enrolled providers are ignored. Note that on a
+ * BYOK session the backend also structures the conversation with the user's
+ * OpenAI key, so a bad key fails conversation saving, not transcription. Keys
+ * are read fresh per connection (no caching) and never logged.
  */
 function byokSttHeaders(base: Record<string, string>): Record<string, string> {
   try {
@@ -276,6 +330,19 @@ function stopKeepalive(s: Session): void {
   }
 }
 
+const SERVICE_STATUS_LOG_FIELDS = ['status', 'reason', 'provider', 'outcome', 'retryable'] as const
+
+/** Log-safe summary of a backend `service_status` event: only the bounded
+ *  primitive fields, each truncated — never the raw payload. */
+export function serviceStatusLogFields(event: Record<string, unknown>): string {
+  return SERVICE_STATUS_LOG_FIELDS.flatMap((key) => {
+    const value = event[key]
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? [`${key}=${String(value).slice(0, 64)}`]
+      : []
+  }).join(' ')
+}
+
 /** The one way a session dies early: mark closed, drop buffers, remove from the
  *  map, close the socket. Shared by replace/supersede/stop so Session cleanup
  *  can't drift between call sites. */
@@ -287,7 +354,13 @@ function killSession(id: string, s: Session, why: string): void {
   stopKeepalive(s)
   sessions.delete(id)
   try {
-    s.ws.close()
+    // A client-initiated stop of an OPEN socket is a normal closure, so say so:
+    // `/v4/listen` only finalizes a desktop conversation at teardown when the
+    // close code is 1000 (backend/routers/listen/runtime.py), and a bare close()
+    // sends an empty close frame the server sees as 1005. A socket that never
+    // opened just aborts its handshake.
+    if (s.ws.readyState === WebSocket.OPEN) s.ws.close(1000, 'client stop')
+    else s.ws.close()
   } catch {
     /* ignore */
   }
@@ -363,8 +436,24 @@ function startSession(args: ListenStartArgs, owner: WebContents): void {
   const t0 = Date.now()
   console.log(`[omi-listen] start ${args.sessionId} mode=${mode} source=${args.source}`)
 
+  // A non-101 handshake reply — in practice the edge rate limit's 429 in front of
+  // /v4/listen. ws's default turns it into a bare "Unexpected server response: N"
+  // error and DROPS the response, Retry-After included, so the renderer could only
+  // guess a backoff. Keep the status + Retry-After, then terminate: from CONNECTING
+  // that runs ws's own handshake abort, so 'error' and 'close' still fire as before.
+  let rejection: { status: number; retryAfterMs?: number } | null = null
+  ws.on('unexpected-response', (_req, res) => {
+    rejection = {
+      status: res.statusCode ?? 0,
+      retryAfterMs: parseRetryAfterMs(res.headers['retry-after'])
+    }
+    noteBackendStatus(rejection.status, 'WS /v4/listen') // feeds the 429-storm banner
+    ws.terminate()
+  })
+
   ws.on('open', () => {
     console.log(`[omi-listen] connected ${args.sessionId} mode=${mode} in ${Date.now() - t0}ms`)
+    noteBackendStatus(200, 'WS /v4/listen') // an accepted handshake is a recovery signal
     // Flush audio captured while the handshake was in flight, in order, so speech
     // spoken during the connect window (e.g. a quick "hello") isn't lost.
     if (session.pending.length > 0) {
@@ -418,19 +507,32 @@ function startSession(args: ListenStartArgs, owner: WebContents): void {
     if (json && typeof json === 'object' && 'type' in (json as object)) {
       const obj = json as Record<string, unknown>
       const event: ListenEvent = { type: String(obj.type), raw: obj }
+      if (event.type === 'service_status') {
+        // A terminal STT failure (then close 1011 transcription_service_unavailable)
+        // explains itself only here; keep the why in main.log.
+        console.log(
+          `[omi-listen] service_status ${args.sessionId} mode=${mode} ${serviceStatusLogFields(obj)}`
+        )
+      }
       emit(session.ownerId, { sessionId: args.sessionId, kind: 'event', event })
     }
   })
 
   ws.on('error', (err) => {
+    // A rejected handshake keeps ws's historical message (the renderer's 429
+    // classifier matches it) and adds the structured status + Retry-After.
+    const r: { status: number; retryAfterMs?: number } | null = rejection
+    const message = r ? `Unexpected server response: ${r.status}` : err.message
+    const retryAfter = r?.retryAfterMs !== undefined ? ` retry-after=${r.retryAfterMs}ms` : ''
     console.log(
-      `[omi-listen] error ${args.sessionId} mode=${mode} after ${Date.now() - t0}ms (readyState=${ws.readyState}): ${err.message}`
+      `[omi-listen] error ${args.sessionId} mode=${mode} after ${Date.now() - t0}ms (readyState=${ws.readyState}): ${message}${retryAfter}`
     )
     emit(session.ownerId, {
       sessionId: args.sessionId,
       kind: 'error',
-      message: err.message,
-      fatal: ws.readyState !== WebSocket.OPEN
+      message,
+      fatal: ws.readyState !== WebSocket.OPEN,
+      ...(r ? { status: r.status, retryAfterMs: r.retryAfterMs } : {})
     })
   })
 
@@ -572,5 +674,12 @@ export function registerOmiListenHandlers(canStartSession: (ownerId: number) => 
   ipcMain.on('omi-listen:finalize', (e, sessionId: string) => {
     if (!isListenSessionOwnedBy(sessionId, e.sender.id)) return
     finalizeSession(sessionId)
+  })
+  // Log-only: the reconnect loop runs in the capture renderer, whose console never
+  // reaches main.log. No session id and no ownership check because nothing is
+  // mutated — the worst a stray sender can do is print a clamped line.
+  ipcMain.on('omi-listen:retry-notice', (_e, notice: ListenRetryNotice) => {
+    const line = formatRetryNotice(notice)
+    if (line) console.log(line)
   })
 }

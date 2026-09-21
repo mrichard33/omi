@@ -198,3 +198,32 @@ describe('createSegmentRetainer', () => {
     expect(r.list().map((s) => s.text)).toEqual(['one', 'two'])
   })
 })
+
+describe('reconnectDelayJitteredMs with a server Retry-After', () => {
+  it('uses Retry-After as the floor when it is longer than the ladder', () => {
+    // The meeting lane's handshake rides the same per-token edge budget as
+    // /v4/listen, so a 429 there carries the same header. Retrying before it just
+    // spends another request on a guaranteed rejection.
+    expect(
+      reconnectDelayJitteredMs(1, { rateLimited: true, retryAfterMs: 47_000, rand: () => 0 })
+    ).toBe(47_000)
+  })
+
+  it('never shortens the delay below the ladder', () => {
+    expect(
+      reconnectDelayJitteredMs(4, { rateLimited: true, retryAfterMs: 1_000, rand: () => 0 })
+    ).toBe(16_000)
+  })
+
+  it('caps an absurd Retry-After at two minutes', () => {
+    expect(
+      reconnectDelayJitteredMs(1, { rateLimited: true, retryAfterMs: 86_400_000, rand: () => 0 })
+    ).toBe(120_000)
+  })
+
+  it('ignores a NaN Retry-After', () => {
+    expect(
+      reconnectDelayJitteredMs(1, { rateLimited: true, retryAfterMs: Number.NaN, rand: () => 0 })
+    ).toBe(5_000)
+  })
+})

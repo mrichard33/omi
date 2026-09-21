@@ -9,6 +9,7 @@ import type { TranscriptLine } from '../../../shared/types'
 function statusLabel(status: LiveStatus): string {
   if (status === 'connecting') return 'Connecting…'
   if (status === 'live') return 'Listening'
+  if (status === 'paused') return 'Paused — retrying shortly'
   if (status === 'error') return 'Microphone unavailable'
   return 'Idle'
 }
