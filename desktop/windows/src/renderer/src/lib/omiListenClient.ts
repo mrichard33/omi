@@ -4,7 +4,14 @@ import { getPreferences } from './preferences'
 import { getWindowsDeviceIdHash } from './clientDevice'
 
 /** A listen error, carrying the rejected handshake's status + Retry-After when known. */
-export type ListenError = Error & { status?: number; retryAfterMs?: number }
+export type ListenError = Error & {
+  /** HTTP status of a rejected handshake (e.g. 429 from the edge rate limit). */
+  status?: number
+  /** That rejection's Retry-After, in ms from when it was received. */
+  retryAfterMs?: number
+  /** The WS close code, when the lane ended on a close frame. */
+  closeCode?: number
+}
 
 export type OmiListenCallbacks = {
   /** Fires once both the v4/listen WS and the requested audio source are ready. */
@@ -96,7 +103,11 @@ export async function startOmiListen(
       } else {
         // The full source + transport lane never became usable. Surface this as
         // an initial failure even when the backend socket briefly reached OPEN.
-        cb.onError(new Error(`v4/listen closed (${msg.code}) ${msg.reason}`.trim()), true)
+        // The code rides on the Error: a handshake rejected with 429 aborts as a
+        // pre-connect 1006, and the reconnect policy must not read that as a clean stop.
+        const err: ListenError = new Error(`v4/listen closed (${msg.code}) ${msg.reason}`.trim())
+        err.closeCode = msg.code
+        cb.onError(err, true)
       }
     }
   })
