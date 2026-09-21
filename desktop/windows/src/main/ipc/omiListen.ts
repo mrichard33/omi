@@ -11,6 +11,22 @@ import {
 import { ByokKeyStore } from '../agentKernel/byokStore'
 import { isByokActive, withByokHeaders } from '../../shared/byok'
 import { decodeUidFromIdToken } from '../auth/omiAuth'
+import { noteBackendStatus } from '../observability/backendDegraded'
+
+/**
+ * An HTTP `Retry-After` (delta-seconds or an HTTP-date) as ms from `now`, or
+ * undefined when absent/unparseable. Negative dates clamp to 0.
+ */
+export function parseRetryAfterMs(
+  value: string | string[] | undefined,
+  now: number = Date.now()
+): number | undefined {
+  const raw = (Array.isArray(value) ? value[0] : value)?.trim()
+  if (!raw) return undefined
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000
+  const at = Date.parse(raw)
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now)
+}
 
 // Lazy so this module stays import-pure (ByokKeyStore's default path needs
 // app.getPath('userData'), only ready after the app is).
@@ -385,8 +401,24 @@ function startSession(args: ListenStartArgs, owner: WebContents): void {
   const t0 = Date.now()
   console.log(`[omi-listen] start ${args.sessionId} mode=${mode} source=${args.source}`)
 
+  // A non-101 handshake reply — in practice the edge rate limit's 429 in front of
+  // /v4/listen. ws's default turns it into a bare "Unexpected server response: N"
+  // error and DROPS the response, Retry-After included, so the renderer could only
+  // guess a backoff. Keep the status + Retry-After, then terminate: from CONNECTING
+  // that runs ws's own handshake abort, so 'error' and 'close' still fire as before.
+  let rejection: { status: number; retryAfterMs?: number } | null = null
+  ws.on('unexpected-response', (_req, res) => {
+    rejection = {
+      status: res.statusCode ?? 0,
+      retryAfterMs: parseRetryAfterMs(res.headers['retry-after'])
+    }
+    noteBackendStatus(rejection.status, 'WS /v4/listen') // feeds the 429-storm banner
+    ws.terminate()
+  })
+
   ws.on('open', () => {
     console.log(`[omi-listen] connected ${args.sessionId} mode=${mode} in ${Date.now() - t0}ms`)
+    noteBackendStatus(200, 'WS /v4/listen') // an accepted handshake is a recovery signal
     // Flush audio captured while the handshake was in flight, in order, so speech
     // spoken during the connect window (e.g. a quick "hello") isn't lost.
     if (session.pending.length > 0) {
@@ -452,14 +484,20 @@ function startSession(args: ListenStartArgs, owner: WebContents): void {
   })
 
   ws.on('error', (err) => {
+    // A rejected handshake keeps ws's historical message (the renderer's 429
+    // classifier matches it) and adds the structured status + Retry-After.
+    const r: { status: number; retryAfterMs?: number } | null = rejection
+    const message = r ? `Unexpected server response: ${r.status}` : err.message
+    const retryAfter = r?.retryAfterMs !== undefined ? ` retry-after=${r.retryAfterMs}ms` : ''
     console.log(
-      `[omi-listen] error ${args.sessionId} mode=${mode} after ${Date.now() - t0}ms (readyState=${ws.readyState}): ${err.message}`
+      `[omi-listen] error ${args.sessionId} mode=${mode} after ${Date.now() - t0}ms (readyState=${ws.readyState}): ${message}${retryAfter}`
     )
     emit(session.ownerId, {
       sessionId: args.sessionId,
       kind: 'error',
-      message: err.message,
-      fatal: ws.readyState !== WebSocket.OPEN
+      message,
+      fatal: ws.readyState !== WebSocket.OPEN,
+      ...(r ? { status: r.status, retryAfterMs: r.retryAfterMs } : {})
     })
   })
 
