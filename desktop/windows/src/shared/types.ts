@@ -236,6 +236,25 @@ export type ListenStartArgs = {
   clientConversationId?: string
 }
 
+/**
+ * One reconnect decision from the capture renderer, forwarded to the main process
+ * purely so it lands in main.log. Only NUMBERS and a closed set of reason words —
+ * no free text, so nothing the user said can ride this channel onto disk.
+ */
+export type ListenRetryNotice =
+  | {
+      kind: 'retry'
+      attempt: number
+      delayMs: number
+      reason:
+        | 'rate_limited'
+        | 'service_unavailable'
+        | 'abnormal_close'
+        | 'connect_error'
+        | 'clean_restart'
+    }
+  | { kind: 'paused'; failures: number; resumeAtMs: number }
+
 export type ListenMessage =
   | { sessionId: string; kind: 'connected' }
   | { sessionId: string; kind: 'segments'; segments: BackendSegment[] }
@@ -756,6 +775,10 @@ export type OmiBridgeApi = {
    *  endpointing so the trailing transcript segment is emitted promptly. No-op for
    *  'conversation' sessions (v4/listen manages its own endpointing). */
   listenFinalize: (sessionId: string) => void
+  /** Report one reconnect decision so it reaches main.log. Fire-and-forget:
+   *  only the main process's console is tee'd to disk, and this lane's whole
+   *  diagnosis comes from that file. */
+  listenRetryNotice: (notice: ListenRetryNotice) => void
   /** Subscribe to status/segment/event messages from every listen session. */
   onListenMessage: (cb: (msg: ListenMessage) => void) => () => void
   // --- Capture window bridge (Phase 2) ---

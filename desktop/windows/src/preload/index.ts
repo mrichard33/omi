@@ -16,6 +16,7 @@ import type {
   ConversationFolder,
   ConversationSyncPatch,
   CaptureChoice,
+  ListenRetryNotice,
   ListenStartArgs,
   ListenMessage,
   CaptureCommand,
@@ -126,6 +127,8 @@ const omi: OmiBridgeApi = {
     ipcRenderer.send('omi-listen:feed', sessionId, pcm)
   },
   listenFinalize: (sessionId: string) => ipcRenderer.send('omi-listen:finalize', sessionId),
+  listenRetryNotice: (notice: ListenRetryNotice) =>
+    ipcRenderer.send('omi-listen:retry-notice', notice),
   onListenMessage: (cb: (msg: ListenMessage) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, msg: ListenMessage): void => cb(msg)
     ipcRenderer.on('omi-listen:message', listener)

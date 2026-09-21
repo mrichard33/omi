@@ -6,6 +6,7 @@ import {
   type ListenEvent,
   type ListenMessage,
   type ListenMode,
+  type ListenRetryNotice,
   type ListenStartArgs
 } from '../../shared/types'
 import { ByokKeyStore } from '../agentKernel/byokStore'
@@ -26,6 +27,40 @@ export function parseRetryAfterMs(
   if (/^\d+$/.test(raw)) return Number(raw) * 1000
   const at = Date.parse(raw)
   return Number.isNaN(at) ? undefined : Math.max(0, at - now)
+}
+
+const RETRY_REASONS = new Set([
+  'rate_limited',
+  'service_unavailable',
+  'abnormal_close',
+  'connect_error',
+  'clean_restart'
+])
+
+/**
+ * One reconnect decision as a log line. The reconnect loop lives in the capture
+ * RENDERER, whose console never reaches disk — only main-process console is tee'd
+ * to main.log (see mainLog.ts), and main.log is the only artifact anyone has when
+ * this lane misbehaves in the field. So the decision is sent here to be printed.
+ *
+ * Everything is clamped and the reason is checked against a closed set: this
+ * channel crosses from a window that handles transcripts, and nothing but numbers
+ * and enum words may reach the log file.
+ */
+export function formatRetryNotice(notice: ListenRetryNotice, locale?: string): string | null {
+  if (notice?.kind === 'retry') {
+    const delayMs = Math.max(0, Math.round(Number(notice.delayMs) || 0))
+    const attempt = Math.max(1, Math.round(Number(notice.attempt) || 1))
+    const reason = RETRY_REASONS.has(notice.reason) ? notice.reason : 'other'
+    return `[omi-listen] retry in ${Math.round(delayMs / 1000)}s (attempt ${attempt}, reason=${reason})`
+  }
+  if (notice?.kind === 'paused') {
+    const failures = Math.max(0, Math.round(Number(notice.failures) || 0))
+    const at = Number(notice.resumeAtMs)
+    const when = Number.isFinite(at) ? new Date(at).toLocaleTimeString(locale) : 'unknown'
+    return `[omi-listen] paused after ${failures} failures; next attempt at ${when}`
+  }
+  return null
 }
 
 // Lazy so this module stays import-pure (ByokKeyStore's default path needs
@@ -639,5 +674,12 @@ export function registerOmiListenHandlers(canStartSession: (ownerId: number) => 
   ipcMain.on('omi-listen:finalize', (e, sessionId: string) => {
     if (!isListenSessionOwnedBy(sessionId, e.sender.id)) return
     finalizeSession(sessionId)
+  })
+  // Log-only: the reconnect loop runs in the capture renderer, whose console never
+  // reaches main.log. No session id and no ownership check because nothing is
+  // mutated — the worst a stray sender can do is print a clamped line.
+  ipcMain.on('omi-listen:retry-notice', (_e, notice: ListenRetryNotice) => {
+    const line = formatRetryNotice(notice)
+    if (line) console.log(line)
   })
 }

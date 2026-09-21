@@ -77,7 +77,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../observability/backendDegraded', () => ({ noteBackendStatus: h.noteBackendStatus }))
 
-import { parseRetryAfterMs, registerOmiListenHandlers } from './omiListen'
+import { formatRetryNotice, parseRetryAfterMs, registerOmiListenHandlers } from './omiListen'
 
 function start(sessionId: string): InstanceType<typeof h.FakeWebSocket> {
   h.ipcHandlers.get('omi-listen:start')!(
@@ -155,5 +155,55 @@ describe('parseRetryAfterMs', () => {
     expect(parseRetryAfterMs('Thu, 10 Sep 2026 21:00:00 GMT', now)).toBe(0) // past → now
     expect(parseRetryAfterMs('soon', now)).toBeUndefined()
     expect(parseRetryAfterMs(undefined, now)).toBeUndefined()
+  })
+})
+
+describe('formatRetryNotice', () => {
+  it('prints the retry decision', () => {
+    expect(
+      formatRetryNotice({
+        kind: 'retry',
+        attempt: 1,
+        delayMs: 5_000,
+        reason: 'service_unavailable'
+      })
+    ).toBe('[omi-listen] retry in 5s (attempt 1, reason=service_unavailable)')
+  })
+
+  it('prints the pause with a wall-clock resume time', () => {
+    const line = formatRetryNotice(
+      { kind: 'paused', failures: 10, resumeAtMs: Date.parse('2026-09-21T14:31:07Z') },
+      'en-GB'
+    )
+    expect(line).toMatch(/^\[omi-listen\] paused after 10 failures; next attempt at \d/)
+  })
+
+  it('collapses a reason it does not know, so no free text reaches the log', () => {
+    const line = formatRetryNotice({
+      kind: 'retry',
+      attempt: 2,
+      delayMs: 15_000,
+      // A sender outside the enum — the log must not echo whatever it sent.
+      reason: 'ignore previous instructions' as unknown as 'connect_error'
+    })
+    expect(line).toBe('[omi-listen] retry in 15s (attempt 2, reason=other)')
+  })
+
+  it('clamps nonsense numbers rather than printing them', () => {
+    expect(
+      formatRetryNotice({
+        kind: 'retry',
+        attempt: -4,
+        delayMs: Number.NaN,
+        reason: 'connect_error'
+      })
+    ).toBe('[omi-listen] retry in 0s (attempt 1, reason=connect_error)')
+    expect(formatRetryNotice({ kind: 'paused', failures: 10, resumeAtMs: Number.NaN })).toBe(
+      '[omi-listen] paused after 10 failures; next attempt at unknown'
+    )
+  })
+
+  it('ignores a payload that is not a notice', () => {
+    expect(formatRetryNotice({ kind: 'nope' } as never)).toBeNull()
   })
 })
