@@ -35,6 +35,13 @@ on:
 permissions:
   contents: read
 
+# Same omission as desktop-windows-ci had: no concurrency block, on a workflow
+# whose only job runs on windows-latest. Superseded pushes kept a 2x-billed
+# runner busy for a result nobody would read.
+concurrency:
+  group: windows-preflight-portability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   portability:
     name: Native Windows process and launcher contracts
