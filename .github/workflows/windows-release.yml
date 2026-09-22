@@ -1,0 +1,188 @@
+name: windows-release
+
+# Merge to main -> installer built here -> published to Mark's PRIVATE releases
+# repo -> the installed app updates itself on its next 4-hour check.
+#
+# WHY A SEPARATE RELEASES REPO (mrichard33/omi-desktop-releases): the installed
+# app must carry a token to read a private feed, and a token is only as safe as
+# its blast radius. Binaries live in a repo of their own, so the token baked into
+# the build is scoped to THAT repo — it can download Mark's own installers and
+# reach nothing else. Source is never exposed through the updater.
+#
+# TWO TOKENS, BOTH FINE-GRAINED AND BOTH LIMITED TO omi-desktop-releases ONLY:
+#   UPDATER_READ_TOKEN     Contents: Read        -> baked into the build; the
+#                                                   app uses it to fetch updates
+#   RELEASES_PUBLISH_TOKEN Contents: Read+write  -> used HERE to upload; never
+#                                                   reaches the build output
+# Keep them distinct. A publish token in the bundle would ship write access to
+# every installed copy.
+#
+# This does NOT replace desktop_windows_release.yml (upstream's manual,
+# tag-driven release into BasedHardware/omi). That workflow stays for syncing
+# with upstream; this one is the fork's own train.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/windows/**'
+      - '.github/workflows/windows-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize; never cancel mid-publish (a cancelled run can leave a release
+  # with a latest.yml and no installer, which every client would then 404 on).
+  group: windows-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: desktop/windows
+
+jobs:
+  build:
+    name: Build · test · publish
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          # Pinned to 10 to match the repo (desktop/windows/AGENTS.md): a
+          # different major silently ignores .npmrc's node-linker=hoisted and
+          # breaks the pi-mono dependency-closure check.
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          # The app pins >=22.19.0 <23 (.nvmrc); 24+ fails pretest.
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/windows/pnpm-lock.yaml
+      # OCR + UI-automation helpers are .NET projects built during install/build.
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Cache electron & electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('desktop/windows/pnpm-lock.yaml') }}
+          restore-keys: electron-builder-windows-
+
+      # .env.example is PUBLIC client config only (Firebase web keys, PostHog
+      # publishable key, Omi API base URLs) — see the embedded-config audit in
+      # desktop/windows/docs/reece-release.md. Nothing secret is added here.
+      - name: Provision .env (public client config)
+        shell: pwsh
+        run: Copy-Item .env.example .env
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The gate. A red suite must never reach an installed app, and publishing
+      # is a later step in the SAME job, so a failure here ends the run.
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Lint
+        run: pnpm run lint
+      - name: Test
+        run: pnpm test
+
+      - name: Stamp version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node scripts/reece-version.mjs "${{ github.run_number }}")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $VERSION"
+
+      # The read-only updater token is injected ONLY here, as a build-time env
+      # var electron-vite freezes into the main bundle
+      # (import.meta.env.MAIN_VITE_UPDATER_READ_TOKEN -> src/main/updateFeed.ts).
+      # A build without it still installs and runs; auto-update is simply off and
+      # says so in the log.
+      #
+      # `pnpm build:win` carries `--config electron-builder.config.mjs --publish
+      # never`. Both matter: the config computes the pi-mono asarUnpack closure,
+      # and --publish never stops electron-builder auto-uploading to the `publish`
+      # block (which is the update FEED pointer, not an upload target). The upload
+      # is the explicit `gh release` step below, with the other token.
+      - name: Build installer
+        env:
+          MAIN_VITE_UPDATER_READ_TOKEN: ${{ secrets.UPDATER_READ_TOKEN }}
+        run: pnpm build:win
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la dist || true
+          # latest.yml is the update feed metadata. Without it the release exists
+          # but no installed app can ever see it.
+          test -f dist/latest.yml || { echo "latest.yml missing — auto-update would be broken." >&2; exit 1; }
+          compgen -G "dist/*.exe" >/dev/null || { echo "installer .exe missing." >&2; exit 1; }
+          # The blockmap is what makes updates differential instead of a full
+          # re-download every time.
+          compgen -G "dist/*.exe.blockmap" >/dev/null || { echo "installer blockmap missing." >&2; exit 1; }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: omi-windows-installer-${{ steps.version.outputs.version }}
+          path: |
+            desktop/windows/dist/*.exe
+            desktop/windows/dist/*.exe.blockmap
+            desktop/windows/dist/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      # PUBLISH — main only. A workflow_dispatch from a branch builds and
+      # uploads the artifact above, so the whole path is exercised on a PR
+      # branch, but nothing reaches the release feed except from main.
+      - name: Publish release to omi-desktop-releases
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PUBLISH_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASES_REPO: mrichard33/omi-desktop-releases
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "RELEASES_PUBLISH_TOKEN is not set — cannot publish." >&2
+            echo "Add it under Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          NOTES="Automated Windows build of \`${GITHUB_SHA}\` from main (run ${GITHUB_RUN_NUMBER}).
+
+          **Unsigned build** — Windows SmartScreen warns \"unknown publisher\" on first install; choose More info -> Run anyway. Code signing is not wired up yet.
+
+          Installed apps pick this up automatically within 4 hours, or on their next launch."
+
+          # Idempotent on a re-run.
+          if ! gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "$RELEASES_REPO" \
+              --title "Omi for Windows ${VERSION}" \
+              --notes "$NOTES"
+          fi
+
+          # --clobber so a re-run overwrites a partial upload. latest.yml goes
+          # LAST: it is what points clients at the installer, so it must never be
+          # readable before the file it names.
+          gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber \
+            dist/*.exe \
+            dist/*.exe.blockmap
+          gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber \
+            dist/latest.yml
+
+          echo "Published $TAG to $RELEASES_REPO"
