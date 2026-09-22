@@ -1,0 +1,6 @@
+{
+  "changes": [
+    "Omi now updates itself in the background and applies the update the next time you quit — no more pulling and restarting by hand.",
+    "An update never restarts Omi in the middle of a recording or a meeting."
+  ]
+}

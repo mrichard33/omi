@@ -55,6 +55,7 @@ docs/*
 !docs/perf-invisible-wins.md
 !docs/linux-screen-recording.md
 !docs/conversation-finalize.md
+!docs/reece-release.md
 skills-lock.json
 
 # Visual brainstorming companion

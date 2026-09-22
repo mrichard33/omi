@@ -70,6 +70,17 @@ for this alone. **Node pin:** `>=22.19.0 <23` (`.nvmrc`; 24+ fails pretest).
 
 ## Release Pipeline
 
+**This fork's own train (the one that reaches Mark's PC): `docs/reece-release.md`.**
+`windows-release.yml` builds and publishes on every merge to `main` touching
+`desktop/windows/**`, into the private `mrichard33/omi-desktop-releases`, and the
+installed app auto-updates from there. The update feed points at that repo and
+nothing else — never `BasedHardware/omi`, which would replace this fork's build
+with Omi's stock app. Two fine-grained tokens, both scoped to the releases repo
+only: `UPDATER_READ_TOKEN` (Contents: Read, baked into the bundle) and
+`RELEASES_PUBLISH_TOKEN` (Contents: Read+write, CI only, never bundled).
+
+Upstream's manual tag-driven workflow below is kept for syncing with upstream.
+
 Full detail: `docs/release-pipeline.md` (mirrors macOS's auto-release shape in
 what it produces; Windows has no external CI, so the same workflow also
 builds the NSIS installer on a `windows-latest` runner). Unlike the macOS
