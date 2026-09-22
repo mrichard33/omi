@@ -55,6 +55,9 @@ export interface TrayMenuActions {
   openSettings: () => void
   /** Run a manual update check (Mac's "Check for Updates…"). */
   checkForUpdates: () => void
+  /** Install the staged update and relaunch. Only reachable while one IS staged
+   *  (the item is omitted otherwise), and refused mid-recording by the updater. */
+  restartToUpdate: () => void
   /** Flip the screen-analysis master. Labeled "Screen Analysis" on Windows: Mac's
    *  menu bar calls it "Screen Capture", but Windows already uses that label for the
    *  Rewind capture toggle (a different setting), so we disambiguate. */
@@ -70,9 +73,15 @@ export interface TrayMenuActions {
  * Screen Analysis toggle sits at the top and Check for Updates sits just before
  * Quit. `screenCaptureEnabled` drives the checkbox; `toggleLabel` is the
  * pause/resume label from describeTray.
+ *
+ * `updateReady` adds "Restart to update" next to Check for Updates. This is the
+ * "Restart now" affordance the update notice points at: an Electron notification
+ * on Windows cannot carry an action button (`actions` is macOS-only), and the
+ * tray is reachable whether or not a window is open. The item is OMITTED when
+ * nothing is staged rather than disabled — a greyed-out item invites clicking.
  */
 export function buildTrayMenuTemplate(
-  opts: { toggleLabel: string; screenCaptureEnabled: boolean },
+  opts: { toggleLabel: string; screenCaptureEnabled: boolean; updateReady?: boolean },
   actions: TrayMenuActions
 ): MenuItemConstructorOptions[] {
   return [
@@ -89,6 +98,9 @@ export function buildTrayMenuTemplate(
     { label: 'Settings', click: () => actions.openSettings() },
     { type: 'separator' },
     { label: 'Check for Updates', click: () => actions.checkForUpdates() },
+    ...(opts.updateReady
+      ? [{ label: 'Restart to update', click: (): void => actions.restartToUpdate() }]
+      : []),
     { type: 'separator' },
     { label: 'Quit Omi', click: () => actions.quit() }
   ]
