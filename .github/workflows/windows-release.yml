@@ -185,6 +185,24 @@ jobs:
             exit 1
           fi
           TAG="v${VERSION}"
+
+          # A brand-new repository has NO COMMITS, and GitHub refuses to create a
+          # release in one: POST /releases answers `422 Repository is empty`,
+          # because a release has to point at a commit. That is exactly how run #3
+          # died — after a clean 31-minute build, at the last step. Seed it here
+          # rather than leaving it a manual step someone has to remember: Contents
+          # write on the releases repo is precisely what RELEASES_PUBLISH_TOKEN
+          # already carries. A no-op on every run after the first.
+          if ! gh api "repos/$RELEASES_REPO/commits" --jq '.[0].sha' >/dev/null 2>&1; then
+            echo "$RELEASES_REPO has no commits — seeding it."
+            # One printf, not a multi-line shell string: an unindented line inside
+            # a `run: |` block ends the YAML block scalar and breaks the workflow.
+            SEED_README=$(printf '%s' '# omi-desktop-releases\n\nWindows installers and latest.yml update metadata for the Reece build of Omi,\npublished by .github/workflows/windows-release.yml in mrichard33/omi.\n\nNo source code lives here, and that separation is the point: the read-only\ntoken baked into every installed copy is scoped to this repository alone.\nSee desktop/windows/docs/reece-release.md in mrichard33/omi.\n')
+            gh api --method PUT "repos/$RELEASES_REPO/contents/README.md" \
+              -f message="Initial commit (seeded by windows-release)" \
+              -f content="$(printf '%b' "$SEED_README" | base64 | tr -d '\n')"
+          fi
+
           NOTES="Automated Windows build of \`${GITHUB_SHA}\` from main (run ${GITHUB_RUN_NUMBER}).
 
           **Unsigned build** — Windows SmartScreen warns \"unknown publisher\" on first install; choose More info -> Run anyway. Code signing is not wired up yet.

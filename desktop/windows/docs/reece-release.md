@@ -28,6 +28,12 @@ Create them at GitHub → Settings → Developer settings → Fine-grained token
 add both under `mrichard33/omi` → Settings → Secrets and variables → Actions →
 the **Secrets** tab → **New repository secret**.
 
+The releases repo itself may be brand new and **empty** — the workflow seeds it
+with a README on the first publish. It has to: GitHub answers
+`422 Repository is empty` to a release created in a repo with no commits, because
+a release must point at one. Run #3 died exactly there, after a clean 31-minute
+build.
+
 **Repository secrets, not environment secrets.** GitHub only exposes an
 environment secret to a job that declares `environment: <name>`, and the build
 job declares none — an environment secret resolves to an empty string there,
