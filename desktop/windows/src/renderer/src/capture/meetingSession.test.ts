@@ -9,28 +9,43 @@ type LaneCb = {
   onLine: (l: { id: string; text: string; speaker?: string }) => void
   onBackend: (backend: 'omi') => void
   onError: (e: Error) => void
+  onSegments?: (segments: { id: string; text: string }[]) => void
+  onEvent?: (event: { type: string; raw: Record<string, unknown> }) => void
 }
 const laneCbs: Partial<Record<'mic' | 'system', LaneCb>> = {}
 const laneModes: Partial<Record<'mic' | 'system', string>> = {}
+const laneConversationIds: Partial<Record<'mic' | 'system', string | undefined>> = {}
 const laneStarts: Record<'mic' | 'system', number> = { mic: 0, system: 0 }
 let systemShouldFail = false
 // Like production startTranscription: a failed start reports through cb.onError
 // first, then rejects.
 let systemFailMessage: string | null = null
 
+// The REAL conversationFinalize module runs; only its transport is stubbed.
+const finalizePost = vi.fn(async () => ({ data: {} }))
+vi.mock('../lib/apiClient', () => ({
+  omiApi: {
+    post: (...a: unknown[]) => finalizePost(...(a as [])),
+    get: async () => ({ data: [] })
+  }
+}))
+
 vi.mock('../lib/transcriptionClient', () => ({
-  startTranscription: vi.fn(async (source: 'mic' | 'system', cb: LaneCb, mode?: string) => {
-    laneCbs[source] = cb
-    laneModes[source] = mode
-    laneStarts[source]++
-    if (source === 'system' && systemShouldFail) throw new Error('loopback unavailable')
-    if (source === 'system' && systemFailMessage) {
-      const error = new Error(systemFailMessage)
-      cb.onError(error)
-      throw error
+  startTranscription: vi.fn(
+    async (source: 'mic' | 'system', cb: LaneCb, mode?: string, clientConversationId?: string) => {
+      laneCbs[source] = cb
+      laneModes[source] = mode
+      laneConversationIds[source] = clientConversationId
+      laneStarts[source]++
+      if (source === 'system' && systemShouldFail) throw new Error('loopback unavailable')
+      if (source === 'system' && systemFailMessage) {
+        const error = new Error(systemFailMessage)
+        cb.onError(error)
+        throw error
+      }
+      return { stop: stops[source], finalize: vi.fn() }
     }
-    return { stop: stops[source], finalize: vi.fn() }
-  })
+  )
 }))
 
 const IDLE_CLOSE =
@@ -61,6 +76,10 @@ vi.mock('./liveMicSession', () => ({
 }))
 
 import { startMeetingSession, formatMeetingTranscript } from './meetingSession'
+import {
+  FINALIZE_GRACE_MS,
+  __resetConversationFinalizeStateForTests
+} from '../lib/conversationFinalize'
 
 const insertLocalConversation = vi.fn(async (c: { transcript: string }): Promise<void> => void c)
 const notifyConversationsChanged = vi.fn()
@@ -72,6 +91,10 @@ beforeEach(() => {
   laneCbs.system = undefined
   laneModes.mic = undefined
   laneModes.system = undefined
+  laneConversationIds.mic = undefined
+  laneConversationIds.system = undefined
+  finalizePost.mockClear()
+  __resetConversationFinalizeStateForTests()
   laneStarts.mic = 0
   laneStarts.system = 0
   systemShouldFail = false
@@ -331,5 +354,60 @@ describe('startMeetingSession', () => {
     expect(stops.mic).toHaveBeenCalledOnce()
     expect(stops.system).toHaveBeenCalledOnce()
     expect(insertLocalConversation).toHaveBeenCalledOnce()
+  })
+})
+
+// A meeting that ended left its mic conversation at "Processing" on the server:
+// /v4/listen only finalizes a desktop conversation when its teardown sees close
+// code 1000 (backend/routers/listen/runtime.py), which a dropped or timed-out
+// socket never delivers. Measured 2026-09-22.
+describe('startMeetingSession — conversation finalize', () => {
+  const announceMic = (id: string): void =>
+    laneCbs.mic?.onEvent?.({
+      type: 'conversation_session',
+      raw: { type: 'conversation_session', conversation_id: id }
+    })
+
+  it('proposes a conversation id for the mic lane it opens itself', async () => {
+    const session = await startMeetingSession({ appName: 'Zoom', onError: vi.fn() })
+    expect(laneConversationIds.mic).toBeTruthy()
+    // The local-only system lane must never claim a server conversation.
+    expect(laneConversationIds.system).toBeUndefined()
+    await session.stop()
+  })
+
+  it('finalizes its own mic conversation when the meeting ends', async () => {
+    vi.useFakeTimers()
+    const session = await startMeetingSession({ appName: 'Zoom', onError: vi.fn() })
+    announceMic('conv-meeting')
+    laneCbs.mic?.onSegments?.([{ id: 'm1', text: 'what we agreed in the meeting' }])
+
+    await session.stop()
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).toHaveBeenCalledWith('/v1/conversations/conv-meeting/finalize', {})
+    vi.useRealTimers()
+  })
+
+  it('does NOT finalize a delegated mic — the continuous session keeps recording', async () => {
+    vi.useFakeTimers()
+    live.health = 'ready' // C6: the always-on session already owns the mic
+    const session = await startMeetingSession({ appName: 'Zoom', onError: vi.fn() })
+    expect(laneStarts.mic).toBe(0) // the meeting never opened a mic lane
+
+    await session.stop()
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('does NOT finalize a mic conversation that never carried audio', async () => {
+    vi.useFakeTimers()
+    const session = await startMeetingSession({ appName: 'Zoom', onError: vi.fn() })
+    announceMic('conv-silent') // announced, but not one segment arrived
+
+    await session.stop()
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 })

@@ -75,6 +75,17 @@ vi.mock('../lib/analytics', () => ({
   trackEvent: (event: string, props?: Record<string, unknown>) => trackEvent(event, props)
 }))
 
+// The REAL conversationFinalize module runs; only its transport is stubbed, so
+// these tests exercise the actual close-code rule and the actual streaming guard
+// rather than a re-statement of them.
+const finalizePost = vi.fn(async () => ({ data: {} }))
+vi.mock('../lib/apiClient', () => ({
+  omiApi: {
+    post: (...a: unknown[]) => finalizePost(...(a as [])),
+    get: async () => ({ data: [] })
+  }
+}))
+
 import {
   getLiveMicSessionHealth,
   isLiveMicSessionActive,
@@ -82,6 +93,10 @@ import {
   waitForLiveMicSessionReady
 } from './liveMicSession'
 import { MAX_CONSECUTIVE_FAILURES } from './listenRetryPolicy'
+import {
+  FINALIZE_GRACE_MS,
+  __resetConversationFinalizeStateForTests
+} from '../lib/conversationFinalize'
 
 // Longer than any single rung of the reconnect ladder (300s, and rand is pinned to
 // 0 so the ±20% jitter subtracts): advancing by this always fires the next connect.
@@ -111,6 +126,8 @@ beforeEach(() => {
   notifyConversationsChanged.mockClear()
   listenRetryNotice.mockClear()
   trackEvent.mockClear()
+  finalizePost.mockClear()
+  __resetConversationFinalizeStateForTests()
   vi.stubGlobal('window', {
     omi: { insertLocalConversation, notifyConversationsChanged, listenRetryNotice }
   })
@@ -376,6 +393,128 @@ describe('startLiveMicSession', () => {
 
     await expect(ready).resolves.toBe(false)
     expect(getLiveMicSessionHealth()).toBe('failed')
+    ctrl.stop()
+  })
+})
+
+// THE STRANDED-CONVERSATION REGRESSION (measured 2026-09-22): 33 of 36 desktop
+// conversations sat at "Processing" for 2h–4d because /v4/listen only finalizes
+// a desktop conversation when its teardown sees close code 1000
+// (backend/routers/listen/runtime.py), and nothing in this client ever asked for
+// one by id. These cover the three live triggers; the sweep and the close-code
+// rule itself are covered in lib/conversationFinalize.test.ts.
+describe('startLiveMicSession — conversation finalize', () => {
+  const announce = (id: string): void =>
+    latest().cb.onEvent?.({
+      type: 'conversation_session',
+      raw: { type: 'conversation_session', conversation_id: id }
+    })
+
+  // Segments alone: this is what the backend stored, and what decides whether an
+  // abnormally-closed conversation has content worth finalizing.
+  const receiveSegments = (text = 'a long enough sentence to finalize'): void => {
+    latest().cb.onSegments?.([{ id: 's1', text, is_user: true, start: 0, end: 2 }])
+  }
+
+  // Segments AND a delivered line — the line is what arms the 30s silence timer,
+  // so only the tests that want a silence finalize use this.
+  const speak = (text = 'this is a long enough sentence to finalize'): void => {
+    receiveSegments(text)
+    latest().cb.onLine({ id: 's1', text })
+  }
+
+  it('finalizes the conversation when the session stops', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    latest().cb.onBackend('omi')
+    announce('conv-stop')
+    speak()
+
+    ctrl.stop()
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).toHaveBeenCalledWith('/v1/conversations/conv-stop/finalize', {})
+  })
+
+  it('finalizes the conversation the silence timeout closes, then starts a new one', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    latest().cb.onBackend('omi')
+    announce('conv-silence')
+    speak()
+
+    // 30s of silence ends the conversation; the grace delay then finalizes it.
+    await vi.advanceTimersByTimeAsync(30_000 + FINALIZE_GRACE_MS)
+    expect(finalizePost).toHaveBeenCalledWith('/v1/conversations/conv-silence/finalize', {})
+    ctrl.stop()
+  })
+
+  it('finalizes after an abnormal close once the lane gives up (1011 + real audio)', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    latest().cb.onBackend('omi')
+    announce('conv-1011')
+    receiveSegments()
+
+    const drop = (): void => {
+      latest().cb.onError(
+        Object.assign(new Error('closed (1011) transcription_service_unavailable'), {
+          closeCode: 1011
+        })
+      )
+    }
+    // Reconnects RESUME the same conversation, so nothing is finalized while the
+    // lane is still trying — only when the breaker opens and abandons it.
+    drop()
+    await vi.advanceTimersByTimeAsync(PAST_BACKOFF_MS)
+    expect(finalizePost).not.toHaveBeenCalled()
+
+    for (let i = 1; i < MAX_CONSECUTIVE_FAILURES; i++) {
+      drop()
+      await vi.advanceTimersByTimeAsync(PAST_BACKOFF_MS)
+    }
+    expect(finalizePost).toHaveBeenCalledWith('/v1/conversations/conv-1011/finalize', {})
+    ctrl.stop()
+  })
+
+  it('does NOT finalize an abnormal close that carried no audio', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    latest().cb.onBackend('omi')
+    announce('conv-empty') // announced, but not one segment ever arrived
+
+    for (let i = 0; i < MAX_CONSECUTIVE_FAILURES; i++) {
+      latest().cb.onError(Object.assign(new Error('outage'), { closeCode: 1011 }))
+      await vi.advanceTimersByTimeAsync(PAST_BACKOFF_MS)
+    }
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).not.toHaveBeenCalled()
+    ctrl.stop()
+  })
+
+  it('finalizes the id the BACKEND named, not the one we proposed', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    const proposed = latest().clientConversationId
+    latest().cb.onBackend('omi')
+    announce('server-rolled-id') // the backend rolled to an id of its own
+    speak()
+
+    ctrl.stop()
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS)
+    expect(finalizePost).toHaveBeenCalledWith('/v1/conversations/server-rolled-id/finalize', {})
+    expect(finalizePost).not.toHaveBeenCalledWith(`/v1/conversations/${proposed}/finalize`, {})
+  })
+
+  it('never finalizes a conversation that is still streaming', async () => {
+    const ctrl = startLiveMicSession()
+    await vi.advanceTimersByTimeAsync(0)
+    latest().cb.onBackend('omi')
+    announce('conv-live')
+    speak()
+
+    // Still live: no stop, no abandonment, and well past any grace delay.
+    await vi.advanceTimersByTimeAsync(FINALIZE_GRACE_MS * 4)
+    expect(finalizePost).not.toHaveBeenCalled()
     ctrl.stop()
   })
 })

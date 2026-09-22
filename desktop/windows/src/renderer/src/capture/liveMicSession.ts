@@ -11,6 +11,14 @@ import {
   createSegmentRetainer
 } from './liveRescue'
 import { HEALTHY_SESSION_MS, createListenRetryPolicy } from './listenRetryPolicy'
+import {
+  conversationIdFromEvent,
+  finalizeConversation,
+  markConversationSettled,
+  markConversationStreaming,
+  scheduleFinalize,
+  shouldFinalizeAfterClose
+} from '../lib/conversationFinalize'
 import { trackEvent } from '../lib/analytics'
 import type { ListenError } from '../lib/omiListenClient'
 import type { LocalConversation } from '../../../shared/types'
@@ -143,6 +151,14 @@ export function startLiveMicSession(): LiveMicController {
 
   // Per-conversation state, reset by resetConversation() at each boundary.
   let clientConversationId = crypto.randomUUID()
+  // The conversation the BACKEND says this socket is writing into. Starts as our
+  // proposed id (the backend adopts it verbatim) and follows every
+  // `conversation_session` event, so a server-side rollover cannot leave us
+  // finalizing the previous, already-finished conversation.
+  let backendConversationId: string = clientConversationId
+  // Segments delivered into the CURRENT backend conversation. A socket that
+  // ended abnormally without any is not worth finalizing — there is no content.
+  let segmentsInConversation = 0
   let conversationStartedAt = Date.now()
   let retainer = createSegmentRetainer()
   // The reconnect budget spans conversations: the backend, not the conversation,
@@ -190,13 +206,15 @@ export function startLiveMicSession(): LiveMicController {
   // 'unconfirmed' so the outbox runs its dedupe-against-cloud BEFORE posting — if
   // the backend DID manage to finalize a conversation from the pre-drop audio we
   // adopt it instead of creating a duplicate.
-  const rescue = (): void => {
-    const segs = retainer.list()
+  // `segs` + `startedAt` are passed in (not read from the live state) because the
+  // rescue can now run AFTER the abandoned conversation has been finalized and
+  // the lane has rolled to a fresh one — see the breaker branch in connect().
+  const rescue = (segs = retainer.list(), startedAt = conversationStartedAt): void => {
     const transcript = segmentsToTranscript(segs)
     if (transcriptWordCount(transcript) < MIN_WORDS) return
     const row: LocalConversation = {
       id: `local-${crypto.randomUUID()}`,
-      startedAt: conversationStartedAt,
+      startedAt,
       endedAt: Date.now(),
       transcript,
       createdAt: Date.now(),
@@ -231,6 +249,11 @@ export function startLiveMicSession(): LiveMicController {
     }
     handle = null
     saveCurrent()
+    // Closing the socket asks the backend to finalize, but it only obliges when
+    // its teardown sees close code 1000 — so say so explicitly rather than
+    // trusting the transport. Scheduled (not immediate) so the backend's own
+    // teardown flushes the trailing segments first; the call then no-ops.
+    scheduleFinalize(backendConversationId, 'stop')
     startConversation() // fresh conversation: new resumable id, cleared retainer
   }
 
@@ -296,10 +319,21 @@ export function startLiveMicSession(): LiveMicController {
         onSegments: (segs) => {
           if (cancelled) return
           retainer.add(segs) // retained for the breaker-pause rescue
+          segmentsInConversation += segs.length
           if (segs.length > 0) markHealthy()
         },
         onEvent: (ev) => {
           if (cancelled) return
+          const announced = conversationIdFromEvent(ev)
+          if (announced && announced !== backendConversationId) {
+            // The backend named a different conversation than the one we were
+            // tracking — either it adopted our proposed id, or it rolled to a
+            // server-minted one. Follow it: that is what any finalize must name.
+            markConversationSettled(backendConversationId)
+            backendConversationId = announced
+            segmentsInConversation = 0
+          }
+          if (announced) markConversationStreaming(announced)
           if (isConversationBoundary(ev)) {
             // Backend finalized on its own (beat our silence timer). Skip trivial
             // blips; otherwise keep the transcript shown as saved, and reset the
@@ -309,6 +343,12 @@ export function startLiveMicSession(): LiveMicController {
             if (liveWordCount() >= MIN_WORDS) saveCurrent()
             retainer = createSegmentRetainer()
             conversationStartedAt = Date.now()
+            // The backend finalized this one itself; nothing left to ask for, and
+            // its content must not count towards the NEXT conversation's
+            // abnormal-close decision. The id it rolls to arrives as the next
+            // `conversation_session` event.
+            markConversationSettled(backendConversationId)
+            segmentsInConversation = 0
           }
         },
         onError: (e) => {
@@ -327,6 +367,12 @@ export function startLiveMicSession(): LiveMicController {
             // raises the "Upgrade" modal. Do NOT call showUsageLimit here: this
             // hidden capture window is a separate renderer, so its in-memory popup
             // signal never reaches the popup host.
+            // The lane is done with this conversation and nothing will reopen it,
+            // so anything already captured must be finalized here or it sits at
+            // "Processing" until someone opens the web app.
+            if (shouldFinalizeAfterClose((e as ListenError).closeCode, segmentsInConversation)) {
+              scheduleFinalize(backendConversationId, 'abnormal_close')
+            }
             setControllerHealth(controllerId, 'failed')
             captureLiveStore.setStatus('error', (e as Error).message)
             return
@@ -364,10 +410,28 @@ export function startLiveMicSession(): LiveMicController {
             return
           }
 
-          // The breaker opened. Rescue what was captured, then stand down for ten
-          // minutes rather than keep hammering a backend that is plainly down —
-          // it is the fast retries themselves that earn the 429s.
-          rescue()
+          // The breaker opened. Finalize and rescue what was captured, then stand
+          // down for ten minutes rather than keep hammering a backend that is
+          // plainly down — it is the fast retries themselves that earn the 429s.
+          //
+          // ORDER MATTERS. The backend already holds every retained segment (they
+          // came back from it), so finalizing turns them into a real cloud
+          // conversation; the rescue exists for when it did NOT, and dedupes by
+          // reading the cloud list first. Running the finalize to completion
+          // BEFORE the rescue is what makes that dedupe deterministic instead of
+          // a race — otherwise both can post the same speech.
+          const abandonedId = backendConversationId
+          const abandonedSegments = segmentsInConversation
+          const retained = retainer.list()
+          const retainedStartedAt = conversationStartedAt
+          markConversationSettled(abandonedId)
+          if (shouldFinalizeAfterClose(err.closeCode, abandonedSegments)) {
+            void finalizeConversation(abandonedId, 'abnormal_close').finally(() =>
+              rescue(retained, retainedStartedAt)
+            )
+          } else {
+            rescue(retained, retainedStartedAt)
+          }
           circuitOpen = true
           trackEvent('fallback_triggered', {
             component: 'live_capture',
@@ -416,7 +480,13 @@ export function startLiveMicSession(): LiveMicController {
   // reconnect budget: the breaker rolls the conversation when it opens, and that
   // is the one case where the lane is anything but healthy.
   function resetConversation(): void {
+    markConversationSettled(backendConversationId)
     clientConversationId = crypto.randomUUID()
+    backendConversationId = clientConversationId
+    // Claimed before the socket opens: the backend adopts a client-proposed id
+    // verbatim, so from here on the sweep must treat it as live, not orphaned.
+    markConversationStreaming(backendConversationId)
+    segmentsInConversation = 0
     conversationStartedAt = Date.now()
     retainer = createSegmentRetainer()
   }
@@ -451,6 +521,11 @@ export function startLiveMicSession(): LiveMicController {
         /* ignore */
       }
       handle = null
+      // The session is over (the user stopped listening, the app is sleeping or
+      // quitting). Closing the socket asks the backend to finalize; say it
+      // outright as well, since the backend only obliges on a clean 1000 and a
+      // teardown mid-quit rarely gets one. Nothing captured → nothing to ask for.
+      if (segmentsInConversation > 0) scheduleFinalize(backendConversationId, 'stop')
       captureLiveStore.reset()
     }
   }
