@@ -54,6 +54,7 @@ docs/*
 !docs/mac-parity-audit
 !docs/perf-invisible-wins.md
 !docs/linux-screen-recording.md
+!docs/conversation-finalize.md
 skills-lock.json
 
 # Visual brainstorming companion
