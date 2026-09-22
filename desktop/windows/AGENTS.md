@@ -70,16 +70,12 @@ for this alone. **Node pin:** `>=22.19.0 <23` (`.nvmrc`; 24+ fails pretest).
 
 ## Release Pipeline
 
-**This fork's own train (the one that reaches Mark's PC): `docs/reece-release.md`.**
-`windows-release.yml` builds and publishes on every merge to `main` touching
-`desktop/windows/**`, into the private `mrichard33/omi-desktop-releases`, and the
-installed app auto-updates from there. The update feed points at that repo and
-nothing else — never `BasedHardware/omi`, which would replace this fork's build
-with Omi's stock app. Two fine-grained tokens, both scoped to the releases repo
-only: `UPDATER_READ_TOKEN` (Contents: Read, baked into the bundle) and
-`RELEASES_PUBLISH_TOKEN` (Contents: Read+write, CI only, never bundled).
-
-Upstream's manual tag-driven workflow below is kept for syncing with upstream.
+**This fork's own train — `docs/reece-release.md`.** `windows-release.yml`
+publishes every merge to `main` into the private `mrichard33/omi-desktop-releases`,
+and the installed app updates from there. The feed must never name
+`BasedHardware/omi`: that would replace this build with Omi's stock app. Two
+fine-grained tokens, releases-repo only. Upstream's manual workflow below stays
+for upstream syncs.
 
 Full detail: `docs/release-pipeline.md` (mirrors macOS's auto-release shape in
 what it produces; Windows has no external CI, so the same workflow also
@@ -93,18 +89,16 @@ leave a stale, unmerged PR behind after a release — see issue #10727. If you
 hit this, check for an open `chore(windows): sync release v<version> to main`
 PR before assuming something else broke.
 
-**Auto-update** (`src/main/updater.ts`, `windowsUpdateFeed.ts`): Windows-only
-today (`platform !== 'win32'` gate) — Linux gets no auto-update mechanism at
-all, and there's currently no release pipeline publishing Linux builds to
-GitHub Releases in the first place. Closing this gap needs both a new Linux
-release-publishing workflow and a backend update-feed endpoint mirroring
-`/v2/desktop/update-feed/windows` — check for an open tracking issue/PR before
-starting this from scratch.
+**Auto-update** (`src/main/updater.ts`, `updateFeed.ts`): Windows-only today
+(`platform !== 'win32'` gate) — Linux gets no auto-update and no release
+pipeline. Closing that gap needs a Linux publishing workflow plus a Linux feed;
+check for an open tracking issue/PR first.
 
 ## Docs index
 
-- `docs/release-pipeline.md` — Windows release/tagging/signing/auto-update, in
-  depth.
+- `docs/reece-release.md` — **this fork's release train**: tokens, versioning,
+  rollback.
+- `docs/release-pipeline.md` — upstream's Windows release/tagging/signing.
 - `docs/bar-gotchas.md` — **read before touching bar window/animation code**:
   the top-edge companion bar has real, non-obvious pathologies (OS show-fade,
   clip-reveal, orb remount blink, eaten hardware clicks).

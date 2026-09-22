@@ -5,13 +5,15 @@
   "canonical_prevention": "Resolve update metadata through an explicit platform-and-channel authority, validate the immutable feed at the client trust boundary, and exercise cross-platform release coexistence plus strict stable-channel behavior in contract tests.",
   "canonical_prevention_artifact": [
     "backend/tests/unit/test_desktop_updates.py",
-    "desktop/windows/src/main/windowsUpdateFeed.test.ts"
+    "desktop/windows/src/main/updater.test.ts"
   ],
-  "evidence_prs": [10610],
+  "evidence_prs": [
+    10610
+  ],
   "scope_hints": [
     "backend/routers/updates.py",
     "desktop/windows/src/main/updater.ts",
-    "desktop/windows/src/main/windowsUpdateFeed.ts",
+    "desktop/windows/src/main/updateFeed.ts",
     "desktop/windows/electron-builder.config.mjs"
   ],
   "status": "open"
