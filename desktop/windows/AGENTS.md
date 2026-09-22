@@ -68,6 +68,12 @@ for this alone. **Node pin:** `>=22.19.0 <23` (`.nvmrc`; 24+ fails pretest).
   degradation) against the real running app — more runtime coverage than the
   Windows job gets today.
 
+**A test that reaches the live API passes vacuously in `checks`:** with no `.env`,
+`VITE_OMI_API_BASE` is empty, so the request is refused instantly by localhost.
+`windows-release.yml` provisions `.env` before the same suite, so that is where it
+shows up — as a timeout, at release time. Mock the network at its module seam
+(`vi.mock('../lib/chatQuotaGate', ...)`, as every `useChat*.test.tsx` does).
+
 ## Release Pipeline
 
 **This fork's own train — `docs/reece-release.md`.** `windows-release.yml`
@@ -77,12 +83,10 @@ and the installed app updates from there. The feed must never name
 fine-grained tokens, releases-repo only. Upstream's manual workflow below stays
 for upstream syncs.
 
-Full detail: `docs/release-pipeline.md` (mirrors macOS's auto-release shape in
-what it produces; Windows has no external CI, so the same workflow also
-builds the NSIS installer on a `windows-latest` runner). Unlike the macOS
-workflow, it's **manual only** (`workflow_dispatch`, no `push` trigger) — see
-`docs/release-pipeline.md` for tagging, signing, auto-update feed, and public
-download link detail.
+Full detail: `docs/release-pipeline.md` — tagging, signing, auto-update feed,
+public download link. Unlike macOS's, upstream's is **manual only**
+(`workflow_dispatch`, no `push` trigger), and since Windows has no external CI
+the same workflow also builds the NSIS installer on a `windows-latest` runner.
 
 The version-bump "sync back to main" step is documented as best-effort and can
 leave a stale, unmerged PR behind after a release — see issue #10727. If you

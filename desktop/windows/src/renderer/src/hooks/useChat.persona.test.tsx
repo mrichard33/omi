@@ -54,6 +54,29 @@ vi.mock('../lib/desktopChatMessages', () => ({
 // selectApp reloads the app's default chat via getMessages({ appId }). Controllable.
 const getMessagesSpy = vi.fn(async (_q: unknown): Promise<unknown[]> => [])
 vi.mock('../lib/chatSessionsClient', () => ({ getMessages: (q: unknown) => getMessagesSpy(q) }))
+// The pre-send quota gate is a module-level SINGLETON (useChat.ts:54), so leaving it
+// unmocked makes the first send() in this file await a REAL
+// `GET /v1/users/me/usage-quota` (axios, 12s timeout, inside chatQuotaGate's 5s
+// cold-start budget) — far longer than waitForSend()'s ~100-tick budget, so the send
+// never reaches mainChatSend and its abandoned turn leaks a save into the next test.
+// It read as green only because the ubuntu `checks` job runs `pnpm test` with NO .env:
+// VITE_OMI_API_BASE is empty there, so the request goes to localhost and is refused
+// instantly. Any lane with a real .env — windows-release.yml, or any developer's
+// checkout — waits on the network and fails. useChat.test.tsx has mocked this since it
+// was written; this file missed it. Default-allow, so no assertion below changes.
+// Implementations are passed to vi.fn() rather than set with mockResolvedValue so they
+// survive a mockReset as well as beforeEach's vi.clearAllMocks().
+const gateMocks = vi.hoisted(() => ({
+  check: vi.fn(async (): Promise<{ blocked: false } | { blocked: true; message: string }> => ({
+    blocked: false
+  })),
+  recordQuery: vi.fn(),
+  sync: vi.fn(async (): Promise<void> => {}),
+  checkSync: vi.fn(() => ({ blocked: false })),
+  applyQuota: vi.fn(),
+  isLimitReached: vi.fn(() => false)
+}))
+vi.mock('../lib/chatQuotaGate', () => ({ createChatQuotaGate: () => gateMocks }))
 
 import { useChat } from './useChat'
 import { clearAttachments } from '../lib/chatAttachments'
