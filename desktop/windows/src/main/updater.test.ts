@@ -1,25 +1,9 @@
-import { describe, it, expect, afterAll, vi } from 'vitest'
+import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
 const dir = mkdtempSync(join(tmpdir(), 'omi-updater-'))
-
-const feedFetch = vi.hoisted(() =>
-  vi.fn(async (input: string | URL | Request) => {
-    const channel = new URL(String(input)).searchParams.get('channel')
-    const version = channel === 'beta' ? '1.0.19' : '1.0.1'
-    return new Response(
-      JSON.stringify({
-        requested_channel: channel,
-        served_channel: channel,
-        version,
-        feed_url: `https://github.com/BasedHardware/omi/releases/download/v${version}-windows/`
-      }),
-      { headers: { 'Content-Type': 'application/json' } }
-    )
-  })
-)
 
 const autoUpdater = vi.hoisted(() => ({
   allowPrerelease: false,
@@ -36,7 +20,7 @@ vi.mock('electron-updater', () => ({ autoUpdater }))
 vi.mock('electron', () => ({
   app: {
     getPath: (): string => dir,
-    getVersion: (): string => '1.0.0',
+    getVersion: (): string => '1.0.35-reece.41',
     isPackaged: true,
     on: (): void => {}
   },
@@ -44,18 +28,17 @@ vi.mock('electron', () => ({
     register: (): boolean => true,
     unregister: (): void => {},
     isRegistered: (): boolean => false
-  },
-  net: { fetch: feedFetch }
+  }
 }))
 vi.mock('./tray', () => ({ setTrayUpdateReady: vi.fn() }))
+const showBestEffortNotification = vi.hoisted(() => vi.fn())
+vi.mock('./notify', () => ({ showBestEffortNotification }))
 
 import { checkForUpdatesNow, getPendingUpdate, initAutoUpdater, installUpdateNow } from './updater'
-import { setAppSettings } from './appSettings'
 
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-} {
+const TOKEN = 'github_pat_updater_read_only'
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {
     resolve = done
@@ -63,180 +46,181 @@ function deferred<T>(): {
   return { promise, resolve }
 }
 
+/** The 'update-downloaded' handler the updater registered on electron-updater. */
+function downloadedHandler(): (info: { version: string }) => void {
+  const call = autoUpdater.on.mock.calls.find((c) => c[0] === 'update-downloaded')
+  expect(call, 'updater never registered update-downloaded').toBeTruthy()
+  return call![1] as (info: { version: string }) => void
+}
+
+let idle = { listening: false, meetingCapturing: false }
+
+beforeEach(() => {
+  idle = { listening: false, meetingCapturing: false }
+})
+
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('updater feed and beta channel wiring', () => {
-  it('stays Windows-only and switches immutable feeds on live beta changes', async () => {
-    vi.useFakeTimers()
-
-    initAutoUpdater(() => null, 'linux')
+// updater.ts holds module state (started / pendingUpdate), so these run in order
+// against ONE initialised updater — the same way the process does.
+describe('initAutoUpdater', () => {
+  it('ignores a non-Windows platform entirely', () => {
+    initAutoUpdater(
+      () => null,
+      () => idle,
+      'linux'
+    )
     expect(autoUpdater.on).not.toHaveBeenCalled()
     expect(autoUpdater.setFeedURL).not.toHaveBeenCalled()
-
-    setAppSettings({ betaUpdatesEnabled: true })
-    initAutoUpdater(() => null, 'win32')
-    expect(autoUpdater.allowPrerelease).toBe(true)
-
-    autoUpdater.checkForUpdates.mockClear()
-    autoUpdater.setFeedURL.mockClear()
-    feedFetch.mockClear()
-    setAppSettings({ betaUpdatesEnabled: false })
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
-    expect(autoUpdater.allowPrerelease).toBe(false)
-    expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
-      provider: 'generic',
-      url: 'https://github.com/BasedHardware/omi/releases/download/v1.0.1-windows/'
-    })
-
-    autoUpdater.checkForUpdates.mockClear()
-    autoUpdater.setFeedURL.mockClear()
-    feedFetch.mockClear()
-    setAppSettings({ betaUpdatesEnabled: true })
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
-    expect(autoUpdater.allowPrerelease).toBe(true)
-    expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
-      provider: 'generic',
-      url: 'https://github.com/BasedHardware/omi/releases/download/v1.0.19-windows/'
-    })
-
-    autoUpdater.checkForUpdates.mockClear()
-    autoUpdater.setFeedURL.mockClear()
-    feedFetch.mockClear()
-    setAppSettings({ closeToTrayNoticeShown: true })
-    await Promise.resolve()
-    expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled()
-    expect(autoUpdater.setFeedURL).not.toHaveBeenCalled()
-    expect(feedFetch).not.toHaveBeenCalled()
-
-    vi.useRealTimers()
   })
 
-  it('drops an in-flight result and rechecks when the selected channel changes', async () => {
-    const cancellationToken = { cancel: vi.fn() }
-    const firstCheck = deferred<{
-      isUpdateAvailable: true
-      updateInfo: { version: string }
-      cancellationToken: { cancel: ReturnType<typeof vi.fn> }
-    }>()
-    autoUpdater.checkForUpdates.mockReset()
-    autoUpdater.checkForUpdates
-      .mockImplementationOnce(() => firstCheck.promise)
-      .mockResolvedValue({ updateInfo: { version: '9.9.9' } })
-    autoUpdater.downloadUpdate.mockClear()
-    autoUpdater.setFeedURL.mockClear()
+  it('points at Mark private releases repo and NEVER at Omi official feed', () => {
+    vi.stubEnv('MAIN_VITE_UPDATER_READ_TOKEN', TOKEN)
+    vi.useFakeTimers()
+    initAutoUpdater(
+      () => null,
+      () => idle,
+      'win32'
+    )
 
-    setAppSettings({ betaUpdatesEnabled: false })
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
-    setAppSettings({ betaUpdatesEnabled: true })
-    await Promise.resolve()
-    expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1)
-
-    firstCheck.resolve({
-      isUpdateAvailable: true,
-      updateInfo: { version: '1.0.1' },
-      cancellationToken
+    expect(autoUpdater.setFeedURL).toHaveBeenCalledTimes(1)
+    expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
+      provider: 'github',
+      owner: 'mrichard33',
+      repo: 'omi-desktop-releases',
+      private: true,
+      token: TOKEN
     })
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2))
-    expect(cancellationToken.cancel).toHaveBeenCalledOnce()
-    expect(autoUpdater.downloadUpdate).not.toHaveBeenCalledWith(cancellationToken)
-    expect(autoUpdater.setFeedURL).toHaveBeenLastCalledWith({
-      provider: 'generic',
-      url: 'https://github.com/BasedHardware/omi/releases/download/v1.0.19-windows/'
-    })
+    // The regression this whole change exists to prevent: any feed naming
+    // BasedHardware would auto-replace this fork's build with Omi's stock app.
+    const feedArg = JSON.stringify(autoUpdater.setFeedURL.mock.calls[0][0])
+    expect(feedArg).not.toContain('BasedHardware')
+    expect(feedArg).not.toContain('api.omi.me')
   })
 
-  it('fails a manual check closed when feed resolution is unavailable', async () => {
-    autoUpdater.checkForUpdates.mockClear()
-    feedFetch.mockRejectedValueOnce(new Error('resolver unavailable'))
+  it('allows prereleases, because every published build is one', () => {
+    // scripts/reece-version.mjs stamps `x.y.z-reece.N`. With allowPrerelease off,
+    // electron-updater filters out every build Mark ships and reports up-to-date
+    // forever, with nothing in the log to notice.
+    expect(autoUpdater.allowPrerelease).toBe(true)
+  })
 
-    await expect(checkForUpdatesNow()).resolves.toEqual({
-      status: 'error',
-      message: 'resolver unavailable'
-    })
-    expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled()
+  it('downloads in the background, not automatically, and stages install-on-quit', () => {
+    expect(autoUpdater.autoDownload).toBe(false)
+    expect(autoUpdater.autoInstallOnAppQuit).toBe(false)
   })
 })
 
-describe('installUpdateNow', () => {
-  it('clears and ignores a beta download that finishes after opting out', async () => {
-    const betaDownload = deferred<string[]>()
-    const cancellationToken = { cancel: vi.fn() }
-    autoUpdater.checkForUpdates.mockReset()
-    autoUpdater.checkForUpdates
-      .mockResolvedValueOnce({
-        isUpdateAvailable: true,
-        updateInfo: { version: '2.0.0' },
-        cancellationToken
-      })
-      .mockResolvedValue({ updateInfo: { version: '1.0.1' } })
-    autoUpdater.downloadUpdate.mockReset()
-    autoUpdater.downloadUpdate.mockReturnValueOnce(betaDownload.promise)
-    autoUpdater.autoInstallOnAppQuit = true
+describe('update checks (nothing staged yet)', () => {
+  it('logs the required lines for a check that finds nothing', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    autoUpdater.checkForUpdates.mockResolvedValueOnce({
+      updateInfo: { version: '1.0.35-reece.41' }
+    })
 
-    setAppSettings({ betaUpdatesEnabled: true })
-    const checking = checkForUpdatesNow()
-    await vi.waitFor(() =>
-      expect(autoUpdater.downloadUpdate).toHaveBeenCalledWith(cancellationToken)
-    )
-
-    const downloaded = autoUpdater.on.mock.calls.find(
-      (call) => call[0] === 'update-downloaded'
-    )?.[1] as (info: { version: string }) => void
-    downloaded({ version: '2.0.0' })
-    expect(getPendingUpdate()).toEqual({ version: '2.0.0' })
-    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
-
-    setAppSettings({ betaUpdatesEnabled: false })
-    expect(cancellationToken.cancel).toHaveBeenCalledOnce()
-    expect(getPendingUpdate()).toBeNull()
-    expect(autoUpdater.autoInstallOnAppQuit).toBe(false)
-
-    downloaded({ version: '2.0.0' })
-    expect(getPendingUpdate()).toBeNull()
-
-    betaDownload.resolve([])
-    await checking
-    downloaded({ version: '2.0.0' })
-
-    expect(getPendingUpdate()).toBeNull()
-    expect(autoUpdater.autoInstallOnAppQuit).toBe(false)
-    expect(installUpdateNow()).toBe(false)
+    await expect(checkForUpdatesNow()).resolves.toEqual({
+      status: 'up-to-date',
+      version: '1.0.35-reece.41'
+    })
+    const lines = log.mock.calls.map((c) => String(c[0]))
+    expect(lines).toContain('[updater] checking')
+    expect(lines).toContain('[updater] none')
+    log.mockRestore()
   })
 
-  it('does nothing when no update is staged', () => {
+  it('reports a failed check as an error and never throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    autoUpdater.checkForUpdates.mockReset()
+    autoUpdater.checkForUpdates.mockRejectedValueOnce(new Error('feed unreachable'))
+
+    await expect(checkForUpdatesNow()).resolves.toEqual({
+      status: 'error',
+      message: 'feed unreachable'
+    })
+    expect(warn.mock.calls.map((c) => String(c[0]))).toContain('[updater] error feed unreachable')
+    warn.mockRestore()
+  })
+
+  it('reports not-staged when nothing has been downloaded', () => {
+    autoUpdater.quitAndInstall.mockClear()
     expect(getPendingUpdate()).toBeNull()
-    expect(installUpdateNow()).toBe(false)
+    expect(installUpdateNow()).toBe('not-staged')
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
+})
 
-  it('installs and relaunches once the current channel update is downloaded', async () => {
-    const stableDownload = deferred<string[]>()
+// From here the module holds ONE staged update, exactly as the process would:
+// nothing clears it but the install that takes the app down.
+describe('a staged update', () => {
+  it('logs available + downloaded, notifies once, and arms install-on-quit', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const download = deferred<string[]>()
     const cancellationToken = { cancel: vi.fn() }
     autoUpdater.checkForUpdates.mockReset()
     autoUpdater.checkForUpdates.mockResolvedValueOnce({
       isUpdateAvailable: true,
-      updateInfo: { version: '2.0.0' },
+      updateInfo: { version: '1.0.35-reece.42' },
       cancellationToken
     })
     autoUpdater.downloadUpdate.mockReset()
-    autoUpdater.downloadUpdate.mockReturnValueOnce(stableDownload.promise)
+    autoUpdater.downloadUpdate.mockReturnValueOnce(download.promise)
+    showBestEffortNotification.mockClear()
 
     const checking = checkForUpdatesNow()
     await vi.waitFor(() =>
       expect(autoUpdater.downloadUpdate).toHaveBeenCalledWith(cancellationToken)
     )
-    const downloaded = autoUpdater.on.mock.calls.find(
-      (call) => call[0] === 'update-downloaded'
-    )?.[1] as (info: { version: string }) => void
-    expect(downloaded).toBeTypeOf('function')
-    downloaded({ version: '2.0.0' })
-    stableDownload.resolve([])
+    downloadedHandler()({ version: '1.0.35-reece.42' })
+    download.resolve([])
     await checking
 
-    expect(getPendingUpdate()).toEqual({ version: '2.0.0' })
-    expect(installUpdateNow()).toBe(true)
+    expect(getPendingUpdate()).toEqual({ version: '1.0.35-reece.42' })
+    // Install-on-quit is armed only once something is actually staged.
+    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
+    const lines = log.mock.calls.map((c) => String(c[0]))
+    expect(lines).toContain('[updater] available 1.0.35-reece.42')
+    expect(lines).toContain('[updater] downloaded 1.0.35-reece.42')
+    // One non-blocking notice, not one per check.
+    expect(showBestEffortNotification).toHaveBeenCalledOnce()
+    expect(showBestEffortNotification.mock.calls[0][0]).toMatch(/restart to apply/i)
+    log.mockRestore()
+  })
+
+  it('NEVER restarts during an active listening session', () => {
+    autoUpdater.quitAndInstall.mockClear()
+    idle = { listening: true, meetingCapturing: false }
+
+    expect(installUpdateNow()).toBe('busy')
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    // Still staged: the installer runs on the next quit instead.
+    expect(getPendingUpdate()).toEqual({ version: '1.0.35-reece.42' })
+  })
+
+  it('NEVER restarts during a meeting capture', () => {
+    autoUpdater.quitAndInstall.mockClear()
+    idle = { listening: false, meetingCapturing: true }
+
+    expect(installUpdateNow()).toBe('busy')
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('refuses the restart when the capture probe answers with nothing usable', () => {
+    // Fail SAFE. An unreadable probe must not read as "idle" — that is the one
+    // way this guard could still take the app down mid-recording.
+    autoUpdater.quitAndInstall.mockClear()
+    idle = null as unknown as { listening: boolean; meetingCapturing: boolean }
+
+    expect(installUpdateNow()).toBe('busy')
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('installs and relaunches once capture stops', () => {
+    autoUpdater.quitAndInstall.mockClear()
+    idle = { listening: false, meetingCapturing: false }
+
+    expect(installUpdateNow()).toBe('installing')
     expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
   })
 })

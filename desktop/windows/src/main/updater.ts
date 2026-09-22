@@ -1,54 +1,46 @@
-// Auto-update via electron-updater. Silent by design: downloads in the
-// background and installs on the next quit (never force-restarts a listening
-// session). When an update is staged we tell the main window so it can offer a
-// "restart to update" action and mark the tray tooltip.
+// Auto-update via electron-updater, from Mark's private release train and
+// nothing else (see updateFeed.ts for the feed and its token).
 //
-// Production checks first resolve an immutable Windows release directory from
-// the backend, then use electron-updater's generic provider for latest.yml and
-// its installer. This avoids GitHubProvider's repository-wide /releases/latest,
-// which can select a macOS release in this multi-platform repository.
+// Silent by design: checks on launch and every 4 hours, downloads in the
+// background, and installs on the next quit. The only path that restarts the
+// app on the updater's schedule is the explicit "Restart to update" action, and
+// that is refused while a recording or meeting capture is live
+// (shared/updateInstall.ts).
+//
+// EVERY build published here carries a `-reece.N` prerelease version
+// (scripts/reece-version.mjs), so `allowPrerelease` is on unconditionally. With
+// it off, electron-updater would filter out every single build Mark ships and
+// report "up to date" forever, with no error to notice.
 //
 // For local testing, set OMI_UPDATER_DEV=1 and provide dev-app-update.yml. That
 // keeps electron-updater on the developer-supplied feed.
-import { app, net, type BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { autoUpdater, type CancellationToken } from 'electron-updater'
 import { setTrayUpdateReady } from './tray'
 import { markQuitting } from './lifecycle'
-import { getAppSettings, onAppSettingsChanged } from './appSettings'
-import { betaOptInToUpdateChannel, resolveBetaChannelChange } from './updaterChannel'
-import {
-  resolveWindowsUpdateFeedUrl,
-  WindowsUpdateFeedSelector,
-  type WindowsUpdateChannel
-} from './windowsUpdateFeed'
+import { showBestEffortNotification } from './notify'
+import { describeUpdateFeed, resolveUpdateFeed, type UpdateFeedConfig } from './updateFeed'
+import { resolveUpdateInstall, type UpdateInstallResult } from '../shared/updateInstall'
 import type { UpdateCheckResult } from '../shared/types'
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
-const OMI_API_BASE = import.meta.env.VITE_OMI_API_BASE || 'https://api.omi.me'
+/** Delayed so the first check does not compete with startup/renderer load. */
+const FIRST_CHECK_DELAY_MS = 45_000
+
+/** Reads the live capture state. Injected so the updater never imports the
+ *  listen/meeting modules directly and stays unit-testable. */
+export type CaptureActivityProbe = () => { listening: boolean; meetingCapturing: boolean }
 
 let started = false
-let selectedChannel: WindowsUpdateChannel = 'stable'
-let channelGeneration = 0
-let pendingUpdate: {
-  version: string
-  channel: WindowsUpdateChannel
-  generation: number
-} | null = null
-let feedSelector: WindowsUpdateFeedSelector | null = null
+let pendingUpdate: { version: string } | null = null
+let feed: UpdateFeedConfig | null = null
 let updateCheckTail: Promise<void> = Promise.resolve()
-let activeDownload: {
-  channel: WindowsUpdateChannel
-  generation: number
-  version: string
-  cancellationToken: CancellationToken
-} | null = null
+let activeDownload: { version: string; cancellationToken: CancellationToken } | null = null
+/** Fail SAFE: with no probe wired we assume capture is live and refuse the
+ *  restart, rather than taking the app down mid-recording. */
+let probeActivity: CaptureActivityProbe = () => ({ listening: true, meetingCapturing: true })
 
 type ElectronUpdateCheckResult = Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>
-type UpdateAttempt = { channel: WindowsUpdateChannel; generation: number }
-
-function isCurrentAttempt(attempt: UpdateAttempt): boolean {
-  return attempt.channel === selectedChannel && attempt.generation === channelGeneration
-}
 
 /** The update staged for install-on-quit, if any. The update:ready event fires
  * once (usually while nobody is on Settings), so the UI queries this on mount. */
@@ -56,42 +48,50 @@ export function getPendingUpdate(): { version: string } | null {
   return pendingUpdate ? { version: pendingUpdate.version } : null
 }
 
-async function prepareUpdateFeed(): Promise<void> {
-  if (feedSelector) await feedSelector.prepareSelected()
+/** Busy unless the probe positively says otherwise. A probe that threw, or gave
+ *  back something that is not the expected shape, must never read as "idle" and
+ *  let a restart through mid-recording. */
+const BUSY = { listening: true, meetingCapturing: true }
+
+function readActivity(): { listening: boolean; meetingCapturing: boolean } {
+  try {
+    const activity = probeActivity()
+    if (typeof activity !== 'object' || activity === null) return BUSY
+    if (typeof activity.listening !== 'boolean' || typeof activity.meetingCapturing !== 'boolean') {
+      return BUSY
+    }
+    return { listening: activity.listening, meetingCapturing: activity.meetingCapturing }
+  } catch (e) {
+    console.warn(`[updater] error capture probe failed, treating as busy: ${(e as Error).message}`)
+    return BUSY
+  }
 }
 
-function runPreparedUpdateCheck(): Promise<ElectronUpdateCheckResult> {
+function runUpdateCheck(): Promise<ElectronUpdateCheckResult> {
   const operation = updateCheckTail.then(async (): Promise<ElectronUpdateCheckResult> => {
-    if (pendingUpdate && isCurrentAttempt(pendingUpdate)) return null
+    if (pendingUpdate) return null
     if (activeDownload) {
       activeDownload.cancellationToken.cancel()
       activeDownload = null
     }
 
-    const attempt = { channel: selectedChannel, generation: channelGeneration }
-    await prepareUpdateFeed()
-    if (!isCurrentAttempt(attempt)) return null
-
+    console.log('[updater] checking')
     const result = await autoUpdater.checkForUpdates()
-    if (!isCurrentAttempt(attempt)) {
-      result?.cancellationToken?.cancel()
-      return null
+    if (!result?.isUpdateAvailable || !result.cancellationToken) {
+      console.log('[updater] none')
+      return result
     }
-    if (!result?.isUpdateAvailable || !result.cancellationToken) return result
 
     const version = typeof result.updateInfo?.version === 'string' ? result.updateInfo.version : ''
-    const download = {
-      ...attempt,
-      version,
-      cancellationToken: result.cancellationToken
-    }
+    console.log(`[updater] available ${version}`)
+    const download = { version, cancellationToken: result.cancellationToken }
     activeDownload = download
     try {
       await autoUpdater.downloadUpdate(download.cancellationToken)
     } finally {
       if (activeDownload === download) activeDownload = null
     }
-    return isCurrentAttempt(download) ? result : null
+    return result
   })
   updateCheckTail = operation.then(
     (): undefined => undefined,
@@ -111,122 +111,104 @@ export async function checkForUpdatesNow(): Promise<UpdateCheckResult> {
   if (!started) return { status: 'unsupported', version: current }
   if (pendingUpdate) return { status: 'update-available', version: pendingUpdate.version }
   try {
-    const res = await runPreparedUpdateCheck()
+    const res = await runUpdateCheck()
     const found = typeof res?.updateInfo?.version === 'string' ? res.updateInfo.version : undefined
     if (found && found !== current) return { status: 'update-available', version: found }
     return { status: 'up-to-date', version: current }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    console.warn('[updater] manual check failed (non-fatal):', message)
+    console.warn(`[updater] error ${message}`)
     return { status: 'error', message }
   }
 }
 
 /**
- * Install the staged update now (Settings -> About "Restart to update"). Plain
- * app.quit() relies on autoInstallOnAppQuit, which runs the NSIS installer
- * without relaunching. quitAndInstall(silent, forceRunAfter) installs and comes
- * back up on the new version, which is what the button promises.
+ * Install the staged update now (Settings -> About and the tray's "Restart to
+ * update"). Plain app.quit() relies on autoInstallOnAppQuit, which runs the
+ * NSIS installer without relaunching; quitAndInstall(silent, forceRunAfter)
+ * installs and comes back up on the new version, which is what the button
+ * promises.
+ *
+ * Refused while a recording or meeting capture is live — the staged installer
+ * still runs on the next quit, so nothing is lost by waiting.
  */
-export function installUpdateNow(): boolean {
-  if (!started || !pendingUpdate) return false
+export function installUpdateNow(): UpdateInstallResult {
+  const outcome = resolveUpdateInstall(started && !!pendingUpdate, readActivity())
+  if (outcome !== 'installing') {
+    if (outcome === 'busy') console.log('[updater] restart deferred: capture in progress')
+    return outcome
+  }
   markQuitting()
   autoUpdater.quitAndInstall(true, true)
-  return true
+  return 'installing'
 }
 
 export function initAutoUpdater(
   getMainWindow: () => BrowserWindow | null,
+  captureActivity: CaptureActivityProbe,
   platform: NodeJS.Platform = process.platform
 ): void {
   if (started || platform !== 'win32') return
   const devForced = process.env.OMI_UPDATER_DEV === '1'
   if (!app.isPackaged && !devForced) return
-  started = true
 
+  probeActivity = captureActivity
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
-  if (devForced) autoUpdater.forceDevUpdateConfig = true
+  // Every published build is a `-reece.N` prerelease; see the header.
+  autoUpdater.allowPrerelease = true
 
-  selectedChannel = betaOptInToUpdateChannel(getAppSettings().betaUpdatesEnabled)
-  // Kept aligned for dev feeds and electron-updater's public state. Production
-  // channel selection is owned by the backend resolver below.
-  autoUpdater.allowPrerelease = selectedChannel === 'beta'
-  if (!devForced) {
-    feedSelector = new WindowsUpdateFeedSelector(
-      selectedChannel,
-      (channel): Promise<string> => resolveWindowsUpdateFeedUrl(OMI_API_BASE, channel, net.fetch),
-      (feedUrl): void => {
-        autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl })
-      }
-    )
+  if (devForced) {
+    autoUpdater.forceDevUpdateConfig = true
+  } else {
+    feed = resolveUpdateFeed(import.meta.env.MAIN_VITE_UPDATER_READ_TOKEN)
+    if (!feed) {
+      // No token baked in: do not start, rather than fall through to whatever
+      // app-update.yml happens to say. A build that cannot authenticate to the
+      // private feed has no feed at all.
+      console.warn('[updater] error no updater token in this build — auto-update is off')
+      return
+    }
+    autoUpdater.setFeedURL(feed)
   }
+  started = true
+  console.log(`[updater] feed ${devForced ? 'dev-app-update.yml' : describeUpdateFeed(feed)}`)
 
   autoUpdater.on('update-downloaded', (info) => {
-    // electron-updater emits this before downloadUpdate() settles. Accept it
-    // only while the matching channel generation still owns the download.
+    // electron-updater emits this before downloadUpdate() settles.
     const download = activeDownload
     const version = typeof info?.version === 'string' ? info.version : ''
-    if (!download || !isCurrentAttempt(download) || version !== download.version) return
+    if (!download || version !== download.version) return
 
-    pendingUpdate = {
-      version,
-      channel: download.channel,
-      generation: download.generation
-    }
+    pendingUpdate = { version }
     const win = getMainWindow()
     if (win && !win.isDestroyed()) win.webContents.send('update:ready', { version })
     setTrayUpdateReady(true)
     autoUpdater.autoInstallOnAppQuit = true
-    console.log('[updater] update downloaded and staged for next quit:', version)
+    console.log(`[updater] downloaded ${version}`)
+    // One non-blocking notice. Windows toasts cannot carry action buttons from
+    // Electron (`actions` is macOS-only), so the "Restart now" affordance is the
+    // tray's "Restart to update" item and the button in Settings -> About; the
+    // notice is what tells the user they are there.
+    showBestEffortNotification('Update ready — restart to apply', `Omi ${version} is ready.`)
   })
 
   autoUpdater.on('error', (err) => {
-    console.warn('[updater] error (non-fatal):', err?.message ?? err)
+    console.warn(`[updater] error ${err?.message ?? err}`)
   })
 
   const check = async (): Promise<void> => {
     try {
-      await runPreparedUpdateCheck()
+      await runUpdateCheck()
     } catch (e) {
-      console.warn(
-        '[updater] check failed (non-fatal):',
-        e instanceof Error ? e.message : String(e)
-      )
+      console.warn(`[updater] error ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
-  // Delay the first check so it does not compete with startup/renderer load.
   setTimeout((): void => {
     void check()
-  }, 45_000)
+  }, FIRST_CHECK_DELAY_MS)
   setInterval((): void => {
     void check()
   }, CHECK_INTERVAL_MS)
-
-  // Apply a live beta toggle immediately instead of waiting for the 4h timer.
-  onAppSettingsChanged((settings) => {
-    const change = resolveBetaChannelChange(selectedChannel, settings.betaUpdatesEnabled)
-    if (!change.changed) return
-    selectedChannel = change.channel
-    channelGeneration += 1
-    autoUpdater.autoInstallOnAppQuit = false
-    if (activeDownload && !isCurrentAttempt(activeDownload)) {
-      const staleDownload = activeDownload
-      activeDownload = null
-      staleDownload.cancellationToken.cancel()
-    }
-    if (pendingUpdate && !isCurrentAttempt(pendingUpdate)) {
-      pendingUpdate = null
-      setTrayUpdateReady(false)
-    }
-    autoUpdater.allowPrerelease = selectedChannel === 'beta'
-    feedSelector?.select(selectedChannel)
-    console.log(
-      '[updater] beta channel',
-      selectedChannel === 'beta' ? 'ON (prereleases included)' : 'OFF (stable only)',
-      '-> re-checking'
-    )
-    void check()
-  })
 }

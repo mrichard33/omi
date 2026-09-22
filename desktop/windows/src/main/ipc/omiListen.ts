@@ -650,6 +650,22 @@ export function isListenSessionOwnedBy(sessionId: string, ownerId: number): bool
   return sessionOwners.get(sessionId) === ownerId
 }
 
+/**
+ * Is any capture socket live right now? Read by the updater so "Restart to
+ * update" can never take the app down mid-recording (see shared/updateInstall.ts).
+ *
+ * CONNECTING counts as live: the renderer is already feeding PCM into the
+ * pre-OPEN buffer by then, so a restart would drop real audio. A `closed`
+ * session is one killSession has already torn down.
+ */
+export function hasActiveListenSession(): boolean {
+  for (const s of sessions.values()) {
+    if (s.closed) continue
+    if (s.ws.readyState === WebSocket.OPEN || s.ws.readyState === WebSocket.CONNECTING) return true
+  }
+  return false
+}
+
 export function registerOmiListenHandlers(canStartSession: (ownerId: number) => boolean): void {
   // Expose the byte counters to the E2E harnesses (VAD-playback / soak) so a
   // Playwright electronApp.evaluate can read them from the main process. Gated on

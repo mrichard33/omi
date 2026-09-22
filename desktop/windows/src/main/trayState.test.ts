@@ -61,6 +61,7 @@ describe('buildTrayMenuTemplate', () => {
     toggleListening: vi.fn(),
     openSettings: vi.fn(),
     checkForUpdates: vi.fn(),
+    restartToUpdate: vi.fn(),
     toggleScreenCapture: vi.fn(),
     quit: vi.fn()
   })
@@ -116,6 +117,39 @@ describe('buildTrayMenuTemplate', () => {
     )
     expect(off.type).toBe('checkbox')
     expect(off.checked).toBe(false)
+  })
+
+  // The "Restart now" affordance the update notice points at: an Electron
+  // notification on Windows cannot carry an action button, and the tray is
+  // reachable with no window open.
+  it('offers Restart to update ONLY while one is staged', () => {
+    const idle = buildTrayMenuTemplate(
+      { toggleLabel: 'Pause listening', screenCaptureEnabled: true },
+      noopActions()
+    ) as Item[]
+    expect(labels(idle)).not.toContain('Restart to update')
+
+    const staged = buildTrayMenuTemplate(
+      { toggleLabel: 'Pause listening', screenCaptureEnabled: true, updateReady: true },
+      noopActions()
+    ) as Item[]
+    expect(labels(staged)).toEqual([
+      'Screen Analysis',
+      'Open Omi',
+      'Pause listening',
+      'Settings',
+      'Check for Updates',
+      'Restart to update',
+      'Quit Omi'
+    ])
+
+    const actions = noopActions()
+    const items = buildTrayMenuTemplate(
+      { toggleLabel: 'Pause listening', screenCaptureEnabled: true, updateReady: true },
+      actions
+    ) as Item[]
+    byLabel(items, 'Restart to update').click?.()
+    expect(actions.restartToUpdate).toHaveBeenCalledOnce()
   })
 
   it('routes each click to its injected action', () => {

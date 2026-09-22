@@ -22,6 +22,9 @@ export interface TrayDeps {
   openSettings: () => void
   /** "Check for Updates" — run a manual update check (see updater.ts). */
   checkForUpdates: () => void
+  /** "Restart to update" — install the staged update and relaunch. Shown only
+   *  while one is staged; the updater refuses it mid-recording. */
+  restartToUpdate: () => void
   /** "Screen Analysis" checkbox — flip the screenAnalysisEnabled master. The tray
    *  checkbox is refreshed from the persisted value via setTrayScreenCapture, so
    *  this only writes the setting (the coordinator re-syncs off that write). */
@@ -78,7 +81,7 @@ function render(): void {
   // action interface directly.
   tray.setContextMenu(
     Menu.buildFromTemplate(
-      buildTrayMenuTemplate({ toggleLabel: p.toggleLabel, screenCaptureEnabled }, d)
+      buildTrayMenuTemplate({ toggleLabel: p.toggleLabel, screenCaptureEnabled, updateReady }, d)
     )
   )
 }

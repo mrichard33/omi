@@ -22,7 +22,7 @@ function changesFromFragment(fragment: unknown): string[] {
 
 const CHANGES: string[] = [
   ...changesFromFragment(phase8Fragment),
-  ...changesFromFragment(chatRefreshFragment),
+  ...changesFromFragment(chatRefreshFragment)
 ]
 
 /** Decide whether to show the what's-new toast this launch, advancing the stored
@@ -41,8 +41,12 @@ export function maybeGetWhatsNew(): WhatsNewPayload | null {
   return { version: current, changes: CHANGES }
 }
 
-/** GitHub releases page for the "View release notes" action (the update feed is
- *  BasedHardware/omi — see electron-builder.yml publish). */
+/** GitHub releases page for the "View release notes" action. Deliberately still
+ *  upstream Omi's PUBLIC releases page — it is where the product's release notes
+ *  are written. It is NOT the update feed: this fork updates from the private
+ *  mrichard33/omi-desktop-releases (see main/updateFeed.ts), whose releases only
+ *  carry installers and would 404 for anyone but its owner. The in-app "what's
+ *  new" card is driven by changelog/unreleased/*.json, not by this URL. */
 export function releaseNotesUrl(): string {
   return 'https://github.com/BasedHardware/omi/releases'
 }

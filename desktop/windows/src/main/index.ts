@@ -21,6 +21,7 @@ import { installContextMenu } from './contextMenu'
 import { GPU_CONTEXT_LOST_CHANNEL } from '../shared/types'
 import type { ConversationFolder, LiveNote } from '../shared/types'
 import {
+  hasActiveListenSession,
   isListenSessionOwnedBy,
   registerOmiListenHandlers,
   startTestListenSession,
@@ -82,7 +83,12 @@ import {
 } from './insight/toastWindow'
 import { maybeGetWhatsNew, releaseNotesUrl } from './whatsNew'
 import { registerMeetingHandlers } from './ipc/meeting'
-import { startMeetingMonitor, stopMeetingMonitor, meetingDebug } from './meeting/meetingMonitor'
+import {
+  startMeetingMonitor,
+  stopMeetingMonitor,
+  meetingDebug,
+  isMeetingCapturing
+} from './meeting/meetingMonitor'
 import { registerAutomationHandlers } from './ipc/automation'
 import { registerCodingAgentHandlers } from './ipc/codingAgent'
 import { initClaudeAgentConfigDir } from './codingAgent/agentConfigDir'
@@ -1077,6 +1083,13 @@ app.whenReady().then(async () => {
     checkForUpdates: () => {
       void checkForUpdatesNow().then((r) => console.log('[tray] update check:', r.status))
     },
+    // "Restart to update" — only offered while an update is staged. The updater
+    // refuses it mid-recording and says so in the log; the installer still runs
+    // on the next quit either way.
+    restartToUpdate: () => {
+      const outcome = installUpdateNow()
+      if (outcome !== 'installing') console.log('[tray] restart to update:', outcome)
+    },
     // "Screen Analysis" toggle → flip the screenAnalysisEnabled master. Writing the
     // setting is the whole action: the proactive coordinator subscribes to
     // onAppSettingsChanged and starts/stops its screen-analysis loop off that write
@@ -1093,7 +1106,15 @@ app.whenReady().then(async () => {
   onAppSettingsChanged((s) => setTrayScreenCapture(s.screenAnalysisEnabled))
 
   // Auto-update (packaged builds only; see updater.ts). Never crashes the app.
-  initAutoUpdater(() => mainWindow)
+  // The capture probe is what stops "Restart to update" taking the app down in
+  // the middle of a recording or a meeting.
+  initAutoUpdater(
+    () => mainWindow,
+    () => ({
+      listening: hasActiveListenSession(),
+      meetingCapturing: isMeetingCapturing()
+    })
+  )
 
   // E2E hook (only when OMI_E2E=1; never in prod): expose the main-process facts
   // the lifecycle harness asserts via electronApp.evaluate.
@@ -1414,23 +1435,15 @@ app.whenReady().then(async () => {
   // Query the staged update on demand (the update:ready event fires once,
   // usually while Settings isn't mounted — see updater.getPendingUpdate).
   ipcMain.handle('update:get-pending', () => getPendingUpdate())
-  // Install the staged update and relaunch (About → "Restart to update"). False
-  // means nothing was staged, so the UI must not pretend it restarted into it.
+  // Install the staged update and relaunch (About / tray → "Restart to update").
+  // Anything but 'installing' means the app is staying up, and the UI says why:
+  // 'not-staged' (nothing downloaded) or 'busy' (recording — it installs on the
+  // next quit instead). See shared/updateInstall.ts.
   ipcMain.handle('update:install-now', () => installUpdateNow())
   // App identity for Settings → About.
   ipcMain.handle('app:get-version', () => ({ name: app.getName(), version: app.getVersion() }))
   // Manual update check (About). Inert in unpackaged dev (returns `unsupported`).
   ipcMain.handle('update:check', () => checkForUpdatesNow())
-  // "Receive beta updates" opt-in (Mac's beta update channel). Persisted; the
-  // updater subscribes to app-settings writes and flips allowPrerelease + re-checks
-  // live (see updater.ts). Returns the written value so the UI reflects the truth.
-  ipcMain.handle('update:get-beta-optin', () => getAppSettings().betaUpdatesEnabled)
-  ipcMain.handle(
-    'update:set-beta-optin',
-    (_e, enabled: boolean) =>
-      setAppSettings({ betaUpdatesEnabled: enabled === true }).betaUpdatesEnabled
-  )
-
   // Suspend/resume global chords while the settings UI captures raw keys for a
   // rebind — otherwise pressing the CURRENT chord fires it instead of being
   // captured. (The overlay's own recorder uses overlay:suspendShortcut.)

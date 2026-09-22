@@ -27,8 +27,16 @@ import {
   type MeetingPatterns
 } from './patterns'
 import { listProcessNames } from './processSnapshot'
-import { readMicCaptureEntries, watchMicConsentStore, type MicConsentWatcher } from './micConsentStore'
-import { getForegroundExePath, getForegroundWindowTitle, subscribeForegroundChange } from '../usage/nativeForeground'
+import {
+  readMicCaptureEntries,
+  watchMicConsentStore,
+  type MicConsentWatcher
+} from './micConsentStore'
+import {
+  getForegroundExePath,
+  getForegroundWindowTitle,
+  subscribeForegroundChange
+} from '../usage/nativeForeground'
 import { showMeetingToast, hideMeetingToast, getCurrentMeetingToast } from '../insight/toastWindow'
 import { onCaptureEventInMain } from '../ipc/captureBridge'
 import { getAppSettings, setAppSettings } from '../appSettings'
@@ -190,7 +198,8 @@ function stopCapture(): void {
 /** Hide the shared toast window ONLY if the meeting card currently on it belongs
  *  to this meeting — never clobber a proactive insight toast that replaced it. */
 function hideOwnMeetingToast(): void {
-  if (currentMeeting && getCurrentMeetingToast()?.meetingId === currentMeeting.id) hideMeetingToast()
+  if (currentMeeting && getCurrentMeetingToast()?.meetingId === currentMeeting.id)
+    hideMeetingToast()
 }
 
 /** Consume the one-time first-run flag (true exactly once). */
@@ -392,6 +401,15 @@ export function stopMeetingMonitor(): void {
   currentMeeting = null
   state = initialDetectorState
   console.log('[meeting] monitor stopped')
+}
+
+/**
+ * Is a meeting being captured right now? Read by the updater so "Restart to
+ * update" can never take the app down mid-meeting (see shared/updateInstall.ts).
+ * Not the E2E debug surface below — that one is gated on OMI_E2E.
+ */
+export function isMeetingCapturing(): boolean {
+  return currentMeeting?.capturing === true
 }
 
 /** E2E-only debug surface (guarded by OMI_E2E at the call site in index.ts):
