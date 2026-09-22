@@ -6,6 +6,7 @@ import { PttCaptureHost } from './PttCaptureHost'
 import { ScreenSessionHost } from './ScreenSessionHost'
 import { MeetingSessionHost } from './MeetingSessionHost'
 import { installCaptureE2EHooks } from './e2eHooks'
+import { maybeStartFinalizeSweep } from '../lib/conversationFinalize'
 import { auth } from '../lib/firebase'
 
 // Test hooks (no-op unless OMI_E2E=1) — module scope so they exist as soon as
@@ -25,6 +26,15 @@ installCaptureE2EHooks()
 // fresh.
 export function CaptureApp(): React.JSX.Element {
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // The conversation-finalize sweep lives HERE, not in the main window's
+  // app-lifetime jobs, because this window owns every capture lane — it is the
+  // only one that knows which conversations are still streaming and must never
+  // be finalized. It is also app-lifetime: the capture window is respawned when
+  // it dies (main/captureWindow.ts), so the sweep survives with it.
+  useEffect(() => {
+    maybeStartFinalizeSweep()
+  }, [])
 
   useEffect(() => {
     return window.omi?.onCaptureCommand?.((cmd) => {

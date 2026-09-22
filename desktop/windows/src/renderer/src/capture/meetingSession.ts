@@ -36,6 +36,13 @@ import {
   onLiveMicSessionHealth,
   waitForLiveMicSessionReady
 } from './liveMicSession'
+import {
+  conversationIdFromEvent,
+  markConversationSettled,
+  markConversationStreaming,
+  scheduleFinalize,
+  shouldFinalizeAfterClose
+} from '../lib/conversationFinalize'
 import type { ListenSource, TranscriptLine } from '../../../shared/types'
 
 export type MeetingSessionHandle = {
@@ -74,6 +81,21 @@ export async function startMeetingSession(args: {
   // Cancels an in-flight reconnect startup on stop(), so a late socket/loopback
   // doesn't linger for the connect timeout after the meeting ended.
   const reconnectAbort = new AbortController()
+
+  // MIC-LANE CONVERSATION (only when this meeting opens the mic lane itself).
+  // The backend adopts a client-proposed id verbatim, so proposing one is what
+  // lets the meeting name its own conversation when the meeting ends — /v4/listen
+  // otherwise only finalizes on a clean 1000 close (backend/routers/listen/
+  // runtime.py), and a meeting that ended on a dropped socket sat at
+  // "Processing" until someone opened the web app.
+  //
+  // When the mic is DELEGATED to the always-on continuous session (the C6 case
+  // below), this stays null: that conversation keeps recording after the meeting
+  // ends, and finalizing it here would cut a live recording in half. The
+  // continuous session owns its own finalize.
+  const micClientConversationId = crypto.randomUUID()
+  let micConversationId: string | null = null
+  let micSegments = 0
 
   const stopStartingHandles = (): void => {
     stopped = true
@@ -178,14 +200,42 @@ export async function startMeetingSession(args: {
         onBackend: () => {
           if (source === 'system') systemConnectedAt = Date.now()
         },
+        onSegments: (segs) => {
+          if (source === 'mic') micSegments += segs.length
+        },
+        onEvent: (ev) => {
+          if (source !== 'mic') return
+          // Follow the conversation the backend says it is writing into: it may
+          // roll to a server-minted id mid-socket, and a finalize must name the
+          // one that is actually live.
+          const announced = conversationIdFromEvent(ev)
+          if (!announced) return
+          if (micConversationId && announced !== micConversationId) {
+            markConversationSettled(micConversationId)
+            micSegments = 0
+          }
+          micConversationId = announced
+          markConversationStreaming(announced)
+        },
         onError: (e) => {
           console.warn(`[meeting-session] ${source} lane error:`, e.message)
           if (source === 'system') onSystemLaneError(e)
-          else if (!stopped) args.onError(`${source}: ${e.message}`)
+          else if (!stopped) {
+            // The mic lane is terminal (it has no reconnect path) — whatever it
+            // captured is stranded unless we finalize it now.
+            if (
+              micConversationId &&
+              shouldFinalizeAfterClose((e as { closeCode?: number }).closeCode, micSegments)
+            ) {
+              scheduleFinalize(micConversationId, 'abnormal_close')
+              micConversationId = null
+            }
+            args.onError(`${source}: ${e.message}`)
+          }
         }
       },
       mode,
-      undefined,
+      source === 'mic' && mode === 'conversation' ? micClientConversationId : undefined,
       signal
     ).then((handle) => {
       if (stopped) {
@@ -253,6 +303,14 @@ export async function startMeetingSession(args: {
       if (stopped) return
       stopStartingHandles()
       offLiveMicHealth()
+      // The meeting ended, so the conversation this meeting's own mic lane was
+      // writing into is finished — ask the backend to process it rather than
+      // trusting the socket's close code. Null when the mic was delegated to the
+      // always-on session, which keeps recording and owns its own finalize.
+      if (micConversationId && micSegments > 0) {
+        scheduleFinalize(micConversationId, 'meeting_end')
+        micConversationId = null
+      }
       const transcript = formatMeetingTranscript(systemLines)
       // Nothing on the system lane worth saving (mic already went to the
       // backend's own conversation pipeline) — skip the empty row.
