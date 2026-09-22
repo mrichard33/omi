@@ -22,13 +22,12 @@ import {
   Newspaper,
   RefreshCw,
   Download,
-  FlaskConical,
   ExternalLink,
   ChevronRight
 } from 'lucide-react'
 import type { UpdateCheckResult } from '../../../../../shared/types'
+import { describeUpdateInstall } from '../../../../../shared/updateInstall'
 import { SettingRow } from '../SettingRow'
-import { Toggle } from '../Toggle'
 
 type Link = { label: string; icon: typeof Globe } & ({ href: string } | { onClick: () => void })
 
@@ -60,7 +59,6 @@ export function AboutTab(): React.JSX.Element {
   const [pending, setPending] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [checkMsg, setCheckMsg] = useState<string | null>(null)
-  const [beta, setBeta] = useState<boolean | null>(null)
 
   useEffect(() => {
     void window.omi?.getAppVersion?.().then((v) => {
@@ -73,7 +71,6 @@ export function AboutTab(): React.JSX.Element {
     void window.omi?.getPendingUpdate?.().then((p) => {
       if (p?.version) setPending(p.version)
     })
-    void window.omi?.getBetaUpdatesOptIn?.().then((v) => setBeta(!!v))
     return window.omi?.onUpdateReady?.((info) => setPending(info.version))
   }, [])
 
@@ -94,25 +91,15 @@ export function AboutTab(): React.JSX.Element {
   }
 
   // Install the staged update and relaunch on the new version. Quitting alone
-  // relies on install-on-quit, which never brings the app back up. If main says
-  // nothing is staged, keep the app open and say so rather than quitting.
+  // relies on install-on-quit, which never brings the app back up. Main owns the
+  // decision (shared/updateInstall.ts) and every refusal has its own sentence: a
+  // recording in progress keeps the app UP and lets the installer run on the next
+  // quit, which is NOT the same as nothing being staged.
   const restartToUpdate = async (): Promise<void> => {
-    const installing = await window.omi?.installUpdateNow?.().catch(() => false)
-    if (installing) return
-    setPending(null)
-    setCheckMsg(
-      'That update is no longer staged. Omi will offer to restart once it downloads again.'
-    )
-  }
-
-  // Opt in/out of pre-release (beta) builds. The pref is persisted in main and the
-  // updater flips its channel + re-checks live; opting IN also kicks a UI check so
-  // a newer beta shows up here immediately rather than on the next background poll.
-  const toggleBeta = async (on: boolean): Promise<void> => {
-    setBeta(on)
-    const next = await window.omi?.setBetaUpdatesOptIn?.(on)
-    if (typeof next === 'boolean') setBeta(next)
-    if (on) void checkForUpdates()
+    const outcome = await window.omi?.installUpdateNow?.().catch(() => 'not-staged' as const)
+    if (outcome === 'installing') return
+    if (outcome === 'not-staged') setPending(null)
+    setCheckMsg(describeUpdateInstall(outcome ?? 'not-staged'))
   }
 
   return (
@@ -179,22 +166,6 @@ export function AboutTab(): React.JSX.Element {
           >
             {checking ? 'Checking…' : 'Check for updates'}
           </button>
-        }
-      />
-
-      <SettingRow
-        icon={FlaskConical}
-        dot={beta ? 'on' : 'off'}
-        title="Receive beta updates"
-        subtitle="Get pre-release versions early. Beta builds get new features first but may be less stable. Turn off to stay on stable releases."
-        keywords="beta prerelease pre-release channel early access insider unstable updates test"
-        control={
-          <Toggle
-            on={!!beta}
-            onChange={(on) => void toggleBeta(on)}
-            disabled={beta === null}
-            label="Receive beta updates"
-          />
         }
       />
 

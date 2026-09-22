@@ -5,6 +5,12 @@ interface ImportMetaEnv {
   readonly MAIN_VITE_GOOGLE_CLIENT_SECRET?: string
   /** Sentry DSN for main-process error reporting. Unset → reporting disabled. */
   readonly MAIN_VITE_SENTRY_DSN?: string
+  /** Read-only GitHub token for the private release feed, baked in at build time
+   *  by .github/workflows/windows-release.yml. Fine-grained, Contents: Read, on
+   *  mrichard33/omi-desktop-releases ONLY — it downloads installers and can do
+   *  nothing else. Unset → auto-update is off (see main/updateFeed.ts). This is
+   *  the ONLY credential this build embeds. */
+  readonly MAIN_VITE_UPDATER_READ_TOKEN?: string
   /** Omi backend base URL (shared VITE_ prefix — visible to all processes).
    *  Main uses it for the sign-in authorize/token endpoints. */
   readonly VITE_OMI_API_BASE?: string

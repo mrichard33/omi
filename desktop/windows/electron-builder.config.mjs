@@ -178,14 +178,29 @@ export default {
   // --- AUTO-UPDATE ---
   // electron-updater is wired in src/main/updater.ts (packaged builds only; silent
   // download + install-on-next-quit; NSIS differential updates stay default-on).
-  // This GitHub config makes electron-builder emit latest.yml and app-update.yml.
-  // Before every production check, updater.ts replaces the repository-wide GitHub
-  // provider with the backend-selected immutable Windows release directory. Local
-  // testing keeps dev-app-update.yml + OMI_UPDATER_DEV=1 (forceDevUpdateConfig).
+  // This GitHub config is what makes electron-builder emit latest.yml + its
+  // blockmap — the update metadata the installed app reads.
+  //
+  // THE OWNER/REPO MATTER. This fork's installed app must only ever see builds
+  // from mrichard33/omi-desktop-releases. It used to point at BasedHardware/omi,
+  // Omi's OFFICIAL release train, which would have auto-replaced every customized
+  // build here with Omi's stock app. Releases live in a repo of their own —
+  // binaries and update metadata, never source — so the read token the app embeds
+  // can be scoped to that one repo and can never reach this codebase.
+  // updater.ts sets the same feed explicitly at runtime, with the token a private
+  // repo needs; this block keeps the emitted metadata consistent with it.
   //
   // NOTE: this block is the UPDATE FEED only — it must never be used as an upload
   // target. electron-builder auto-publishes to it when CI + a git tag are detected,
   // so every build command must pass `--publish never` (build:win does; the release
   // workflow uploads explicitly via `gh release` instead).
-  publish: [{ provider: 'github', owner: 'BasedHardware', repo: 'omi', releaseType: 'release' }]
+  publish: [
+    {
+      provider: 'github',
+      owner: 'mrichard33',
+      repo: 'omi-desktop-releases',
+      private: true,
+      releaseType: 'release'
+    }
+  ]
 }

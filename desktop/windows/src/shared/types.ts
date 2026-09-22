@@ -1,6 +1,7 @@
 // BYOK provider key types used by the OmiBridgeApi surface below.
 import type { ByokEnrollResult, ByokKeys, ByokProvider } from './byok'
 import type { ChatContentBlock } from './chatContent'
+import type { UpdateInstallResult } from './updateInstall'
 import type { ChatEvidenceReferenceEnvelope } from './knowledgeLedger'
 import type {
   McpConnectorId,
@@ -1290,19 +1291,17 @@ export type OmiBridgeApi = {
   /** The update staged for install-on-quit, if any (query on Settings mount —
    *  the one-shot update:ready event usually fires while Settings is unmounted). */
   getPendingUpdate: () => Promise<{ version: string } | null>
-  /** Install the staged update and relaunch on the new version. Resolves false
-   *  when nothing is staged (nothing downloaded yet) — the app stays open. */
-  installUpdateNow: () => Promise<boolean>
+  /** Install the staged update and relaunch on the new version. Anything but
+   *  'installing' means the app is staying open: 'not-staged' (nothing
+   *  downloaded yet) or 'busy' (a recording or meeting capture is live, so the
+   *  installer waits for the next quit). Show the matching sentence from
+   *  describeUpdateInstall. */
+  installUpdateNow: () => Promise<UpdateInstallResult>
   /** App display name + version (from Electron's app metadata). Shown in About. */
   getAppVersion: () => Promise<{ name: string; version: string }>
   /** Manually trigger an update check (Settings → About "Check for updates").
    *  Inert in unpackaged dev (returns `unsupported`). */
   checkForUpdates: () => Promise<UpdateCheckResult>
-  /** Whether "Receive beta updates" (the pre-release/beta channel) is on. */
-  getBetaUpdatesOptIn: () => Promise<boolean>
-  /** Opt in/out of beta (pre-release) updates. Persisted; the updater flips its
-   *  channel and re-checks live. Returns the written value. */
-  setBetaUpdatesOptIn: (enabled: boolean) => Promise<boolean>
   /** Release all global chords while a rebind UI captures raw keys (pressing the
    *  current chord must be captured, not fire the shortcut). Always pair with resume. */
   suspendShortcutCapture: () => void
