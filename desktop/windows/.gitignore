@@ -56,6 +56,7 @@ docs/*
 !docs/linux-screen-recording.md
 !docs/conversation-finalize.md
 !docs/reece-release.md
+!docs/listen-reconnect.md
 skills-lock.json
 
 # Visual brainstorming companion
