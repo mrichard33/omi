@@ -28,6 +28,17 @@ defaults:
   run:
     working-directory: desktop/windows
 
+# The only PR workflow here that lacked this, while seven others (repo-checks,
+# desktop-checks, backend-checks, web-checks, mobile-app-checks,
+# backend-hermetic-e2e, desktop-swift-ci) all had it. Without it every push to a
+# PR started a fresh run while the previous one ran to completion — and this is
+# the most expensive of them, ~28 minutes of runner time per run across three
+# jobs, one of them on windows-latest. The last commit still gets a full run;
+# only superseded ones are dropped.
+concurrency:
+  group: desktop-windows-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     name: Typecheck · Lint · Test
