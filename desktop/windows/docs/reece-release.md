@@ -19,6 +19,15 @@ Both are **fine-grained** tokens limited to **`omi-desktop-releases` only**.
 Neither can reach the source repo — that is the entire reason binaries live in a
 repo of their own.
 
+**2026-09-22 — the premise changed.** Both `mrichard33/omi` and
+`mrichard33/omi-desktop-releases` are now PUBLIC. The separation below was argued from
+a private source repo ("keeps the source from ever being exposed through the updater"),
+and that reason no longer applies. Nothing is broken — `updateFeed.ts` still sends the
+token and GitHub accepts it against a public repo — but `UPDATER_READ_TOKEN` is no
+longer buying anything, and the updater would work with no credential at all. Deleting
+it would remove the only secret baked into every installed copy. That is a deliberate
+open decision, not an oversight; do not "fix" the wording below without making the call.
+
 | Actions secret | Permission | Where it goes | Why that scope |
 |---|---|---|---|
 | `UPDATER_READ_TOKEN` | Contents: **Read** | Baked into the app bundle at build time as `MAIN_VITE_UPDATER_READ_TOKEN` (`src/main/updateFeed.ts`) | A private feed needs a credential on every installed copy. Read-only on one binaries repo is the smallest thing that works — it downloads Mark's own installers and nothing else. |
@@ -104,6 +113,32 @@ Log lines, all in `main.log`:
 [updater] none
 [updater] error <message>
 ```
+
+## Installing it
+
+Grab the newest `Omi-for-Windows-Setup-<version>.exe` from
+[omi-desktop-releases/releases](https://github.com/mrichard33/omi-desktop-releases/releases)
+and run it. That is the whole prerequisite list:
+
+- **Nothing else to install.** The three bundled .NET helpers (OCR, audio/loopback,
+  UI automation) are built `SelfContained` + `PublishSingleFile` for `win-x64`, so the
+  .NET runtime ships inside them; Electron and Node ship inside the installer. No
+  .NET, no Node, no VC++ redistributable.
+- **No admin rights.** `perMachine: false` — it installs for the current user.
+- **x64 only.** `target: [{ target: 'nsis', arch: ['x64'] }]`. An ARM Windows machine
+  has no build here.
+- **SmartScreen warns once.** The build is unsigned: *"Windows protected your PC"* →
+  *More info* → *Run anyway*.
+
+Then **stop using `pnpm dev` for daily use**, or the source tree and the installed app
+run side by side and only one of them updates — which reads as a broken updater when it
+isn't.
+
+To confirm auto-update end to end: launch the app, merge any change touching
+`desktop/windows/**`, and watch `main.log` for `[updater] checking` →
+`[updater] available <v>` → `[updater] downloaded <v>`. The first check is 45s after
+launch, then every 4 hours; the staged update installs on the next quit, or immediately
+via tray → **Restart to update**.
 
 ## Cutting a release by hand
 
