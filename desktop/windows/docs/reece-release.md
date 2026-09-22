@@ -25,7 +25,16 @@ repo of their own.
 | `RELEASES_PUBLISH_TOKEN` | Contents: **Read and write** | Used only by the `gh release` step in the workflow | Write access must never be in the bundle. Keeping it a separate token is what makes that guarantee checkable. |
 
 Create them at GitHub → Settings → Developer settings → Fine-grained tokens, then
-add both under `mrichard33/omi` → Settings → Secrets and variables → Actions.
+add both under `mrichard33/omi` → Settings → Secrets and variables → Actions →
+the **Secrets** tab → **New repository secret**.
+
+**Repository secrets, not environment secrets.** GitHub only exposes an
+environment secret to a job that declares `environment: <name>`, and the build
+job declares none — an environment secret resolves to an empty string there,
+with no warning. `RELEASES_PUBLISH_TOKEN` would fail loudly at the publish step;
+`UPDATER_READ_TOKEN` used to fail SILENTLY (green run, working installer, dead
+auto-update), which is why the build step now refuses to produce a build without
+it.
 
 ### Embedded-config audit
 
@@ -69,7 +78,8 @@ before any check. The backend resolver this replaced
 (`GET {api}/v2/desktop/update-feed/windows` → a `BasedHardware/omi` release
 directory) is **deleted**, not disabled — there is no second path to drift back
 onto. A build with no token turns the updater off entirely rather than falling
-back to whatever `app-update.yml` says.
+back to whatever `app-update.yml` says — that is a local `pnpm build:win`, not a
+released one, since the release workflow now refuses to build without the token.
 
 Update behavior: check 45s after launch then every 4 hours, download in the
 background, install on the next quit. "Restart to update" (tray, and Settings →

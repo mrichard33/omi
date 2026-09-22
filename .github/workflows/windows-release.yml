@@ -107,8 +107,8 @@ jobs:
       # The read-only updater token is injected ONLY here, as a build-time env
       # var electron-vite freezes into the main bundle
       # (import.meta.env.MAIN_VITE_UPDATER_READ_TOKEN -> src/main/updateFeed.ts).
-      # A build without it still installs and runs; auto-update is simply off and
-      # says so in the log.
+      # A build without it still installs and runs, with auto-update simply off —
+      # which is exactly why the step refuses to produce one (see the guard).
       #
       # `pnpm build:win` carries `--config electron-builder.config.mjs --publish
       # never`. Both matter: the config computes the pi-mono asarUnpack closure,
@@ -116,9 +116,32 @@ jobs:
       # block (which is the update FEED pointer, not an upload target). The upload
       # is the explicit `gh release` step below, with the other token.
       - name: Build installer
+        # shell: bash is REQUIRED, not stylistic: windows-latest defaults to
+        # PowerShell, where the `[ -z ... ]` test below is not syntax and the
+        # guard would never run.
+        shell: bash
         env:
           MAIN_VITE_UPDATER_READ_TOKEN: ${{ secrets.UPDATER_READ_TOKEN }}
-        run: pnpm build:win
+        run: |
+          set -euo pipefail
+          # THE ONE SILENT FAILURE IN THIS PIPELINE, closed here. A missing token
+          # does not fail the build: updateFeed.ts turns the updater off and the
+          # installer still works, so the run goes green, the release publishes,
+          # and the shipped app can never update itself — noticed weeks later,
+          # when a merge fails to reach the PC. Unlike RELEASES_PUBLISH_TOKEN
+          # below, nothing else would catch it.
+          #
+          # The way it goes missing is specific: both tokens must be REPOSITORY
+          # secrets. This job declares no `environment:`, and GitHub only exposes
+          # environment secrets to a job that does — an environment secret
+          # resolves to an empty string here, with no warning.
+          if [ -z "${MAIN_VITE_UPDATER_READ_TOKEN:-}" ]; then
+            echo "UPDATER_READ_TOKEN is not set — the build would ship with auto-update disabled." >&2
+            echo "Add it as a REPOSITORY secret under Settings -> Secrets and variables -> Actions." >&2
+            echo "(An ENVIRONMENT secret is invisible to this job: it declares no 'environment:'.)" >&2
+            exit 1
+          fi
+          pnpm build:win
 
       - name: Verify release artifacts
         shell: bash
