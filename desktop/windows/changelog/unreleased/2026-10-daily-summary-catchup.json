@@ -1,0 +1,5 @@
+{
+  "changes": [
+    "Missing daily summaries now fill themselves in: the app asks Omi for a recap of any of the last seven days that has none, shortly after it opens and again late each evening."
+  ]
+}

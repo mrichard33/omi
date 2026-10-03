@@ -3,14 +3,26 @@
 How this fork is laid out, why, and the two things that waste an afternoon if
 nobody tells you.
 
+## Which repo is which (2026-10-03)
+
+| Repo | What it is |
+|---|---|
+| `mrichard33/omi` | **This repo.** A standalone copy of [BasedHardware/omi](https://github.com/BasedHardware/omi) (not a GitHub fork), created 2026-09-20. Everything builds from here. |
+| `mrichard33/omi-desktop-releases` | Where the Windows installers and update feed are published. No source. |
+| `mrichard33/omi-old` | The original GitHub fork, last pushed 2026-09-15. Nothing builds from it or points at it; kept as history. |
+
+**Your data does not go to either repo.** Every app (Windows, Mac, phone) signs in
+with Omi's Firebase project and talks to Omi's hosted backend (`api.omi.me`). So
+`backend/` changes made here are not live for us unless Omi ships them too. Daily
+summaries are made by that hosted backend; the Windows build fills any day it
+skipped (`desktop/windows/src/renderer/src/lib/dailySummaryCatchup.ts`).
+
 ## The layout
 
-`main` mirrors [BasedHardware/omi](https://github.com/BasedHardware/omi). All
-custom work lives on branches. That is what keeps upstream merges tractable: a
-sync PR that only has to merge upstream into upstream is usually a no-op, and a
-conflict on a branch is a conflict in one place rather than everywhere.
+`main` carries Reece's own commits (the Windows desktop work, merged through PRs)
+on top of upstream. Upstream changes arrive only through the weekly sync PR below.
 
-**The one exception** is these three files, which are on `main` on purpose:
+These three files are on `main` on purpose:
 
 | File | Why it must be on main |
 |---|---|
@@ -18,7 +30,8 @@ conflict on a branch is a conflict in one place rather than everywhere.
 | `scripts/push-all.ps1` | It has to be there in a fresh clone, before you have checked anything out. |
 | `docs/reece-fork.md` | This file. It is no use on a branch you have not found yet. |
 
-Everything else Reece-specific belongs on a branch.
+Other Reece work lands on `main` through PRs; a merge that touches
+`desktop/windows/**` publishes a new Windows build (see below).
 
 ### The three worktrees
 
@@ -47,25 +60,19 @@ on the branch and push.
 
 If it says "already current", it did nothing, which is the correct outcome.
 
-> **Actions are off on this fork.** Nothing above runs until someone enables
-> them in Settings → Actions. That is deliberate: this fork carries 78 upstream
-> workflows, and turning Actions on starts those too. Turn them on when you are
-> ready to see what upstream's CI does to a fork.
+> **Actions are on.** They were turned on by 2026-09-22 for the Windows release
+> train, so upstream's inherited workflows run here too (for example the weekly
+> guardrail pulse that opened issue #9).
 
 ## Cutting a Windows build
 
-Use the workflow that already exists: **Actions → "Auto Release Desktop
-(Windows) on Main" → Run workflow** (`.github/workflows/desktop_windows_release.yml`).
+You do not cut one by hand. `.github/workflows/windows-release.yml` builds and
+publishes on every merge to `main` that touches `desktop/windows/**`, into
+`mrichard33/omi-desktop-releases`, and installed copies update from there within
+about four hours. Full detail: `desktop/windows/docs/reece-release.md`.
 
-It bumps the patch version, tags `v<version>-windows`, builds the NSIS installer
-on a `windows-latest` runner, and publishes it to a prerelease GitHub Release.
-It signs the installer when the Azure Trusted Signing secrets are present and
-builds unsigned when they are not — an unsigned build works, it just makes
-Windows SmartScreen warn about an unknown publisher.
-
-There is deliberately **no second build workflow**. An earlier plan called for
-one triggered by an `omi-windows-v*` tag; it was dropped because two release
-paths with two tag schemes is how you end up with a release nobody can find.
+Upstream's manual `desktop_windows_release.yml` is still in the repo but is not
+our release path; do not use it.
 
 ## Two things that will waste your afternoon
 

@@ -3,9 +3,11 @@ import { maybeBuildLocalGraph } from './kgSynthesis'
 import { maybeStartScreenSynthesis } from './screenSynthesis'
 import { maybeStartInsightEngine } from './insightEngine'
 import { maybeStartRetentionSweep } from './retentionSweep'
+import { maybeStartDailySummaryCatchup } from './dailySummaryCatchup'
 
-// The app's four background engines: knowledge-graph synthesis, screen synthesis,
-// the insight engine, and the retention sweep.
+// The app's background engines: knowledge-graph synthesis, screen synthesis, the
+// insight engine, the retention sweep, and the daily-summary catch-up (asks the
+// server for any recent day that has no recap — see dailySummaryCatchup.ts).
 //
 // These are APP-LIFETIME, not page-scoped. They used to be kicked off from the Home
 // PAGE's mount, which silently coupled "the user's landing page is Home" to "these
@@ -24,6 +26,7 @@ export function useAppLifetimeJobs(): void {
     maybeStartScreenSynthesis()
     maybeStartInsightEngine()
     maybeStartRetentionSweep()
+    maybeStartDailySummaryCatchup()
     return () => clearTimeout(t)
   }, [])
 }

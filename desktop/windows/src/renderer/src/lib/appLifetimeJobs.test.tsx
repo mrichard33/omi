@@ -14,6 +14,7 @@ const maybeBuildLocalGraph = vi.fn()
 const maybeStartScreenSynthesis = vi.fn()
 const maybeStartInsightEngine = vi.fn()
 const maybeStartRetentionSweep = vi.fn()
+const maybeStartDailySummaryCatchup = vi.fn()
 
 vi.mock('./kgSynthesis', () => ({ maybeBuildLocalGraph: () => maybeBuildLocalGraph() }))
 vi.mock('./screenSynthesis', () => ({
@@ -21,6 +22,9 @@ vi.mock('./screenSynthesis', () => ({
 }))
 vi.mock('./insightEngine', () => ({ maybeStartInsightEngine: () => maybeStartInsightEngine() }))
 vi.mock('./retentionSweep', () => ({ maybeStartRetentionSweep: () => maybeStartRetentionSweep() }))
+vi.mock('./dailySummaryCatchup', () => ({
+  maybeStartDailySummaryCatchup: () => maybeStartDailySummaryCatchup()
+}))
 
 import { useAppLifetimeJobs } from './appLifetimeJobs'
 
@@ -39,11 +43,12 @@ afterEach(() => {
 })
 
 describe('useAppLifetimeJobs — the shell owns the background engines', () => {
-  it('starts screen synthesis, the insight engine, and the retention sweep on mount', () => {
+  it('starts screen synthesis, the insight engine, the retention sweep and the daily-summary catch-up on mount', () => {
     render(<Shell />)
     expect(maybeStartScreenSynthesis).toHaveBeenCalledTimes(1)
     expect(maybeStartInsightEngine).toHaveBeenCalledTimes(1)
     expect(maybeStartRetentionSweep).toHaveBeenCalledTimes(1)
+    expect(maybeStartDailySummaryCatchup).toHaveBeenCalledTimes(1)
   })
 
   it('defers the knowledge-graph build past the entrance animations (1800ms)', () => {
@@ -70,7 +75,10 @@ describe('useAppLifetimeJobs — the shell owns the background engines', () => {
   it('is actually CALLED by the app shell — not just callable', () => {
     // vitest runs from the package root (desktop/windows).
     const app = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-    const shell = app.slice(app.indexOf('function AppShellInner'), app.indexOf('function AppShell('))
+    const shell = app.slice(
+      app.indexOf('function AppShellInner'),
+      app.indexOf('function AppShell(')
+    )
     expect(shell).toContain('useAppLifetimeJobs()')
   })
 })
