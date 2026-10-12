@@ -62,6 +62,20 @@ BODY_FILE="$(mktemp)"
     echo
     echo "_This run was a failure-path test (\`simulate_failure\`)._"
   fi
+  # Upstream's Hygiene job checks the PR body (UI evidence, invariants,
+  # failure class); pr-metadata.sh wrote the lines it needs in the sync job.
+  echo
+  if [ -s "${REPORT_DIR}/pr-metadata.md" ]; then
+    cat "${REPORT_DIR}/pr-metadata.md"
+  else
+    echo "## Failure class (fixes)"
+    echo
+    echo "Failure-Class: none"
+    echo
+    echo "## UI evidence"
+    echo
+    echo "UI-Evidence: none -- automated upstream sync; each upstream PR carries its own UI evidence"
+  fi
   echo
   echo "<!-- autosync-reason: ${REASON:-none} -->"
 } > "$BODY_FILE"
