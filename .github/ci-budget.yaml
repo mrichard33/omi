@@ -2496,6 +2496,24 @@
       },
       "runs_on": "windows-latest"
     },
+    "reece-upstream-sync-tests.yml/test": {
+      "budget_p50_minutes": 2,
+      "display_name": "Sync scripts",
+      "expected_runs_class": "unsampled-pr-sentinel",
+      "expected_runs_per_day": 1,
+      "if": null,
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": [],
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Shellcheck plus two hermetic shell test files; 31s on PR #12 (2026-10-12), rounded up",
+      "reusable": null,
+      "runner": "linux",
+      "runner_counts": {
+        "linux": 1
+      },
+      "runs_on": "ubuntu-latest"
+    },
     "release-eligibility.yml/release-eligibility": {
       "budget_p50_minutes": 7,
       "display_name": "Release Eligibility",
@@ -2748,6 +2766,63 @@
       },
       "runs_on": "ubuntu-latest"
     },
+    "upstream-sync.yml/finish": {
+      "budget_p50_minutes": 10,
+      "display_name": "Merge or flag",
+      "expected_runs_class": "non-pr",
+      "expected_runs_per_day": 0,
+      "if": "always() && needs.sync.result == 'success' && needs.sync.outputs.behind != '0' && needs.sync.outputs.head_sha != ''",
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": [
+        "sync",
+        "windows-build"
+      ],
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Not a PR job: open/merge the sync PR, then wait up to 5 min for the Windows release run to appear",
+      "reusable": null,
+      "runner": "linux",
+      "runner_counts": {
+        "linux": 1
+      },
+      "runs_on": "ubuntu-latest"
+    },
+    "upstream-sync.yml/sync": {
+      "budget_p50_minutes": 30,
+      "display_name": "Merge upstream \u00b7 Linux checks",
+      "expected_runs_class": "non-pr",
+      "expected_runs_per_day": 0,
+      "if": null,
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": [],
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Not a PR job: once a day. Full pnpm install + typecheck + lint + vitest (about 15 min on Desktop Windows CI), plus an occasional Claude conflict pass",
+      "reusable": null,
+      "runner": "linux",
+      "runner_counts": {
+        "linux": 1
+      },
+      "runs_on": "ubuntu-latest"
+    },
+    "upstream-sync.yml/windows-build": {
+      "budget_p50_minutes": 15,
+      "display_name": "Windows build",
+      "expected_runs_class": "non-pr",
+      "expected_runs_per_day": 0,
+      "if": "needs.sync.outputs.status == 'ok'",
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": "sync",
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Not a PR job: once a day after a green sync. Same build:win:unpack as Desktop Windows CI's Windows build smoke (about 5-7 min, 2026-10-12)",
+      "reusable": null,
+      "runner": "windows",
+      "runner_counts": {
+        "windows": 1
+      },
+      "runs_on": "windows-latest"
+    },
     "web-checks.yml/build": {
       "budget_p50_minutes": 1,
       "display_name": "Build",
@@ -2813,6 +2888,24 @@
       "needs": [],
       "owner": "CI maintainers",
       "rationale": "2026-09-26 PR sample p50 x 1.25, rounded up",
+      "reusable": null,
+      "runner": "windows",
+      "runner_counts": {
+        "windows": 1
+      },
+      "runs_on": "windows-latest"
+    },
+    "windows-release.yml/build": {
+      "budget_p50_minutes": 20,
+      "display_name": "Build \u00b7 test \u00b7 publish",
+      "expected_runs_class": "non-pr",
+      "expected_runs_per_day": 0,
+      "if": null,
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": [],
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Not a PR job: runs on merges to main touching desktop/windows; earlier runs took about 15 min (runs 37087935346, 35785032662)",
       "reusable": null,
       "runner": "windows",
       "runner_counts": {
@@ -5156,6 +5249,23 @@
         }
       }
     },
+    "reece-upstream-sync-tests.yml": {
+      "name": "Upstream sync tests (Reece fork)",
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Reece fork only: hermetic tests for the daily upstream sync scripts; runs only on PRs that touch .github/scripts/reece-upstream-sync/** or the sync workflows (2026-10-12).",
+      "triggers": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/scripts/reece-upstream-sync/**",
+            ".github/workflows/upstream-sync.yml",
+            ".github/workflows/reece-upstream-sync-tests.yml"
+          ]
+        }
+      }
+    },
     "release-eligibility.yml": {
       "name": "Release Eligibility",
       "owner": "CI maintainers",
@@ -5328,6 +5438,34 @@
         "workflow_dispatch": ""
       }
     },
+    "upstream-sync.yml": {
+      "name": "Upstream sync (Reece fork)",
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Reece fork only: daily upstream sync from BasedHardware/omi (schedule + workflow_dispatch, never on PRs); merges on green, flags needs-attention otherwise (2026-10-12).",
+      "triggers": {
+        "schedule": [
+          {
+            "cron": "0 10 * * *"
+          }
+        ],
+        "workflow_dispatch": {
+          "inputs": {
+            "simulate_failure": {
+              "default": "false",
+              "description": "Test the failure path: force a failing check (no Claude, never merges)",
+              "required": "false",
+              "type": "boolean"
+            },
+            "upstream_ref": {
+              "default": "main",
+              "description": "Upstream branch to sync from",
+              "required": "false",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "web-checks.yml": {
       "name": "Web Checks",
       "owner": "CI maintainers",
@@ -5384,6 +5522,23 @@
             "scripts/test-pre-push-worktree-fallback.sh"
           ]
         }
+      }
+    },
+    "windows-release.yml": {
+      "name": "windows-release",
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Reece fork only: builds and publishes the Windows app to mrichard33/omi-desktop-releases on merges to main that touch desktop/windows (push + workflow_dispatch, never on PRs).",
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "desktop/windows/**",
+            ".github/workflows/windows-release.yml"
+          ]
+        },
+        "workflow_dispatch": ""
       }
     }
   }

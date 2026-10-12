@@ -1,28 +1,36 @@
 name: Upstream sync (Reece fork)
 
-# Keep this fork's main mergeable with BasedHardware/omi.
+# Keep this fork current with BasedHardware/omi, every day, without a person.
 #
-# As of 2026-09-14 main is ~145 commits behind upstream and 13 ahead. Catching
-# up by hand is the kind of chore that gets skipped until the fork is too far
-# gone to merge at all, so it happens on a schedule instead: fetch upstream,
-# put it on a dated branch, open a PR, stop.
+# History: from 2026-09-14 this ran weekly, opened a PR and stopped. Nobody merged
+# those PRs, so by 2026-10-12 main was 3,977 commits behind and the Windows app a
+# month out of date. Mark's ruling (2026-10-12): "Everything updated daily and
+# fully automated." A person is involved only when automation cannot produce a
+# passing build.
 #
-# IT NEVER AUTO-MERGES. This fork has custom commits on main, so a merge can
-# conflict with work somebody is relying on — and an unattended merge that
-# resolves a conflict badly is worse than a fork that is behind. The PR is the
-# point: it is where the conflicts become visible.
+# Each run:
+#   1. merges upstream main into sync/upstream-YYYY-MM-DD (a merge commit, never a
+#      rebase: our own commits stay in history);
+#   2. regenerates the pi-mono unpack list (the drift that broke `pnpm install`);
+#   3. runs the desktop/windows checks: full pnpm install, typecheck, lint, tests,
+#      and the real Windows package build;
+#   4. on a conflict or a failing check, asks Claude to resolve it once with the
+#      fork's rules, then re-checks;
+#   5. all green -> opens the PR and merges it with UPSTREAM_SYNC_TOKEN, which is
+#      what lets the merge trigger windows-release.yml (a GITHUB_TOKEN merge would
+#      not), then confirms the release run started;
+#      still red -> leaves the PR open, labeled needs-attention, and sends one
+#      Slack alert. A failing build is never merged.
 #
-# Reece-specific files live on main (see docs/reece-fork.md), which means an
-# upstream merge can touch them. They are few and they are ours, so conflicts
-# on them resolve in our favour — but that judgement belongs to a person
-# reading the PR, not to this workflow.
+# Never pushes to main and never pushes to upstream: every change reaches main
+# through the PR. Pause it: Actions -> Upstream sync -> "..." -> Disable workflow.
+# Scripts: .github/scripts/reece-upstream-sync/. Docs: docs/reece-fork.md.
 
 on:
   schedule:
-    # Mondays 06:00 ET. Cron is UTC and GitHub does not do daylight saving, so
-    # this is 10:00 UTC — 06:00 EDT in summer, 05:00 EST in winter. An hour of
-    # drift on a weekly chore is not worth two cron lines.
-    - cron: "0 10 * * 1"
+    # Daily 06:00 ET. Cron is UTC and has no daylight saving: 10:00 UTC is
+    # 06:00 EDT in summer and 05:00 EST in winter.
+    - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
       upstream_ref:
@@ -30,9 +38,18 @@ on:
         required: false
         default: "main"
         type: string
+      simulate_failure:
+        description: "Test the failure path: force a failing check (no Claude, never merges)"
+        required: false
+        default: false
+        type: boolean
 
+# GITHUB_TOKEN only reads, labels, comments and dispatches. Every push, PR and
+# merge uses UPSTREAM_SYNC_TOKEN.
 permissions:
-  contents: write
+  contents: read
+  actions: write
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -41,104 +58,391 @@ concurrency:
   group: upstream-sync
   cancel-in-progress: false
 
+env:
+  UPSTREAM_REF: ${{ inputs.upstream_ref || 'main' }}
+  SIMULATE_FAILURE: ${{ inputs.simulate_failure && 'true' || 'false' }}
+
 jobs:
   sync:
+    name: Merge upstream · Linux checks
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      behind: ${{ steps.prepare.outputs.behind }}
+      ahead: ${{ steps.prepare.outputs.ahead }}
+      branch: ${{ steps.prepare.outputs.branch }}
+      pr: ${{ steps.prepare.outputs.pr }}
+      status: ${{ steps.verdict.outputs.status }}
+      reason: ${{ steps.verdict.outputs.reason }}
+      head_sha: ${{ steps.push.outputs.head_sha }}
+      touches_windows: ${{ steps.push.outputs.touches_windows }}
+      claude_used: ${{ steps.verdict.outputs.claude_used }}
     steps:
+      - name: Required secrets
+        env:
+          UPSTREAM_SYNC_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          missing=""
+          [ -n "$UPSTREAM_SYNC_TOKEN" ] || missing="$missing UPSTREAM_SYNC_TOKEN"
+          [ -n "$ANTHROPIC_API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. Add them in Settings -> Secrets and variables -> Actions (see docs/reece-fork.md, 'Keeping up with upstream'). Nothing was synced."
+            exit 1
+          fi
+
       - name: Checkout this fork
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The PAT, so the pushed branch and PR trigger CI, and so a sync that
+          # carries upstream workflow changes can be pushed at all (GITHUB_TOKEN
+          # may not push .github/workflows/** edits).
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
 
-      - name: Fetch upstream
-        id: fetch
-        env:
-          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'main' }}
+      - name: Git identity
         run: |
-          set -euo pipefail
-          git remote add upstream https://github.com/BasedHardware/omi.git 2>/dev/null || true
-          git fetch upstream "$UPSTREAM_REF"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          BEHIND=$(git rev-list --count "HEAD..upstream/${UPSTREAM_REF}")
-          AHEAD=$(git rev-list --count "upstream/${UPSTREAM_REF}..HEAD")
-          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
-          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
-          echo "Behind upstream by $BEHIND, ahead by $AHEAD."
+      - name: Merge upstream into the sync branch
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+        run: .github/scripts/reece-upstream-sync/prepare-branch.sh
 
       - name: Already current
-        if: steps.fetch.outputs.behind == '0'
+        if: steps.prepare.outputs.behind == '0'
         run: |
-          echo "Nothing to sync — main already has everything upstream has."
           echo "### Already current" >> "$GITHUB_STEP_SUMMARY"
-          echo "Ahead by ${{ steps.fetch.outputs.ahead }} commits of our own." >> "$GITHUB_STEP_SUMMARY"
+          echo "Main has everything upstream has (ahead by ${{ steps.prepare.outputs.ahead }} of our own). Nothing to do." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build the sync branch
-        if: steps.fetch.outputs.behind != '0'
-        id: branch
+      - uses: pnpm/action-setup@v6
+        if: steps.prepare.outputs.behind != '0'
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        if: steps.prepare.outputs.behind != '0'
+        with:
+          node-version: 22
+
+      # ---- conflicts: Claude resolves them, once -----------------------------
+      - name: Claude resolves the merge conflicts
+        id: claude_conflicts
+        if: steps.prepare.outputs.conflicted == 'true' && env.SIMULATE_FAILURE != 'true'
+        continue-on-error: true
+        timeout-minutes: 60
+        # Pinned to an exact release (v1.0.248). Bump deliberately.
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          claude_args: >-
+            --max-turns 120
+            --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep"
+            --disallowedTools "Bash(git push:*),Bash(git commit:*),Bash(git rebase:*),Bash(git reset:*),Bash(git merge:*),Bash(git checkout -b:*),Bash(git switch:*)"
+          prompt: |
+            A git merge of BasedHardware/omi (upstream) into mrichard33/omi (the Reece
+            fork) is IN PROGRESS in this checkout and has conflicts. The conflicted
+            files are listed in .autosync/conflicts.txt (also `git diff --name-only --diff-filter=U`).
+            "Ours"/HEAD is the Reece fork; "theirs" is upstream.
+
+            Resolve every conflicted file with these rules:
+            1. KEEP OURS: docs/reece-fork.md, scripts/push-all.ps1,
+               .github/workflows/upstream-sync.yml, .github/workflows/windows-release.yml,
+               .github/workflows/reece-upstream-sync-tests.yml,
+               .github/scripts/reece-upstream-sync/**, and every Windows release/updater
+               setting that points at mrichard33/omi-desktop-releases
+               (desktop/windows/electron-builder.config.mjs `publish`,
+               desktop/windows/src/main/updateFeed.ts). The app must never switch to
+               Omi's update feed.
+            2. desktop/windows source: the fork carries Reece fixes (the listen reconnect
+               policy with its 10-failure circuit breaker, conversation finalize, the
+               daily-summary catch-up, meeting system-lane reconnect, transcribe-stream
+               budget fixes, never installing an update mid-recording). For each
+               conflict, check whether upstream now covers the same behavior. Upstream
+               covers it -> take upstream. Upstream lacks it -> keep ours, adapted to
+               the new code. When the two sides add independent things, keep both.
+            3. backend/: take upstream (Omi's hosted backend is what runs).
+            4. Everything else: take upstream.
+            Then `git add` each resolved file. No conflict markers may remain.
+
+            Check your work in desktop/windows: `pnpm install --frozen-lockfile --ignore-scripts`,
+            `pnpm run typecheck`, then `pnpm test`. Fix only what the merge broke. Never
+            skip, delete or weaken a test to get green.
+
+            Do NOT commit, push, rebase, reset, switch branches or abort the merge: the
+            workflow commits your resolution.
+
+            Last, write .autosync/decisions.md: a markdown table `| File | Decision | Why |`
+            with one row per conflicted file, then one line naming any Reece fix dropped
+            because upstream replaced it (or "Reece fixes dropped: none").
+
+      - name: Commit the merge
+        id: commit_merge
+        if: steps.prepare.outputs.behind != '0' && steps.prepare.outputs.conflicted != 'main'
         env:
-          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'main' }}
+          CONFLICTED: ${{ steps.prepare.outputs.conflicted }}
         run: |
           set -euo pipefail
-          BRANCH="sync/upstream-$(date -u +%Y-%m-%d)"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          if [ "$CONFLICTED" != "true" ]; then
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Resolved = no unmerged index entries and no markers left in the files
+          # that conflicted. `=======` alone is not checked: it is a valid heading
+          # underline in Markdown and reStructuredText.
+          left=$(git diff --name-only --diff-filter=U || true)
+          markers=$(xargs -r -d '\n' grep -lE '^(<<<<<<<|>>>>>>>)( |$)' -- < .autosync/conflicts.txt 2>/dev/null || true)
+          git add -A
+          if [ -z "$left" ] && [ -z "$markers" ]; then
+            git commit -q -F - <<'MSG'
+          chore(sync): merge upstream with conflicts resolved by Claude
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          The resolution notes are in the sync PR body.
 
-          # Re-run on the same day updates the branch rather than failing.
-          git checkout -B "$BRANCH"
-
-          # A conflict here is EXPECTED and is not a failure: it is the whole
-          # reason a person looks at the PR. Commit the conflicted state so the
-          # markers are visible in the diff, rather than dropping the run and
-          # leaving nobody any the wiser.
-          if git merge --no-edit "upstream/${UPSTREAM_REF}"; then
-            echo "conflicts=false" >> "$GITHUB_OUTPUT"
+          Upstream-Autosync: true
+          MSG
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
           else
-            echo "conflicts=true" >> "$GITHUB_OUTPUT"
-            git add -A
-            git commit -m "chore(sync): merge upstream/${UPSTREAM_REF} WITH CONFLICTS — resolve before merging"
+            # Commit the markers so the PR shows exactly what is unresolved.
+            git commit -q -F - <<'MSG'
+          chore(sync): merge upstream WITH CONFLICTS - needs a person
+
+          Upstream-Autosync: true
+          MSG
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Conflicts remain in: ${left} ${markers}"
           fi
 
-          git push --force-with-lease origin "$BRANCH"
-
-      - name: Open or update the PR
-        if: steps.fetch.outputs.behind != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ steps.branch.outputs.branch }}
-          BEHIND: ${{ steps.fetch.outputs.behind }}
-          AHEAD: ${{ steps.fetch.outputs.ahead }}
-          CONFLICTS: ${{ steps.branch.outputs.conflicts }}
+      # ---- known drift: regenerate, commit if it changed ----------------------
+      - name: Regenerate the pi-mono unpack list
+        if: steps.commit_merge.outputs.resolved == 'true'
+        continue-on-error: true
+        working-directory: desktop/windows
         run: |
           set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm gen:pimono-unpack
+          git add scripts/pimono-asar-unpack.generated.json
+          if ! git diff --cached --quiet; then
+            git commit -q -F - <<'MSG'
+          chore(sync): regenerate the pi-mono unpack list after the upstream merge
 
-          if [ "$CONFLICTS" = "true" ]; then
-            TITLE="chore(sync): upstream → main (${BEHIND} commits, CONFLICTS)"
-            NOTE="**This merge has conflicts.** They are committed on the branch with the markers left in, so they show up in the diff. Resolve them on \`${BRANCH}\` and push before merging."
-          else
-            TITLE="chore(sync): upstream → main (${BEHIND} commits)"
-            NOTE="Merged cleanly. Read the diff before merging anyway — clean is not the same as safe on a fork with its own commits on main."
+          Upstream-Autosync: true
+          MSG
           fi
 
-          # NOT a heredoc. Every line inside a YAML block scalar is indented,
-          # and a heredoc terminator has to sit at column 0 — an indented EOF is
-          # never matched and the step dies with "delimited by end-of-file".
-          # printf keeps the indentation out of the argument entirely.
-          BODY=$(printf '%s\n\n%s\n%s\n\n%s\n\n%s\n' \
-            "Automated weekly sync from [BasedHardware/omi](https://github.com/BasedHardware/omi)." \
-            "- Behind upstream by **${BEHIND}** commits before this merge" \
-            "- Ahead by **${AHEAD}** commits of our own" \
-            "${NOTE}" \
-            "This PR is never merged automatically. See \`docs/reece-fork.md\`.")
+      - name: Checks
+        id: checks
+        if: steps.commit_merge.outputs.resolved == 'true'
+        run: .github/scripts/reece-upstream-sync/checks.sh .autosync/report
 
-          EXISTING=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number' || echo "")
-          if [ -n "$EXISTING" ]; then
-            gh pr edit "$EXISTING" --title "$TITLE" --body "$BODY"
-            echo "Updated PR #$EXISTING"
+      - name: Read the check result
+        id: check_result
+        if: steps.commit_merge.outputs.resolved == 'true'
+        run: echo "failed=$(cat .autosync/report/failed_check)" >> "$GITHUB_OUTPUT"
+
+      # ---- a failing check: Claude fixes it, once -----------------------------
+      - name: Claude fixes the failing check
+        id: claude_fix
+        if: steps.check_result.outputs.failed != '' && env.SIMULATE_FAILURE != 'true'
+        continue-on-error: true
+        timeout-minutes: 60
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          claude_args: >-
+            --max-turns 120
+            --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep"
+            --disallowedTools "Bash(git push:*),Bash(git commit:*),Bash(git rebase:*),Bash(git reset:*),Bash(git merge:*),Bash(git checkout -b:*),Bash(git switch:*)"
+          prompt: |
+            This checkout is a merge of BasedHardware/omi (upstream) into mrichard33/omi
+            (the Reece fork), already committed. After it, the desktop/windows check
+            "${{ steps.check_result.outputs.failed }}" fails. Its output is in
+            .autosync/report/failure.log (full logs: .autosync/report/step-*.log). The
+            checks, all run in desktop/windows, are: `pnpm install --frozen-lockfile`,
+            `pnpm run typecheck`, `pnpm run lint`, `pnpm test`.
+
+            Fix only what the merge broke, so every check passes. Rules:
+            - Never skip, delete or weaken a test, and never add eslint-disable or
+              @ts-ignore to get green.
+            - Keep the Reece fixes (listen reconnect policy + 10-failure circuit breaker,
+              conversation finalize, daily-summary catch-up, meeting system-lane
+              reconnect, transcribe-stream budget fixes, never installing an update
+              mid-recording) unless upstream now covers the same behavior.
+            - Updates must keep coming only from mrichard33/omi-desktop-releases.
+            - backend/ follows upstream.
+            Run the failing check yourself until it passes, then run the others.
+
+            Do NOT commit, push, rebase, reset or switch branches: the workflow commits
+            your fix.
+
+            Last, append to .autosync/decisions.md (create it if missing) a short section
+            "Check fix: <check name>" listing each file you changed and why.
+
+      - name: Commit Claude's fix and re-run the checks
+        id: recheck
+        if: steps.check_result.outputs.failed != '' && env.SIMULATE_FAILURE != 'true'
+        env:
+          FAILED: ${{ steps.check_result.outputs.failed }}
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Claude changed nothing; the check still fails."
+            exit 0
+          fi
+          git commit -q -F - <<MSG
+          chore(sync): repair "${FAILED}" after the upstream merge (Claude)
+
+          Upstream-Autosync: true
+          MSG
+          .github/scripts/reece-upstream-sync/checks.sh .autosync/report
+
+      - name: Verdict
+        id: verdict
+        if: steps.prepare.outputs.behind != '0'
+        env:
+          CONFLICTED: ${{ steps.prepare.outputs.conflicted }}
+          RESOLVED: ${{ steps.commit_merge.outputs.resolved }}
+          CLAUDE_CONFLICTS: ${{ steps.claude_conflicts.outcome }}
+          CLAUDE_FIX: ${{ steps.claude_fix.outcome }}
+        run: |
+          set -euo pipefail
+          claude_used=false
+          if [ "$CLAUDE_CONFLICTS" != "" ] && [ "$CLAUDE_CONFLICTS" != "skipped" ]; then claude_used=true; fi
+          if [ "$CLAUDE_FIX" != "" ] && [ "$CLAUDE_FIX" != "skipped" ]; then claude_used=true; fi
+          echo "claude_used=$claude_used" >> "$GITHUB_OUTPUT"
+          if [ "$CONFLICTED" = "main" ]; then
+            status=needs_attention; reason="conflict (main no longer merges into the sync branch)"
+          elif [ "$RESOLVED" != "true" ]; then
+            status=needs_attention; reason="conflict"
+          elif [ -s .autosync/report/failed_check ]; then
+            status=needs_attention; reason="failing check: $(cat .autosync/report/failed_check)"
           else
-            gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$BODY"
+            status=ok; reason=""
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Verdict: $status $reason"
+
+      - name: Push the sync branch
+        id: push
+        if: steps.prepare.outputs.behind != '0'
+        env:
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          REMOTE_SHA: ${{ steps.prepare.outputs.remote_sha }}
+        run: |
+          set -euo pipefail
+          # Lease on the sha we started from: a person's push since then wins.
+          git push --force-with-lease="refs/heads/${BRANCH}:${REMOTE_SHA}" origin "HEAD:refs/heads/${BRANCH}"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if git diff --quiet origin/main HEAD -- desktop/windows .github/workflows/windows-release.yml; then
+            echo "touches_windows=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "touches_windows=true" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "### Sync PR ready" >> "$GITHUB_STEP_SUMMARY"
-          echo "$TITLE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the report for the finish job
+        if: steps.prepare.outputs.behind != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-sync-report
+          path: .autosync/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows-build:
+    name: Windows build
+    needs: sync
+    if: needs.sync.outputs.status == 'ok'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: desktop/windows
+    # The same steps as Desktop Windows CI's "Windows build smoke".
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.sync.outputs.head_sha }}
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/windows/pnpm-lock.yaml
+      - name: Cache electron & electron-builder downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('desktop/windows/pnpm-lock.yaml') }}
+          restore-keys: electron-builder-windows-
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+      - name: Provision .env (ships public Firebase/PostHog config)
+        shell: pwsh
+        run: Copy-Item .env.example .env
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # build + typecheck + electron-builder --dir + verify:packaged-main.
+      - name: Build unpacked app
+        run: pnpm run build:win:unpack
+
+  finish:
+    name: Merge or flag
+    needs: [sync, windows-build]
+    # Run after a skipped or failed Windows build too: that is a needs-attention.
+    if: always() && needs.sync.result == 'success' && needs.sync.outputs.behind != '0' && needs.sync.outputs.head_sha != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts/reece-upstream-sync
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: upstream-sync-report
+          path: .autosync
+      - name: Merge on green, otherwise flag it
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          ACTIONS_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SYNC_STATUS: ${{ needs.sync.outputs.status }}
+          SYNC_REASON: ${{ needs.sync.outputs.reason }}
+          WINDOWS_RESULT: ${{ needs.windows-build.result }}
+          BRANCH: ${{ needs.sync.outputs.branch }}
+          PR: ${{ needs.sync.outputs.pr }}
+          BEHIND: ${{ needs.sync.outputs.behind }}
+          AHEAD: ${{ needs.sync.outputs.ahead }}
+          HEAD_SHA: ${{ needs.sync.outputs.head_sha }}
+          TOUCHES_WINDOWS: ${{ needs.sync.outputs.touches_windows }}
+          CLAUDE_USED: ${{ needs.sync.outputs.claude_used }}
+          SIMULATED: ${{ env.SIMULATE_FAILURE }}
+          REPORT_DIR: .autosync/report
+        run: |
+          set -euo pipefail
+          # decisions.md sits one level up from the check report.
+          if [ -f .autosync/decisions.md ]; then mkdir -p "$REPORT_DIR"; cp .autosync/decisions.md "$REPORT_DIR/decisions.md"; fi
+          STATUS="$SYNC_STATUS"
+          REASON="$SYNC_REASON"
+          if [ "$STATUS" = "ok" ] && [ "$WINDOWS_RESULT" != "success" ]; then
+            STATUS=needs_attention
+            REASON="failing check: Windows build (${WINDOWS_RESULT})"
+            mkdir -p "$REPORT_DIR"
+            printf 'The Windows build job ended "%s". Its log: %s\n' "$WINDOWS_RESULT" "$RUN_URL" > "$REPORT_DIR/failure.log"
+          fi
+          export STATUS REASON
+          .github/scripts/reece-upstream-sync/finish.sh
