@@ -20,7 +20,7 @@ skipped (`desktop/windows/src/renderer/src/lib/dailySummaryCatchup.ts`).
 ## The layout
 
 `main` carries Reece's own commits (the Windows desktop work, merged through PRs)
-on top of upstream. Upstream changes arrive only through the weekly sync PR below.
+on top of upstream. Upstream changes arrive only through the daily sync PR below.
 
 These three files are on `main` on purpose:
 
@@ -47,22 +47,74 @@ standing in, assuming you are done, and losing the other two.
 
 ## Keeping up with upstream
 
-`.github/workflows/upstream-sync.yml` runs on Mondays at 06:00 ET and on demand
-(Actions → Upstream sync → Run workflow). It fetches upstream, puts the merge on
-`sync/upstream-YYYY-MM-DD`, and opens a PR.
+**Daily and automatic (Mark, 2026-10-12: "Everything updated daily and fully
+automated").** The weekly sync PRs were never merged after 2026-09-11, and by
+2026-10-12 `main` was 3,977 commits behind. So the sync now merges itself when
+everything passes, and only asks a person when it cannot produce a passing build.
 
-**It never merges anything.** This fork has its own commits on `main`, so an
-upstream merge can conflict with work somebody is relying on, and an unattended
-merge that resolves a conflict badly is worse than a fork that is behind. When
-the merge conflicts, the workflow commits the conflicted state *with the markers
-left in* so they show up in the PR diff, and says so in the title — resolve them
-on the branch and push.
+`.github/workflows/upstream-sync.yml` runs every day at 06:00 ET (10:00 UTC, so
+05:00 EST in winter) and on demand (Actions → Upstream sync → Run workflow). Each run:
 
-If it says "already current", it did nothing, which is the correct outcome.
+1. Fetches `BasedHardware/omi` `main`. Nothing new → it stops quietly.
+2. Merges it into `sync/upstream-YYYY-MM-DD` with a merge commit (never a rebase:
+   our own commits stay in history).
+3. Regenerates the pi-mono unpack list (`pnpm gen:pimono-unpack`) and commits it if
+   it changed. That drift is what broke `pnpm install` before 2026-10-12.
+4. Runs the `desktop/windows` checks: the full `pnpm install` (with
+   `verify-pimono-unpack`), typecheck, lint, tests, and the real Windows build
+   (`build:win:unpack`) on a Windows runner.
+5. **Conflict or failing check →** Claude (`anthropics/claude-code-action`, pinned)
+   resolves it once with the rules below, and the checks run again.
+6. **All green →** it opens the PR and merges it (merge commit) with
+   `UPSTREAM_SYNC_TOKEN`. That merge triggers `windows-release.yml`, so a new
+   Windows build is published. The run confirms the release started, and starts it
+   itself if it did not.
+7. **Still red →** the PR stays open with the `needs-attention` label and the
+   failing output in its body, and ONE Slack alert goes out: "Omi upstream sync
+   needs attention: <PR link>. Reason: <conflict | failing check>." No repeat alert
+   for the same PR unless the reason changes. **A failing build is never merged.**
+
+Only one sync PR is open at a time. A `needs-attention` PR is reused the next day:
+rebuilt from scratch if only the automation has touched it, or updated in place
+(your commits kept) if a person has pushed a fix to its branch. To take it over,
+push your fix to that branch and merge the PR yourself.
+
+It never pushes to `main` and never pushes to upstream. Every change reaches `main`
+through the PR. The PR's own CI also runs, but the merge does not wait for it: the
+sync has already run the same `desktop/windows` checks itself.
+
+**Conflict rules (the same ones Claude is given):** keep ours for this file,
+`scripts/push-all.ps1`, the sync and release workflows, and every updater setting
+that points at `mrichard33/omi-desktop-releases`. In `desktop/windows`, keep a
+Reece fix unless upstream now covers the same behavior. Take upstream for
+`backend/` and everything else.
+
+### Secrets it needs
+
+Add them in GitHub → `mrichard33/omi` → Settings → Secrets and variables → Actions.
+A run with a required secret missing fails at once and names the missing secret.
+
+| Secret | Required | What it is |
+|---|---|---|
+| `UPSTREAM_SYNC_TOKEN` | yes | Fine-grained token, access to `mrichard33/omi` only, with Contents, Pull requests and Workflows set to read and write. It pushes the branch, opens and merges the PR. A merge made with the default `GITHUB_TOKEN` would not start the Windows release. |
+| `ANTHROPIC_API_KEY` | yes | Claude Console API key, with a monthly spend limit. Used only when a merge conflicts or a check fails. |
+| `SLACK_WEBHOOK_URL` | no | Slack incoming webhook for the alert. Unset → no alert, the PR is still labeled. |
+
+### Pause it, test it
+
+- **Pause:** Actions → Upstream sync → "…" → Disable workflow. Enable it again the
+  same way.
+- **Test the failure path:** Run workflow with `simulate_failure` ticked. It forces a
+  failing check, skips Claude, never merges, labels the PR and sends the alert. The
+  next normal run reuses that PR and merges it if everything passes.
+- The sync scripts live in `.github/scripts/reece-upstream-sync/`, and their tests
+  run on every PR that changes them (`reece-upstream-sync-tests.yml`).
+
+If a run says "already current", it did nothing, which is the correct outcome.
 
 > **Actions are on.** They were turned on by 2026-09-22 for the Windows release
 > train, so upstream's inherited workflows run here too (for example the weekly
-> guardrail pulse that opened issue #9).
+> guardrail pulse that opened issue #9, since removed upstream).
 
 ## Cutting a Windows build
 
