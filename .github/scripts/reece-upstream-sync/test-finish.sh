@@ -18,7 +18,10 @@ cat > "$WORK/bin/gh" <<'GH'
 #!/usr/bin/env bash
 echo "$*" >> "$STATE/calls"
 case "$1 $2" in
-  "pr create") cat "$(echo "$@" | sed -n 's/.*--body-file \([^ ]*\).*/\1/p')" > "$STATE/body"; echo "https://github.com/o/r/pull/42" ;;
+  "pr create")
+    if [ "${CREATE_FAILS:-0}" = 1 ]; then echo "a pull request for branch already exists" >&2; exit 1; fi
+    cat "$(echo "$@" | sed -n 's/.*--body-file \([^ ]*\).*/\1/p')" > "$STATE/body"; echo "https://github.com/o/r/pull/42" ;;
+  "pr list") echo 42 ;;
   "pr view")
     if [[ "$*" == *mergeCommit* ]]; then echo "mergesha"; else cat "$STATE/body" 2>/dev/null || true; fi ;;
   "pr edit")
@@ -95,5 +98,13 @@ MERGE_FAILS=1 STATUS=ok REASON="" PR="" "$SCRIPT" > /dev/null
 grep -q -- "--add-label needs-attention" "$WORK/calls" || die "refused merge not flagged"
 grep -q "Reason: merge refused by GitHub" "$WORK/slack" || die "refused merge not alerted"
 ok "merge refused -> needs-attention"
+
+# 7. The sync job missed an open PR (run 38313452502): create fails, the
+#    existing PR is found, updated and merged instead of failing the run.
+reset
+CREATE_FAILS=1 STATUS=ok REASON="" PR="" "$SCRIPT" > /dev/null
+grep -q "^pr edit 42 --repo o/r --title" "$WORK/calls" || die "existing PR not updated"
+grep -q "^pr merge 42 --repo o/r --merge --match-head-commit abc" "$WORK/calls" || die "existing PR not merged"
+ok "PR already exists -> found, updated and merged"
 
 echo "all $pass passed"

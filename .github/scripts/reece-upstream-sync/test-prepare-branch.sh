@@ -18,11 +18,16 @@ die() { echo "FAIL - $1"; exit 1; }
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'GH'
 #!/usr/bin/env bash
-[ "$1 $2" = "pr list" ] && { printf '%s' "${FAKE_PRS:-}"; exit 0; }
+# Like the real gh with an `upstream` remote present: without --repo it lists
+# BasedHardware/omi's PRs, where no sync PR exists.
+if [ "$1 $2" = "pr list" ]; then
+  case " $* " in *" --repo o/r "*) printf '%s' "${FAKE_PRS:-}" ;; esac
+  exit 0
+fi
 echo "unexpected gh call: $*" >&2; exit 1
 GH
 chmod +x "$WORK/bin/gh"
-export PATH="$WORK/bin:$PATH"
+export PATH="$WORK/bin:$PATH" GITHUB_REPOSITORY=o/r
 
 # upstream: base + 2 new commits. origin (the fork): base + 1 Reece commit.
 g init -q "$WORK/upstream"

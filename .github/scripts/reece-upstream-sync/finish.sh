@@ -95,8 +95,19 @@ if [ -n "$PR" ]; then
   if [ -n "$OLD_ALERTED" ]; then echo "<!-- autosync-alerted: ${OLD_ALERTED} -->" >> "$BODY_FILE"; fi
   gh pr edit "$PR" --repo "$REPO" --title "$TITLE" --body-file "$BODY_FILE"
 else
-  URL=$(gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE")
-  PR="${URL##*/}"
+  if URL=$(gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY_FILE"); then
+    PR="${URL##*/}"
+  else
+    # The sync job missed an open PR for this branch: find it and update it
+    # rather than failing a run whose checks passed.
+    PR=$(gh pr list --repo "$REPO" --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+    if [ -z "$PR" ]; then
+      echo "::error::Could not open or find the sync PR for ${BRANCH}."
+      exit 1
+    fi
+    OLD_BODY=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body || true)
+    gh pr edit "$PR" --repo "$REPO" --title "$TITLE" --body-file "$BODY_FILE"
+  fi
 fi
 PR_URL="https://github.com/${REPO}/pull/${PR}"
 summary "### Sync PR: ${PR_URL}"
