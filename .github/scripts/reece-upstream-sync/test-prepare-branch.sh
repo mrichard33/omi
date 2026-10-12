@@ -85,8 +85,15 @@ fresh_clone; : > "$WORK/out"; FAKE_PRS="" run conflict
 ok "conflict -> merge left in progress, conflict list written, scratch dir excluded"
 
 # 5. Already current: behind 0, nothing else happens.
-( cd "$WORK/seed" && git pull -q --no-rebase "$WORK/upstream" main 2>/dev/null || true
-  git checkout -q --theirs shared.txt 2>/dev/null || true; git add -A; g commit -qm "take upstream" 2>/dev/null || true; g push -q origin main )
+# Bring all of upstream into the fork's main (conflict resolved to upstream's side).
+( cd "$WORK/seed"
+  g fetch -q "$WORK/upstream" main
+  if ! g merge -q --no-edit FETCH_HEAD > /dev/null 2>&1; then
+    git checkout -q --theirs shared.txt
+    git add shared.txt
+    g commit -qm "take upstream"
+  fi
+  g push -q origin main )
 fresh_clone; : > "$WORK/out"; FAKE_PRS="" run current
 [ "$(outv behind)" = 0 ] || die "should be current"
 [ -z "$(outv branch)" ] || die "no branch when current"
