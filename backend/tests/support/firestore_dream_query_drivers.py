@@ -1,0 +1,158 @@
+"""Executable query profiles for bounded dream worker and feedback reads."""
+
+from types import SimpleNamespace
+from datetime import datetime, timezone
+from unittest.mock import patch
+
+from config.dream_agent import Caps
+from tests.support.firestore_query_drivers import DriverEntry, SHAPE_UID as UID
+
+
+def producer_mode(client):
+    return patch.dict('os.environ', {'DREAM_AGENT_MODE': 'shadow', 'DREAM_AGENT_UID_ALLOWLIST': UID})
+
+
+def trim_overflow(client):
+    from database import dream_store
+
+    # Exercise the oldest query even though the shape recorder has neutral data.
+    return patch.object(dream_store, 'dirty_count', side_effect=[501, 501, 0])
+
+
+def finish_state(client, args, trial):
+    client.documents['dream_users/' + UID] = {'lease': {'run_id': 'shape-run'}, 'score': 1}
+
+
+def admission_state(client, args, trial):
+    client.documents['dream_users/' + UID] = {'score': 1}
+
+
+def entries():
+    return (
+        DriverEntry(
+            'database.dream_context_reads.subject_memory_refs', base={'uid': UID, 'subject': 'person:synthetic'}
+        ),
+        DriverEntry(
+            'database.dream_context_reads.temporal_neighbours',
+            base={
+                'uid': UID,
+                'start': datetime(2026, 10, 9, tzinfo=timezone.utc),
+                'anchor': datetime(2026, 10, 9, 1, tzinfo=timezone.utc),
+                'end': datetime(2026, 10, 9, 2, tzinfo=timezone.utc),
+            },
+            domains={'collection': ['conversations', 'screen_activity']},
+            neutrals={'excluded_ids': ((), 'post-query exclusion within a fixed 12-row scan per side')},
+        ),
+        DriverEntry(
+            'database.dream_history.history_page',
+            base={'uid': UID},
+            domains={
+                'collection': ['conversations', 'action_items', 'people', 'memory_items'],
+                'after': [None, 'one'],
+                'limit': [1, 40],
+            },
+        ),
+        DriverEntry(
+            'database.dream_history.history_count',
+            base={'uid': UID},
+            domains={'collection': ['conversations', 'action_items', 'people', 'memory_items']},
+        ),
+        DriverEntry(
+            'database.dream_history.history_from_key',
+            base={'uid': UID},
+            domains={
+                'collection': ['conversations', 'action_items', 'people', 'memory_items'],
+                'key': ['00000000', 'ffffffff'],
+            },
+        ),
+        DriverEntry(
+            'database.dream_scheduler.candidates',
+            domains={'limit': [1, 100]},
+            neutrals={'now': (datetime(2026, 10, 12, tzinfo=timezone.utc), 'post-query priority only')},
+        ),
+        DriverEntry(
+            'database.dream_scheduler.candidate_page',
+            domains={'after': [None, 'one'], 'limit': [1, 100]},
+            neutrals={'transaction': (None, 'transaction does not change query shape')},
+        ),
+        DriverEntry('database.dream_store.own_runs', base={'uid': UID}, domains={'limit': [1, 10, 20]}),
+        DriverEntry(
+            'database.dream_store.acquire',
+            base={'uid': UID},
+            domains={'trigger': ['schedule', 'manual']},
+            neutrals={
+                'caps': (Caps(), 'admission policy only'),
+                'rng': (None, 'coin does not alter query shape'),
+                'canary': (False, 'cohort gate only'),
+                'now': (datetime(2026, 10, 9, tzinfo=timezone.utc), 'UTC accounting day only'),
+            },
+            setup=admission_state,
+            patchers=(producer_mode,),
+        ),
+        DriverEntry(
+            'database.dream_store.dirty_count',
+            base={'uid': UID},
+            neutrals={'transaction': (None, 'transaction binding does not change query shape')},
+        ),
+        DriverEntry(
+            'database.dream_store.mark_dirty',
+            base={'uid': UID},
+            domains={'refs': [[('conversations', 'one')], [('people', 'person'), ('conversations', 'two')]]},
+            neutrals={'canary': (False, 'cohort gate only; admitted canary uses the identical queue builders')},
+            patchers=(producer_mode,),
+        ),
+        DriverEntry('database.dream_store.trim_dirty', base={'uid': UID}, patchers=(trim_overflow,)),
+        DriverEntry(
+            'database.dream_store.finish',
+            base={
+                'uid': UID,
+                'lease': {
+                    'run_id': 'shape-run',
+                    'day': '2026-10-08',
+                    'started_at': datetime(2026, 10, 8, tzinfo=timezone.utc),
+                    'watermark': datetime(1970, 1, 1, tzinfo=timezone.utc),
+                    'score': 1,
+                    'mode': 'shadow',
+                    'reservation_usd': 0.24,
+                    'dirty_dropped': 0,
+                    'dirty_dropped_reported': 0,
+                },
+                'report': {'status': 'complete'},
+            },
+            domains={
+                'success': [True, False],
+                'refund': [True, False],
+                'count_failure': [True, False],
+                'deferred': [[], ['conversations/one']],
+            },
+            neutrals={
+                'now': (datetime(2026, 10, 9, tzinfo=timezone.utc), 'UTC reset metadata only'),
+                'reviewed': ([], 'metadata writes only'),
+                'seeded': ([], 'direct settlement document selection only'),
+                'cleanup_cursor': (None, 'metadata writes only'),
+                'consumed': ([], 'settlement metadata; watermark uses the separately driven dirty_refs builder'),
+                'unavailable': ([], 'settlement metadata; watermark uses the separately driven dirty_refs builder'),
+                'release': (True, 'post-query lease policy'),
+            },
+            setup=finish_state,
+        ),
+        DriverEntry(
+            'database.dream_store.dirty_refs',
+            base={'uid': UID},
+            domains={'limit': [1, 32, 33, 400, 500], 'newest': [True, False]},
+            neutrals={'transaction': (None, 'transaction binding does not change query shape')},
+        ),
+        DriverEntry(
+            'database.dream_store.demoted_types',
+            base={'uid': UID},
+            neutrals={'caps': (Caps(), 'post-query policy only')},
+        ),
+        DriverEntry('database.dream_feedback.read_patterns', neutrals={'k': (20, 'post-query threshold only')}),
+    )
+
+
+registry_extension = SimpleNamespace(
+    DRIVERS={entry.function: entry for entry in entries()},
+    COVERED_BY={},
+    SKIPS={},
+)
