@@ -54,6 +54,9 @@ grep -q "^pr merge" "$WORK/calls" && die "a failing build was merged"
 [ "$(slack_count)" = 1 ] || die "expected one Slack alert"
 grep -q "needs attention: https://github.com/o/r/pull/42. Reason: failing check: typecheck." "$WORK/slack" || die "alert text: $(cat "$WORK/slack")"
 grep -q "error TS2345: boom" "$WORK/body" || die "failing output not in the PR body"
+# No pr-metadata.md yet: the fallback still carries the lines upstream's Hygiene job needs.
+grep -qx "UI-Evidence: none -- automated upstream sync; each upstream PR carries its own UI evidence" "$WORK/body" || die "fallback body lacks UI-Evidence"
+grep -qx "Failure-Class: none" "$WORK/body" || die "fallback body lacks Failure-Class"
 ok "needs-attention -> label, no merge, one alert with the PR link and reason"
 
 # 2. Same PR, same reason next day: no second alert.
@@ -73,9 +76,13 @@ SLACK_WEBHOOK_URL="" STATUS=needs_attention REASON="conflict" PR="" "$SCRIPT" > 
 grep -q -- "--add-label needs-attention" "$WORK/calls" || die "label not added"
 ok "no webhook -> no alert, still labeled"
 
-# 5. Green: merged with a merge commit on the checked head, release run confirmed.
+# 5. Green: merged with a merge commit on the checked head, release run confirmed,
+#    and the body carries pr-metadata.md (the invariant citations it computed).
 reset
+printf '## Product invariants affected\n\nINV-TEST-1\n' > "$WORK/report/pr-metadata.md"
 STATUS=ok REASON="" PR="" "$SCRIPT" > /dev/null
+rm -f "$WORK/report/pr-metadata.md"
+grep -qx "INV-TEST-1" "$WORK/body" || die "pr-metadata.md not carried into the PR body"
 grep -q "^pr merge 42 --repo o/r --merge --match-head-commit abc" "$WORK/calls" || die "not merged as a merge commit on the head sha"
 grep -q "^run list" "$WORK/calls" || die "release run not looked up"
 grep -q "workflow run" "$WORK/calls" && die "dispatched although the run existed"

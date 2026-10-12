@@ -328,6 +328,13 @@ jobs:
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
           echo "Verdict: $status $reason"
 
+      # Upstream's PR checks read the PR body; write the lines they need
+      # (invariant citations, failure class, UI evidence). See pr-metadata.sh.
+      - name: PR metadata for upstream's PR checks
+        if: steps.prepare.outputs.behind != '0'
+        continue-on-error: true
+        run: .github/scripts/reece-upstream-sync/pr-metadata.sh .autosync/report/pr-metadata.md origin/main
+
       - name: Push the sync branch
         id: push
         if: steps.prepare.outputs.behind != '0'
