@@ -216,10 +216,28 @@ jobs:
 
           Installed apps pick this up automatically within 4 hours, or on their next launch."
 
-          # Idempotent on a re-run.
+          # ORDER IS THE UPDATE FEED. The app's updater (allowPrerelease = true,
+          # electron-updater's private GitHub provider) takes the FIRST non-draft
+          # release of GET /releases. GitHub sorts that list by created_at, which
+          # is the date of the commit the tag points at. Every release used to tag
+          # the releases repo's single seed commit (2026-09-22), so they all tied
+          # and GitHub broke the tie by tag name as TEXT: "v1.0.35-reece.9" sorts
+          # above "v1.0.35-reece.11". On 2026-10-12, reece.11 published and every
+          # installed app kept offering reece.9. So each release now points at a
+          # fresh commit of its own: a one-line LATEST file naming the tag.
+          #
+          # Idempotent on a re-run: the commit and the release are made once.
           if ! gh release view "$TAG" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            LATEST_SHA=$(gh api "repos/$RELEASES_REPO/contents/LATEST" --jq .sha 2>/dev/null || true)
+            PUT_ARGS=(-f message="Release ${TAG}" -f content="$(printf '%s\n' "$TAG" | base64 | tr -d '\n')")
+            if [ -n "$LATEST_SHA" ]; then PUT_ARGS+=(-f sha="$LATEST_SHA"); fi
+            TARGET=$(gh api --method PUT "repos/$RELEASES_REPO/contents/LATEST" "${PUT_ARGS[@]}" --jq .commit.sha)
+            # A DRAFT until every file is up: the updater skips drafts, so it never
+            # sees a release that sorts first but has no latest.yml yet.
             gh release create "$TAG" \
               --repo "$RELEASES_REPO" \
+              --target "$TARGET" \
+              --draft \
               --title "Omi for Windows ${VERSION}" \
               --notes "$NOTES"
           fi
@@ -232,5 +250,15 @@ jobs:
             dist/*.exe.blockmap
           gh release upload "$TAG" --repo "$RELEASES_REPO" --clobber \
             dist/latest.yml
+          gh release edit "$TAG" --repo "$RELEASES_REPO" --draft=false
 
-          echo "Published $TAG to $RELEASES_REPO"
+          # Check what the updater will see: the first non-draft release must be
+          # this one. If not, installed apps will not get this build, so say so
+          # now instead of letting the run look green.
+          FIRST=$(gh api "repos/$RELEASES_REPO/releases?per_page=10" --jq '[.[] | select(.draft | not)][0].tag_name')
+          if [ "$FIRST" != "$TAG" ]; then
+            echo "::error::Published $TAG, but the update feed's first release is $FIRST. Installed apps will not update to $TAG."
+            exit 1
+          fi
+
+          echo "Published $TAG to $RELEASES_REPO (first in the update feed)"

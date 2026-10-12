@@ -96,6 +96,16 @@ onto. A build with no token turns the updater off entirely rather than falling
 back to whatever `app-update.yml` says — that is a local `pnpm build:win`, not a
 released one, since the release workflow now refuses to build without the token.
 
+**Which release counts as "current".** With `allowPrerelease` on, electron-updater
+reads `GET /releases` and takes the FIRST non-draft release. GitHub sorts that list
+by `created_at`, which is the date of the commit the release's tag points at, and
+breaks ties by tag name as text. Until 2026-10-12 every release tagged the repo's
+one seed commit, so they all tied, `v1.0.35-reece.9` sorted above
+`v1.0.35-reece.11`, and installed apps stayed on reece.9. The release workflow now
+gives each release its own commit (a one-line `LATEST` file naming the tag),
+publishes it as a draft until `latest.yml` is up, and fails the run if the new
+release is not first in the list afterwards.
+
 Update behavior: check 45s after launch then every 4 hours, download in the
 background, install on the next quit. "Restart to update" (tray, and Settings →
 About) is the only path that restarts on the updater's schedule, and it is
@@ -152,13 +162,15 @@ the dry run to use when changing this pipeline.
 Pick whichever fits; both are done in `omi-desktop-releases`, not here.
 
 1. **Re-publish an older build as the newest.** Download the good installer,
-   `latest.yml` and `.blockmap` from the older release, then create a NEW release
-   with a higher run number in its tag and upload those files to it. Clients
-   compare versions, so the only thing that makes a build "current" is being the
-   highest version in the feed. (`latest.yml` still names the old version inside;
-   that is what makes clients install it.)
-2. **Delete the bad release.** Clients fall back to the highest remaining
-   version. Fastest option, but it loses the record of what shipped — prefer (1)
+   `latest.yml` and `.blockmap` from the older release. First commit a change to
+   `LATEST` in `omi-desktop-releases` (the web editor is fine), then create a NEW
+   release on that commit, with a higher run number in its tag, and upload those
+   files to it. Clients take the first release in the list (see "The feed"), so
+   the release must sit on the newest commit; a release on an older commit sorts
+   below the current one and is ignored. (`latest.yml` still names the old
+   version inside; that is what makes clients install it.)
+2. **Delete the bad release.** Clients fall back to the next release in the
+   list. Fastest option, but it loses the record of what shipped — prefer (1)
    unless the bad build is actively harmful.
 3. **Pin one machine.** Install the wanted `.exe` by hand and it stays put until
    a *higher* version appears in the feed.
