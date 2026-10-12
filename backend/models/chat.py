@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
@@ -488,6 +489,25 @@ class ChatEvidenceEnvelope(BaseModel):
         return self
 
 
+class EditReceiptBlock(BaseModel):
+    """Server-authored write receipt. IDs and URLs never encode item content."""
+
+    type: Literal['editReceipt'] = 'editReceipt'
+    id: str
+    receiptId: str
+    targetKind: Literal['conversation', 'memory', 'task', 'person']
+    action: Literal['created', 'updated', 'deleted', 'completed', 'uncompleted', 'renamed']
+    targetId: str
+    summary: str = Field(min_length=1, max_length=300)
+    undoable: bool = True
+    undoneAt: Optional[datetime] = None
+
+
+class UndoChatReceiptResponse(BaseModel):
+    status: Literal['undone', 'already_undone', 'unavailable']
+    block: EditReceiptBlock
+
+
 class Message(BaseModel):
     id: str
     text: str
@@ -713,6 +733,41 @@ class SendMessageRequest(BaseModel):
     text: str
     file_ids: Optional[List[str]] = []
     context: Optional[PageContext] = None
+    time_zone: Optional[str] = None
+
+    # Tools this client can execute on the device itself. Declared per request
+    # because it depends on the device in hand: an iPad with no messaging
+    # service, or a denied Contacts grant, advertises fewer than an iPhone.
+    # A tool the client did not declare is never offered to the model.
+    device_tools: Optional[List[str]] = None
+
+    @field_validator("time_zone", mode="before")
+    @classmethod
+    def _validate_time_zone(cls, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("time_zone must be a string")
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            ZoneInfo(stripped)
+        except Exception as exc:
+            raise ValueError("time_zone must be a valid IANA timezone") from exc
+        return stripped
+
+
+class DeviceToolResultRequest(BaseModel):
+    """A client's result for one in-flight device tool call."""
+
+    result: Dict[str, Any]
+
+
+class DeviceToolResultResponse(BaseModel):
+    """Acknowledgement that a device tool result was handed over."""
+
+    status: str
 
 
 class GenerateReplyTurn(BaseModel):

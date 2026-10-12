@@ -33,6 +33,8 @@ def test_workflow_owns_dev_auto_deploy_and_manual_production() -> None:
     assert set(triggers['push']['paths']) == {
         'backend/charts/monitoring/prometheus-stackdriver-exporter/*_omi_cloud_run_metrics_exporter.yaml',
         'backend/charts/monitoring/kube-prometheus-stack/*_omi_monitoring_values.yaml',
+        'backend/charts/monitoring/alerts/live-stt.json',
+        'backend/charts/monitoring/live-alert-gate.json',
         '.github/workflows/gcp_cloud_run_metrics_egress.yml',
     }
     environment = triggers['workflow_dispatch']['inputs']['environment']
@@ -61,7 +63,73 @@ def test_workflow_installs_both_pinned_releases_atomically() -> None:
     assert 'kubectl rollout status "deployment/$EXPORTER_RELEASE"' in scripts
 
 
+def test_workflow_provisions_live_stt_alerts_independently_of_helm() -> None:
+    workflow = _workflow()
+    jobs = workflow['jobs']
+    deploy = jobs['deploy']
+    provision = jobs['provision-live-alerts']
+    provision_steps = provision['steps']
+    deploy_names = {step['name'] for step in deploy['steps']}
+    assert 'Import allowlisted live-STT Grafana alerts' not in deploy_names
+    assert 'Verify imported live-STT Grafana alert coverage' not in deploy_names
+
+    assert provision['if'] == "github.ref == 'refs/heads/main'"
+    assert provision['environment'] == deploy['environment']
+    assert provision['permissions'] == {'contents': 'read'}
+    assert 'needs' not in provision
+    assert provision_steps[0]['uses'] == 'actions/checkout@v7'
+    assert provision_steps[0]['with']['ref'] == '${{ github.sha }}'
+    assert not any(
+        'google-github-actions/auth@' in step.get('uses', '')
+        or 'google-github-actions/get-gke-credentials@' in step.get('uses', '')
+        for step in provision_steps
+    )
+
+    steps = provision_steps
+    names = [step['name'] for step in steps]
+    imported = names.index('Import allowlisted live-STT Grafana alerts')
+    verified = names.index('Verify imported live-STT Grafana alert coverage')
+    assert imported < verified
+    import_run = steps[imported]['run']
+    verify_run = steps[verified]['run']
+    assert '--mode import' in import_run
+    assert '--mode fleet' in verify_run
+    assert '--alert-set live-stt' in verify_run
+    assert '--fail-on gated' in verify_run
+    for run in (import_run, verify_run):
+        assert 'MONITOR_GRAFANA_TOKEN' in run
+        assert 'token_file' in run
+        assert '--token-file "$token_file"' in run
+        assert 'umask 077' in run
+        assert 'trap cleanup EXIT' in run
+        assert (
+            steps[imported if run == import_run else verified]['env']['MONITOR_GRAFANA_TOKEN']
+            == '${{ secrets.MONITOR_GRAFANA_TOKEN }}'
+        )
+        assert 'python3 backend/scripts/verify_pusher_live_alert_route.py' in run
+    push_paths = set(workflow['on']['push']['paths'])
+    assert 'backend/charts/monitoring/alerts/live-stt.json' in push_paths
+    assert 'backend/charts/monitoring/live-alert-gate.json' in push_paths
+
+
 def test_workflow_values_exist_for_every_environment() -> None:
     for environment in ('dev', 'prod'):
         assert (EXPORTER_VALUES / f'{environment}_omi_cloud_run_metrics_exporter.yaml').is_file()
         assert (STACK_VALUES / f'{environment}_omi_monitoring_values.yaml').is_file()
+
+
+def test_deadman_is_prod_only_and_fails_before_deploy_without_channels() -> None:
+    steps = _workflow()['jobs']['deploy']['steps']
+    names = [step['name'] for step in steps]
+    validate = steps[names.index('Validate prod dead-man notification channels')]
+    ensure = steps[names.index('Ensure external prod Grafana dead-man')]
+    for step in (validate, ensure):
+        assert step['if'] == "github.event.inputs.environment == 'prod'"
+        assert step['env']['ALERT_CHANNELS'] == '${{ vars.MONITORING_DEADMAN_NOTIFICATION_CHANNELS }}'
+    assert 'exit 1' in validate['run']
+    assert 'must be created' in validate['run']
+    assert names.index(validate['name']) < names.index('Google Auth (prod WIF)')
+    assert names.index('Google Auth (prod WIF)') < names.index(ensure['name'])
+    assert names.index(ensure['name']) < names.index('Deploy Prometheus scrape configuration')
+    assert '--notification-channels="$ALERT_CHANNELS"' in ensure['run']
+    assert 'SYNC_BACKFILL_ALERT_NOTIFICATION_CHANNELS' not in WORKFLOW.read_text()
