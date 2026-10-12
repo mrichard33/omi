@@ -64,6 +64,9 @@ const h = vi.hoisted(() => {
 
 vi.mock('ws', () => ({ default: h.FakeWebSocket }))
 vi.mock('electron', () => ({
+  // omiListen now imports the sign-language host (upstream #20946), which reads
+  // app.getPath at module load — same stub the finalize suite uses.
+  app: { getPath: () => '/tmp' },
   ipcMain: {
     handle: (ch: string, fn: (...args: unknown[]) => void) => h.ipcHandlers.set(ch, fn),
     on: (ch: string, fn: (...args: unknown[]) => void) => h.ipcHandlers.set(ch, fn)

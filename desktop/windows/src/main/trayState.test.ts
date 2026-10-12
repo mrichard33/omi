@@ -138,6 +138,7 @@ describe('buildTrayMenuTemplate', () => {
     expect(labels(staged)).toEqual([
       'Screen Analysis',
       'Open Omi',
+      'Toggle OMI Bar',
       'Pause listening',
       'Settings',
       'Check for Updates',
