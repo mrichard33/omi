@@ -3,6 +3,8 @@
 #
 #   STATUS=ok              -> merge the PR (merge commit) with UPSTREAM_SYNC_TOKEN,
 #                             then make sure the Windows release run started.
+#   BODY_ONLY=true         -> only refresh an open PR's description (STATUS
+#                             pending), before the sync job pushes the branch.
 #   STATUS=needs_attention -> leave the PR open, label it needs-attention, put the
 #                             failing output in the body, and send ONE Slack alert
 #                             (none again for the same PR unless the reason changes).
@@ -36,7 +38,9 @@ BODY_FILE="$(mktemp)"
   echo "- Ahead by **${AHEAD:-?}** commits of our own (kept: merge commit, no rebase)"
   echo "- Branch head: \`${HEAD_SHA}\` · [workflow run](${RUN_URL:-})"
   echo
-  if [ "$STATUS" = "ok" ]; then
+  if [ "$STATUS" = "pending" ]; then
+    echo "**Sync in progress.** The checks are running; this description is replaced when the run finishes."
+  elif [ "$STATUS" = "ok" ]; then
     echo "**All checks passed** (pnpm install with verify-pimono-unpack, typecheck, lint, tests, Windows build). This PR merges itself."
   else
     echo "## ⚠️ Needs attention: ${REASON}"
@@ -84,6 +88,24 @@ if [ "$STATUS" = "ok" ]; then
   TITLE="chore(sync): upstream → main (${BEHIND:-?} commits)"
 else
   TITLE="chore(sync): upstream → main (${BEHIND:-?} commits) — needs attention: ${REASON}"
+fi
+
+# ---- body only: refresh an open PR's description before the push -----------
+# Upstream's Hygiene job reads the PR body when the push lands (`synchronize`).
+# Editing the body only afterwards left PR #14 with a red Hygiene: its
+# post-edit re-run was skipped because the PR merged a second later
+# (2026-10-12). So the sync job calls this with BODY_ONLY=true first.
+if [ "${BODY_ONLY:-false}" = "true" ]; then
+  if [ -z "$PR" ]; then
+    echo "No open sync PR yet; its body is set when it is opened."
+    exit 0
+  fi
+  OLD_BODY=$(gh pr view "$PR" --repo "$REPO" --json body --jq .body || true)
+  OLD_ALERTED=$(printf '%s' "$OLD_BODY" | sed -n 's/.*<!-- autosync-alerted: \(.*\) -->.*/\1/p' | tail -n 1)
+  if [ -n "$OLD_ALERTED" ]; then echo "<!-- autosync-alerted: ${OLD_ALERTED} -->" >> "$BODY_FILE"; fi
+  gh pr edit "$PR" --repo "$REPO" --body-file "$BODY_FILE"
+  echo "Refreshed the description of PR #${PR} before the push."
+  exit 0
 fi
 
 # ---- open or update ---------------------------------------------------------

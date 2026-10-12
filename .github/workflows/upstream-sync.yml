@@ -335,6 +335,25 @@ jobs:
         continue-on-error: true
         run: .github/scripts/reece-upstream-sync/pr-metadata.sh .autosync/report/pr-metadata.md origin/main
 
+      # Before the push: upstream's Hygiene job reads the PR body when the
+      # push lands, so an open sync PR must already carry the new lines.
+      - name: Refresh the open sync PR's description
+        if: steps.prepare.outputs.behind != '0' && steps.prepare.outputs.pr != ''
+        continue-on-error: true
+        env:
+          BODY_ONLY: "true"
+          STATUS: pending
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          ACTIONS_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          PR: ${{ steps.prepare.outputs.pr }}
+          BEHIND: ${{ steps.prepare.outputs.behind }}
+          AHEAD: ${{ steps.prepare.outputs.ahead }}
+          REPORT_DIR: .autosync/report
+        run: HEAD_SHA="$(git rev-parse HEAD)" .github/scripts/reece-upstream-sync/finish.sh
+
       - name: Push the sync branch
         id: push
         if: steps.prepare.outputs.behind != '0'

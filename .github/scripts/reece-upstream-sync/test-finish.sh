@@ -107,4 +107,19 @@ grep -q "^pr edit 42 --repo o/r --title" "$WORK/calls" || die "existing PR not u
 grep -q "^pr merge 42 --repo o/r --merge --match-head-commit abc" "$WORK/calls" || die "existing PR not merged"
 ok "PR already exists -> found, updated and merged"
 
+# 8. BODY_ONLY (before the push): an open PR gets the new description, with
+#    the lines upstream's Hygiene job reads; nothing is merged or labeled.
+reset
+printf 'old\n<!-- autosync-alerted: conflict -->\n' > "$WORK/body"
+BODY_ONLY=true STATUS=pending REASON="" PR=42 "$SCRIPT" > /dev/null
+grep -q "^pr edit 42 --repo o/r --body-file" "$WORK/calls" || die "body not refreshed"
+grep -qx "UI-Evidence: none -- automated upstream sync; each upstream PR carries its own UI evidence" "$WORK/body" || die "refreshed body lacks UI-Evidence"
+grep -qx "<!-- autosync-alerted: conflict -->" "$WORK/body" || die "alert marker lost"
+grep -qE "^pr (merge|create)|add-label" "$WORK/calls" && die "BODY_ONLY must not merge, open or label"
+# No open PR yet: nothing to do.
+reset
+BODY_ONLY=true STATUS=pending REASON="" PR="" "$SCRIPT" > /dev/null
+[ ! -f "$WORK/calls" ] || die "BODY_ONLY without a PR must call nothing"
+ok "BODY_ONLY -> open PR's description refreshed before the push, nothing else"
+
 echo "all $pass passed"
