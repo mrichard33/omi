@@ -216,11 +216,14 @@ describe('a staged update', () => {
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
 
-  it('installs and relaunches once capture stops', () => {
+  it('installs and relaunches once capture stops', async () => {
     autoUpdater.quitAndInstall.mockClear()
     idle = { listening: false, meetingCapturing: false }
 
     expect(installUpdateNow()).toBe('installing')
-    expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    // Deferred a tick (upstream #10849) so the quit handshake finishes first.
+    await vi.waitFor(() =>
+      expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    )
   })
 })

@@ -17,6 +17,23 @@ enum SubscriptionPlanPresentation {
   }
 }
 
+/// Copy comes from the server's allowance decision, not the synthetic BYOK
+/// subscription flag: an enrolled LLM key alone does not pay for transcription.
+enum TranscriptionAllowancePresentation {
+  static func statusText(_ allowance: TranscriptionAllowanceSnapshot?) -> String {
+    guard let allowance else { return "Transcription allowance unavailable — refresh to check" }
+    switch allowance.reason {
+    case "byok": return "Transcription: using your Deepgram key"
+    case "plan_within_allowance": return "Transcription: Omi-managed allowance"
+    case "plan_allowance_exhausted": return "Transcription: Omi-managed allowance exhausted"
+    case "plan_unlimited", "marketplace_reviewer": return "Transcription: Omi-managed (unlimited)"
+    case "trial_paywalled": return "Transcription: Omi trial access ended"
+    case "subscription_inactive": return "Transcription: Omi plan inactive"
+    default: return "Transcription allowance unavailable — refresh to check"
+    }
+  }
+}
+
 extension SettingsContentView {
   var hasPaidSubscription: Bool {
     guard let subscription = userSubscription?.subscription else { return false }
@@ -48,13 +65,12 @@ extension SettingsContentView {
 
   var currentPlanTitle: String {
     guard let subscription = userSubscription?.subscription else {
-      return isLoadingSubscription ? "Loading plan..." : "Free"
+      return isLoadingSubscription ? "Loading plan…" : "Free"
     }
-    // BYOK users: the backend returns plan=unlimited to turn off metering
-    // but that's an implementation detail — to the user, they're on the
-    // free plan because they pay the providers directly, not Omi.
+    // The synthetic BYOK subscription describes enrolled keys, not an
+    // unlimited allowance for every feature. Chat has its own quota snapshot.
     if subscription.features.contains("byok") {
-      return "Free (BYOK)"
+      return "Custom keys (BYOK)"
     }
     switch subscription.plan {
     case .basic:
@@ -67,7 +83,7 @@ extension SettingsContentView {
       // `operator` enum. Distinguish by matching current_price_id against
       // an Operator-titled plan in the catalog.
       if isCurrentSubscriptionOperator() {
-        return "Operator"
+        return "Pro"
       }
       return "Neo"
     case .unlimitedV2:
@@ -75,7 +91,7 @@ extension SettingsContentView {
     case .architect, .pro:
       return "Architect"
     case .operator:
-      return "Operator"
+      return "Pro"
     case .unknown:
       return subscription.plan.displayName
     }
@@ -89,7 +105,7 @@ extension SettingsContentView {
       let currentPriceId = subscription.currentPriceId
     else { return false }
     for plan in mergedPlanCatalog {
-      guard plan.title == "Operator" else { continue }
+      guard plan.id == "operator" else { continue }
       if plan.prices.contains(where: { $0.id == currentPriceId }) {
         return true
       }
@@ -99,7 +115,10 @@ extension SettingsContentView {
 
   var currentPlanSubtitle: String {
     if isLoadingSubscription {
-      return "Fetching subscription details from omi."
+      return "Fetching subscription details from Omi."
+    }
+    if userSubscription?.subscription.features.contains("byok") == true {
+      return "Using your own AI keys for supported features."
     }
     if let detail = currentPlanBillingDetail {
       return detail
@@ -120,7 +139,7 @@ extension SettingsContentView {
 
     for plan in mergedPlanCatalog {
       if let price = plan.prices.first(where: { $0.id == currentPriceId }) {
-        return "\(plan.title) \(price.title) • \(price.priceString)"
+        return "\(plan.displayTitle) \(price.title) • \(price.priceString)"
       }
     }
 
@@ -163,7 +182,7 @@ extension SettingsContentView {
 
   func planSelectionLabel(for plan: SubscriptionPlanOption) -> String {
     SubscriptionPlanPresentation.selectionLabel(
-      planTitle: plan.title,
+      planTitle: plan.displayTitle,
       startingPrice: preferredStartingPrice(for: plan)?.priceString
     )
   }
@@ -269,20 +288,7 @@ extension SettingsContentView {
   }
 
   func normalizedPlanId(from title: String) -> String? {
-    let normalized = title.lowercased()
-    // Match the three plan families by title keyword. Neo is the post-rename
-    // display name for the legacy "unlimited" plan and still maps to that id
-    // because Stripe/backend PlanType enum is unchanged.
-    if normalized.contains("unlimited") || normalized.contains("neo") {
-      return "unlimited"
-    }
-    if normalized.contains("operator") {
-      return "operator"
-    }
-    if normalized.contains("architect") || normalized.contains("pro") {
-      return "architect"
-    }
-    return nil
+    SubscriptionPlanNames.planId(from: title)
   }
 
   func planCatalog(from prices: [AvailablePlanPriceOption]) -> [SubscriptionPlanOption] {
@@ -298,9 +304,13 @@ extension SettingsContentView {
       case "unlimited":
         title = "Neo"
       case "operator":
-        title = "Operator"
+        title = "Pro"
       case "architect":
         title = "Architect"
+      case "plus":
+        title = "Plus"
+      case "unlimited_v2":
+        title = "Unlimited"
       default:
         title = options.first?.title ?? "Plan"
       }
@@ -352,7 +362,7 @@ extension SettingsContentView {
               .tracking(0.8)
           }
 
-          Text(plan.title)
+          Text(plan.displayTitle)
             .scaledFont(size: OmiType.heading, weight: .bold)
             .foregroundColor(Ink.primary)
 
@@ -572,11 +582,6 @@ extension SettingsContentView {
       of: taskExtractionInterval, in: extractionIntervalOptions)
   }
 
-  var insightIntervalSliderIndex: Int {
-    SettingsControlMetrics.nearestLadderIndex(
-      of: insightExtractionInterval, in: extractionIntervalOptions)
-  }
-
   var memoryIntervalSliderIndex: Int {
     SettingsControlMetrics.nearestLadderIndex(
       of: memoryExtractionInterval, in: extractionIntervalOptions)
@@ -741,6 +746,7 @@ extension SettingsContentView {
     vocabularyList = AssistantSettings.shared.transcriptionVocabulary
     let transcriptionVocabularyRevisionAtLoadStart =
       AssistantSettings.shared.transcriptionVocabularyRevision
+    let dailySummaryDepthRevisionAtLoadStart = dailySummaryDepthRevision
     vadGateEnabled = AssistantSettings.shared.vadGateEnabled
     Task {
       do {
@@ -768,6 +774,11 @@ extension SettingsContentView {
         await MainActor.run {
           dailySummaryEnabled = dailySummary.enabled
           dailySummaryHour = dailySummary.hour
+          if dailySummaryDepthRevision == dailySummaryDepthRevisionAtLoadStart {
+            savedDailySummaryDepth = dailySummary.depth
+            dailySummaryDepth = dailySummary.depth
+            dailySummaryDepthError = nil
+          }
           dailySummaryTime = SettingsControlMetrics.dailySummaryDate(
             forHour: dailySummary.hour, referenceDate: Date())
           // Local UserDefaults remain the gate. The coordinator owns GET/hydrate/retry.

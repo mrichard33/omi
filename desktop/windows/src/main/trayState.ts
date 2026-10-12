@@ -53,6 +53,11 @@ export interface TrayMenuActions {
   toggleListening: () => void
   /** Show the window and route to Settings. */
   openSettings: () => void
+  /** Manually summon the top-edge companion bar — the only fallback on
+   *  platforms where the global hotkey can't register (e.g. native Wayland;
+   *  see desktop/windows/AGENTS.md's Linux dev environment section). Fires
+   *  the same gesture as a hotkey tap (toggles open/closed). */
+  openBar: () => void
   /** Run a manual update check (Mac's "Check for Updates…"). */
   checkForUpdates: () => void
   /** Install the staged update and relaunch. Only reachable while one IS staged
@@ -72,7 +77,9 @@ export interface TrayMenuActions {
  * Menu.buildFromTemplate. Layout mirrors Mac's menu bar (OmiApp.swift): the
  * Screen Analysis toggle sits at the top and Check for Updates sits just before
  * Quit. `screenCaptureEnabled` drives the checkbox; `toggleLabel` is the
- * pause/resume label from describeTray.
+ * pause/resume label from describeTray. "Toggle OMI Bar" has no Mac equivalent (the
+ * bar is Windows/Linux-only) — it's the manual fallback for platforms where
+ * the global summon hotkey can't register.
  *
  * `updateReady` adds "Restart to update" next to Check for Updates. This is the
  * "Restart now" affordance the update notice points at: an Electron notification
@@ -93,6 +100,7 @@ export function buildTrayMenuTemplate(
     },
     { type: 'separator' },
     { label: 'Open Omi', click: () => actions.showMainWindow() },
+    { label: 'Toggle OMI Bar', click: () => actions.openBar() },
     { label: opts.toggleLabel, click: () => actions.toggleListening() },
     { type: 'separator' },
     { label: 'Settings', click: () => actions.openSettings() },

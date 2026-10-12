@@ -139,7 +139,12 @@ export function installUpdateNow(): UpdateInstallResult {
     return outcome
   }
   markQuitting()
-  autoUpdater.quitAndInstall(true, true)
+  // Defer so Electron finishes the quit handshake before NSIS update.exe runs.
+  // Launching synchronously from IPC can leave the assisted installer stuck after
+  // uninstall (#10849 — app removed, update never applied).
+  setImmediate(() => {
+    autoUpdater.quitAndInstall(true, true)
+  })
   return 'installing'
 }
 
