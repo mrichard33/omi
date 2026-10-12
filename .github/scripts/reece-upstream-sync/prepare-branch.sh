@@ -19,6 +19,7 @@
 # mode, remote_sha, conflicted (true|false|main).
 #
 # Env: UPSTREAM_REF (default main), GH_TOKEN (for `gh pr list`),
+#      GITHUB_REPOSITORY (this fork, owner/name; set by Actions),
 #      UPSTREAM_URL (default the BasedHardware repo; tests override it).
 set -euo pipefail
 
@@ -51,8 +52,13 @@ if [ "$BEHIND" = "0" ]; then
   exit 0
 fi
 
-# Newest open sync PR, if any.
-EXISTING=$(gh pr list --base main --state open --limit 100 --json number,headRefName \
+# Newest open sync PR, if any. --repo is REQUIRED: with an `upstream` remote
+# added above, gh picks BasedHardware/omi as the default repo, finds no sync
+# PR there, and the run then tries to open a second PR for the same branch
+# (and would rebuild over a person's commits). Sync run 38313452502,
+# 2026-10-12: "a pull request for branch ... already exists".
+REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY (owner/name of this fork) must be set}"
+EXISTING=$(gh pr list --repo "$REPO" --base main --state open --limit 100 --json number,headRefName \
   --jq '[.[] | select(.headRefName | startswith("sync/upstream-"))] | sort_by(.number) | last
         | if . == null then "" else "\(.number) \(.headRefName)" end')
 
