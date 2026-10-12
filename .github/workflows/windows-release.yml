@@ -92,8 +92,15 @@ jobs:
         run: pnpm run typecheck
       - name: Lint
         run: pnpm run lint
+      # Same suite as `pnpm test` (vitest run), with a 30s per-test ceiling
+      # instead of vitest's 5s default. This job runs on windows-latest, which
+      # is several times slower than the ubuntu runners upstream's CI uses:
+      # run 38316770751 (2026-10-12) failed 1 of 5,736 tests, a four-row
+      # SQLite test in agentKernel/store.test.ts, at 5.9s. That test takes
+      # 0.6s on Linux and passed in the two releases before it. Nothing is
+      # skipped; a test that hangs still fails.
       - name: Test
-        run: pnpm test
+        run: pnpm exec vitest run --testTimeout=30000
 
       - name: Stamp version
         id: version
