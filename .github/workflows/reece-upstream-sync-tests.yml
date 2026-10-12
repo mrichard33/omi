@@ -1,0 +1,35 @@
+name: Upstream sync tests (Reece fork)
+
+# Gates changes to the daily upstream sync (.github/workflows/upstream-sync.yml and
+# its scripts). The sync merges into main on its own, so a bug in it lands
+# unreviewed code or flags nothing; these hermetic tests (local git repos, stub
+# gh/curl, no network) catch that on the PR instead.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/scripts/reece-upstream-sync/**'
+      - '.github/workflows/upstream-sync.yml'
+      - '.github/workflows/reece-upstream-sync-tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reece-upstream-sync-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Sync scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shellcheck
+        run: shellcheck .github/scripts/reece-upstream-sync/*.sh
+      - name: Branch selection and merge
+        run: .github/scripts/reece-upstream-sync/test-prepare-branch.sh
+      - name: Merge or flag, Slack de-duplication
+        run: .github/scripts/reece-upstream-sync/test-finish.sh
