@@ -5644,11 +5644,6 @@ class AppLocalizationsFa extends AppLocalizations {
   String get downloadingFromSdCard => 'دانلود از کارت SD';
 
   @override
-  String processingProgress(int current, int total) {
-    return 'پردازش $current/$total';
-  }
-
-  @override
   String conversationsCreated(int count) {
     return '$count مکالمه ایجاد شد';
   }
@@ -9089,18 +9084,10 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String syncCardProgressOf(int current, int total) {
-    return '$current از $total';
-  }
-
-  @override
   String get syncStatusOnDevice => 'روی دستگاه شما';
 
   @override
   String get syncStatusDownloadingFromDevice => 'در حال دانلود از دستگاه شما';
-
-  @override
-  String get newestFirst => 'ابتدا جدیدترین‌ها';
 
   @override
   String get noSyncedRecordingsYet => 'هنوز ضبط همگام‌سازی‌شده‌ای وجود ندارد';
@@ -11993,9 +11980,6 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String get localCopiesSection => 'نسخه‌های محلی';
-
-  @override
   String speakerLabelLinesLabeled(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -12312,6 +12296,9 @@ class AppLocalizationsFa extends AppLocalizations {
   String reviewQuestionSamePerson(String name) {
     return 'همان شخصِ «$name» است؟';
   }
+
+  @override
+  String get reviewSpellingContext => 'زمینهٔ گفتگو';
 
   @override
   String get reviewQuestionSpelling => 'این چطور نوشته می‌شود؟';
@@ -13048,6 +13035,36 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
+  String get paywallRecommended => 'Recommended';
+
+  @override
+  String get paywallNoPlans => 'Plans aren\'t available right now. Try again in a minute.';
+
+  @override
+  String get paywallOtherPlans => 'See all plans';
+
+  @override
+  String get paywallComparePlans => 'See plans';
+
+  @override
+  String get paywallYourPlan => 'Your plan';
+
+  @override
+  String get paywallNotNow => 'Not now';
+
+  @override
+  String get paywallTryAgain => 'Try again';
+
+  @override
+  String get paywallManageBilling => 'Manage billing';
+
+  @override
+  String get paywallLoadError => 'Couldn\'t load plans. Check your connection and try again.';
+
+  @override
+  String get paywallPlans => 'Plans';
+
+  @override
   String get firstCaptureTitle => 'How will you capture?';
 
   @override
@@ -13094,6 +13111,41 @@ class AppLocalizationsFa extends AppLocalizations {
   String get firstCaptureEmpty => 'I didn\'t catch enough speech, try again with a few sentences';
 
   @override
+  String get watchCaptureTitle => 'Record from your Apple Watch';
+
+  @override
+  String get watchCaptureOpen => 'Open Omi on your Apple Watch.';
+
+  @override
+  String get watchCaptureRecord => 'Tap Record. Allow microphone access if asked.';
+
+  @override
+  String get watchCaptureSync => 'Your recording syncs to Omi on this phone.';
+
+  @override
+  String get pairingBluetoothOff => 'Turn on Bluetooth on your phone, then try again.';
+
+  @override
+  String get pairingBluetoothPermission => 'Allow Bluetooth access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingNearbyPermission => 'Allow Nearby devices access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingLocationPermission =>
+      'Allow location access for Omi in Settings so this phone can find your device, then try again.';
+
+  @override
+  String get pairingNotFoundOrDropped =>
+      'Couldn\'t reach your Omi. Make sure it\'s charged, close to your phone, and its light is blinking, then try again.';
+
+  @override
+  String get pairingBondRecovery => 'Forget Omi in your phone’s Bluetooth settings, then try pairing again.';
+
+  @override
+  String get pairingHowTo => 'How to pair';
+
+  @override
   String get firstCaptureWatchInstructions =>
       'Open Omi on your Apple Watch and tap Record. Allow microphone access if asked. Your capture will sync to Omi on this phone.';
 
@@ -13131,4 +13183,91 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get firstCaptureSiriTip => 'Tip: Enable Omi in Shortcuts → Siri.';
+
+  @override
+  String get paywallOutlineHeadline => 'دیگر هیچ کلمه‌ای را از دست ندهید.';
+
+  @override
+  String get paywallCancelAnytime => 'هر زمان که بخواهید لغو کنید.';
+
+  @override
+  String get connectAnAgent => 'اتصال یک ایجنت';
+
+  @override
+  String get connectAnAgentSubtitle => 'یک پرامپت راه‌اندازی برای Claude، ChatGPT، Codex یا هر ایجنتی بگیرید';
+
+  @override
+  String syncCardSyncingAmount(String amount) {
+    return 'همگام‌سازی $amount صدا';
+  }
+
+  @override
+  String get syncCardSyncingTitle => 'همگام‌سازی ضبط‌های شما';
+
+  @override
+  String syncStepDownloadingAmount(String done, String total) {
+    return 'دریافت از Omi · $done / $total';
+  }
+
+  @override
+  String syncStepUploadingAmount(String done, String total) {
+    return 'آپلود · $done / $total';
+  }
+
+  @override
+  String syncCardTranscribingAmount(String amount) {
+    return 'تبدیل $amount به گفتگو';
+  }
+
+  @override
+  String syncCardTranscribedOf(String done, String total) {
+    return '$done / $total انجام شد · می‌توانید از این صفحه خارج شوید';
+  }
+
+  @override
+  String syncCardReadyAmount(String amount) {
+    return '$amount آماده همگام‌سازی';
+  }
+
+  @override
+  String get syncStepLabelDownload => 'Omi → گوشی';
+
+  @override
+  String get syncStepLabelUpload => 'آپلود';
+
+  @override
+  String get syncStepLabelTranscribe => 'رونویسی';
+
+  @override
+  String get syncDetailsTitle => 'جزئیات همگام‌سازی';
+
+  @override
+  String get syncDetailsRightNow => 'همین حالا';
+
+  @override
+  String get syncDetailsYourOmi => 'Omi شما';
+
+  @override
+  String get syncDetailsTransferSpeed => 'سرعت انتقال';
+
+  @override
+  String get syncDetailsWaitingOnOmi => 'در انتظار Omi';
+
+  @override
+  String get syncDetailsWaitingOnPhone => 'در انتظار این گوشی';
+
+  @override
+  String get syncDetailsTranscribing => 'در حال رونویسی در Omi';
+
+  @override
+  String get syncDetailsForSupport => 'برای پشتیبانی';
+
+  @override
+  String get syncDetailsAudioFiles => 'فایل‌های صوتی';
+
+  @override
+  String get syncDetailsServerJobs => 'کارهای سرور (انجام‌شده / کل)';
+
+  @override
+  String get syncDetailsCopy => 'کپی جزئیات برای پشتیبانی';
 }

@@ -5603,11 +5603,6 @@ class AppLocalizationsHe extends AppLocalizations {
   String get downloadingFromSdCard => 'הורדה מכרטיס SD';
 
   @override
-  String processingProgress(int current, int total) {
-    return 'עיבוד $current/$total';
-  }
-
-  @override
   String conversationsCreated(int count) {
     return '$count שיחות שנוצרו';
   }
@@ -9024,18 +9019,10 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
-  String syncCardProgressOf(int current, int total) {
-    return '$current מתוך $total';
-  }
-
-  @override
   String get syncStatusOnDevice => 'במכשיר שלך';
 
   @override
   String get syncStatusDownloadingFromDevice => 'מוריד מהמכשיר שלך';
-
-  @override
-  String get newestFirst => 'החדשות ביותר תחילה';
 
   @override
   String get noSyncedRecordingsYet => 'אין עדיין הקלטות מסונכרנות';
@@ -11908,9 +11895,6 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
-  String get localCopiesSection => 'עותקים מקומיים';
-
-  @override
   String speakerLabelLinesLabeled(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -12227,6 +12211,9 @@ class AppLocalizationsHe extends AppLocalizations {
   String reviewQuestionSamePerson(String name) {
     return 'אותו אדם כמו “$name”?';
   }
+
+  @override
+  String get reviewSpellingContext => 'הקשר השיחה';
 
   @override
   String get reviewQuestionSpelling => 'איך זה נכתב?';
@@ -12960,6 +12947,36 @@ class AppLocalizationsHe extends AppLocalizations {
   }
 
   @override
+  String get paywallRecommended => 'Recommended';
+
+  @override
+  String get paywallNoPlans => 'Plans aren\'t available right now. Try again in a minute.';
+
+  @override
+  String get paywallOtherPlans => 'See all plans';
+
+  @override
+  String get paywallComparePlans => 'See plans';
+
+  @override
+  String get paywallYourPlan => 'Your plan';
+
+  @override
+  String get paywallNotNow => 'Not now';
+
+  @override
+  String get paywallTryAgain => 'Try again';
+
+  @override
+  String get paywallManageBilling => 'Manage billing';
+
+  @override
+  String get paywallLoadError => 'Couldn\'t load plans. Check your connection and try again.';
+
+  @override
+  String get paywallPlans => 'Plans';
+
+  @override
   String get firstCaptureTitle => 'How will you capture?';
 
   @override
@@ -13006,6 +13023,41 @@ class AppLocalizationsHe extends AppLocalizations {
   String get firstCaptureEmpty => 'I didn\'t catch enough speech, try again with a few sentences';
 
   @override
+  String get watchCaptureTitle => 'Record from your Apple Watch';
+
+  @override
+  String get watchCaptureOpen => 'Open Omi on your Apple Watch.';
+
+  @override
+  String get watchCaptureRecord => 'Tap Record. Allow microphone access if asked.';
+
+  @override
+  String get watchCaptureSync => 'Your recording syncs to Omi on this phone.';
+
+  @override
+  String get pairingBluetoothOff => 'Turn on Bluetooth on your phone, then try again.';
+
+  @override
+  String get pairingBluetoothPermission => 'Allow Bluetooth access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingNearbyPermission => 'Allow Nearby devices access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingLocationPermission =>
+      'Allow location access for Omi in Settings so this phone can find your device, then try again.';
+
+  @override
+  String get pairingNotFoundOrDropped =>
+      'Couldn\'t reach your Omi. Make sure it\'s charged, close to your phone, and its light is blinking, then try again.';
+
+  @override
+  String get pairingBondRecovery => 'Forget Omi in your phone’s Bluetooth settings, then try pairing again.';
+
+  @override
+  String get pairingHowTo => 'How to pair';
+
+  @override
   String get firstCaptureWatchInstructions =>
       'Open Omi on your Apple Watch and tap Record. Allow microphone access if asked. Your capture will sync to Omi on this phone.';
 
@@ -13043,4 +13095,91 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get firstCaptureSiriTip => 'Tip: Enable Omi in Shortcuts → Siri.';
+
+  @override
+  String get paywallOutlineHeadline => 'אל תפספסו אף מילה יותר.';
+
+  @override
+  String get paywallCancelAnytime => 'ניתן לבטל בכל עת.';
+
+  @override
+  String get connectAnAgent => 'חיבור סוכן';
+
+  @override
+  String get connectAnAgentSubtitle => 'קבלו הנחיית הגדרה עבור Claude, ‏ChatGPT, ‏Codex או כל סוכן';
+
+  @override
+  String syncCardSyncingAmount(String amount) {
+    return 'מסנכרן $amount של אודיו';
+  }
+
+  @override
+  String get syncCardSyncingTitle => 'מסנכרן את ההקלטות שלך';
+
+  @override
+  String syncStepDownloadingAmount(String done, String total) {
+    return 'מוריד מה-Omi שלך · $done מתוך $total';
+  }
+
+  @override
+  String syncStepUploadingAmount(String done, String total) {
+    return 'מעלה · $done מתוך $total';
+  }
+
+  @override
+  String syncCardTranscribingAmount(String amount) {
+    return 'הופך $amount לשיחות';
+  }
+
+  @override
+  String syncCardTranscribedOf(String done, String total) {
+    return '$done מתוך $total הושלמו · אפשר לצאת ממסך זה';
+  }
+
+  @override
+  String syncCardReadyAmount(String amount) {
+    return '$amount מוכנים לסנכרון';
+  }
+
+  @override
+  String get syncStepLabelDownload => 'Omi → טלפון';
+
+  @override
+  String get syncStepLabelUpload => 'העלאה';
+
+  @override
+  String get syncStepLabelTranscribe => 'תמלול';
+
+  @override
+  String get syncDetailsTitle => 'פרטי הסנכרון';
+
+  @override
+  String get syncDetailsRightNow => 'כרגע';
+
+  @override
+  String get syncDetailsYourOmi => 'ה-Omi שלך';
+
+  @override
+  String get syncDetailsTransferSpeed => 'מהירות העברה';
+
+  @override
+  String get syncDetailsWaitingOnOmi => 'ממתין ל-Omi שלך';
+
+  @override
+  String get syncDetailsWaitingOnPhone => 'ממתין בטלפון זה';
+
+  @override
+  String get syncDetailsTranscribing => 'מתמלל ב-Omi';
+
+  @override
+  String get syncDetailsForSupport => 'לתמיכה';
+
+  @override
+  String get syncDetailsAudioFiles => 'קובצי אודיו';
+
+  @override
+  String get syncDetailsServerJobs => 'משימות שרת (הושלמו / סך הכול)';
+
+  @override
+  String get syncDetailsCopy => 'העתקת פרטים לתמיכה';
 }

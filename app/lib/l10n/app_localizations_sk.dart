@@ -5644,11 +5644,6 @@ class AppLocalizationsSk extends AppLocalizations {
   String get downloadingFromSdCard => 'Sťahovanie z SD karty';
 
   @override
-  String processingProgress(int current, int total) {
-    return 'Processing $current/$total';
-  }
-
-  @override
   String conversationsCreated(int count) {
     return 'Vytvorených $count konverzácií';
   }
@@ -9083,18 +9078,10 @@ class AppLocalizationsSk extends AppLocalizations {
   }
 
   @override
-  String syncCardProgressOf(int current, int total) {
-    return '$current z $total';
-  }
-
-  @override
   String get syncStatusOnDevice => 'Vo vašom zariadení';
 
   @override
   String get syncStatusDownloadingFromDevice => 'Sťahovanie z vášho zariadenia';
-
-  @override
-  String get newestFirst => 'Najnovšie ako prvé';
 
   @override
   String get noSyncedRecordingsYet => 'Zatiaľ žiadne synchronizované nahrávky';
@@ -11992,9 +11979,6 @@ class AppLocalizationsSk extends AppLocalizations {
   }
 
   @override
-  String get localCopiesSection => 'Lokálne kópie';
-
-  @override
   String speakerLabelLinesLabeled(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -12311,6 +12295,9 @@ class AppLocalizationsSk extends AppLocalizations {
   String reviewQuestionSamePerson(String name) {
     return 'Je to ten istý človek ako „$name“?';
   }
+
+  @override
+  String get reviewSpellingContext => 'Kontext konverzácie';
 
   @override
   String get reviewQuestionSpelling => 'Ako sa to píše?';
@@ -13049,6 +13036,36 @@ class AppLocalizationsSk extends AppLocalizations {
   }
 
   @override
+  String get paywallRecommended => 'Recommended';
+
+  @override
+  String get paywallNoPlans => 'Plans aren\'t available right now. Try again in a minute.';
+
+  @override
+  String get paywallOtherPlans => 'See all plans';
+
+  @override
+  String get paywallComparePlans => 'See plans';
+
+  @override
+  String get paywallYourPlan => 'Your plan';
+
+  @override
+  String get paywallNotNow => 'Not now';
+
+  @override
+  String get paywallTryAgain => 'Try again';
+
+  @override
+  String get paywallManageBilling => 'Manage billing';
+
+  @override
+  String get paywallLoadError => 'Couldn\'t load plans. Check your connection and try again.';
+
+  @override
+  String get paywallPlans => 'Plans';
+
+  @override
   String get firstCaptureTitle => 'How will you capture?';
 
   @override
@@ -13095,6 +13112,41 @@ class AppLocalizationsSk extends AppLocalizations {
   String get firstCaptureEmpty => 'I didn\'t catch enough speech, try again with a few sentences';
 
   @override
+  String get watchCaptureTitle => 'Record from your Apple Watch';
+
+  @override
+  String get watchCaptureOpen => 'Open Omi on your Apple Watch.';
+
+  @override
+  String get watchCaptureRecord => 'Tap Record. Allow microphone access if asked.';
+
+  @override
+  String get watchCaptureSync => 'Your recording syncs to Omi on this phone.';
+
+  @override
+  String get pairingBluetoothOff => 'Turn on Bluetooth on your phone, then try again.';
+
+  @override
+  String get pairingBluetoothPermission => 'Allow Bluetooth access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingNearbyPermission => 'Allow Nearby devices access for Omi in Settings, then try again.';
+
+  @override
+  String get pairingLocationPermission =>
+      'Allow location access for Omi in Settings so this phone can find your device, then try again.';
+
+  @override
+  String get pairingNotFoundOrDropped =>
+      'Couldn\'t reach your Omi. Make sure it\'s charged, close to your phone, and its light is blinking, then try again.';
+
+  @override
+  String get pairingBondRecovery => 'Forget Omi in your phone’s Bluetooth settings, then try pairing again.';
+
+  @override
+  String get pairingHowTo => 'How to pair';
+
+  @override
   String get firstCaptureWatchInstructions =>
       'Open Omi on your Apple Watch and tap Record. Allow microphone access if asked. Your capture will sync to Omi on this phone.';
 
@@ -13132,4 +13184,91 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get firstCaptureSiriTip => 'Tip: Enable Omi in Shortcuts → Siri.';
+
+  @override
+  String get paywallOutlineHeadline => 'Už vám neunikne ani slovo.';
+
+  @override
+  String get paywallCancelAnytime => 'Zrušte kedykoľvek.';
+
+  @override
+  String get connectAnAgent => 'Pripojiť agenta';
+
+  @override
+  String get connectAnAgentSubtitle => 'Získajte pokyny na nastavenie pre Claude, ChatGPT, Codex alebo iného agenta';
+
+  @override
+  String syncCardSyncingAmount(String amount) {
+    return 'Synchronizácia $amount zvuku';
+  }
+
+  @override
+  String get syncCardSyncingTitle => 'Synchronizácia nahrávok';
+
+  @override
+  String syncStepDownloadingAmount(String done, String total) {
+    return 'Sťahovanie z Omi · $done z $total';
+  }
+
+  @override
+  String syncStepUploadingAmount(String done, String total) {
+    return 'Nahrávanie · $done z $total';
+  }
+
+  @override
+  String syncCardTranscribingAmount(String amount) {
+    return 'Premena $amount na konverzácie';
+  }
+
+  @override
+  String syncCardTranscribedOf(String done, String total) {
+    return 'Hotovo $done z $total · túto obrazovku môžete opustiť';
+  }
+
+  @override
+  String syncCardReadyAmount(String amount) {
+    return '$amount pripravené na synchronizáciu';
+  }
+
+  @override
+  String get syncStepLabelDownload => 'Omi → telefón';
+
+  @override
+  String get syncStepLabelUpload => 'Nahrávanie';
+
+  @override
+  String get syncStepLabelTranscribe => 'Prepis';
+
+  @override
+  String get syncDetailsTitle => 'Podrobnosti synchronizácie';
+
+  @override
+  String get syncDetailsRightNow => 'Práve teraz';
+
+  @override
+  String get syncDetailsYourOmi => 'Váš Omi';
+
+  @override
+  String get syncDetailsTransferSpeed => 'Rýchlosť prenosu';
+
+  @override
+  String get syncDetailsWaitingOnOmi => 'Čaká na Omi';
+
+  @override
+  String get syncDetailsWaitingOnPhone => 'Čaká v tomto telefóne';
+
+  @override
+  String get syncDetailsTranscribing => 'Prepisuje sa v Omi';
+
+  @override
+  String get syncDetailsForSupport => 'Pre podporu';
+
+  @override
+  String get syncDetailsAudioFiles => 'Zvukové súbory';
+
+  @override
+  String get syncDetailsServerJobs => 'Úlohy servera (hotovo / spolu)';
+
+  @override
+  String get syncDetailsCopy => 'Kopírovať podrobnosti pre podporu';
 }
