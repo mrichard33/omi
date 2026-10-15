@@ -1,4 +1,4 @@
-"""The prepared batch cutover must admit only David, without record/WAL writes."""
+"""Reviewed batch stages bind the same cohort on live and offline-sync hosts."""
 
 import json
 from pathlib import Path
@@ -10,7 +10,7 @@ from config import transcription_final_pass as flags
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize('host', ['backend', 'backend-sync', 'pusher'])
+@pytest.mark.parametrize('host', ['backend', 'backend-sync', 'backend-sync-backfill', 'pusher'])
 def test_prepared_cohort_matches_reviewed_stage(monkeypatch, host):
     manifest = yaml.load((ROOT / 'backend/deploy/runtime_env.yaml').read_text(), Loader=yaml.CSafeLoader)[
         'environments'
@@ -19,15 +19,16 @@ def test_prepared_cohort_matches_reviewed_stage(monkeypatch, host):
     stages = json.loads((ROOT / 'config/diarization-cohort-stages.json').read_text())
     keys = tuple(stages['A'])
     selected = {key: binding[key]['value'] for key in keys}
-    assert selected in stages.values()
+    assert selected == stages['C']
     assert selected == {key: manifest['gke']['pusher']['env'][key]['value'] for key in keys}
     for key, value in selected.items():
         monkeypatch.setenv(key, value)
     uid = 'vi7SA9ckQCe4ccobWNxlbdcNdC23'
     assert selected['TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST'] == uid
     assert flags.enabled_for(uid)
+    assert not flags.enabled_for('synthetic-outside-cohort')
     assert flags.authoritative_for(uid) == (selected['TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE'] == 'true')
-    assert not flags.sync_enabled_for(uid)
+    assert flags.sync_enabled_for(uid) == (selected['TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED'] == 'true')
     assert selected['TRANSCRIPTION_FINAL_PASS_BACKEND'] == 'pyannote'
     assert selected['HOSTED_DIARIZATION_API_URL'] == 'http://172.16.160.20/diarizer-batch'
     assert binding['TRANSCRIPTION_SHADOW_UID_ALLOWLIST']['value'] == uid
@@ -40,15 +41,18 @@ def test_prepared_cohort_matches_reviewed_stage(monkeypatch, host):
         assert {key: chart_values[key] for key in keys} == selected
 
 
-def test_prepared_cohort_does_not_enable_backfill_integration_or_dev():
+def test_prepared_cohort_does_not_enable_integration_or_dev():
     manifest = yaml.load((ROOT / 'backend/deploy/runtime_env.yaml').read_text(), Loader=yaml.CSafeLoader)[
         'environments'
     ]
-    for host in ('backend-sync-backfill', 'backend-integration'):
+    for host in ('backend-integration',):
         env = manifest['prod']['cloud_run']['services'][host]['env']
         assert env.get('TRANSCRIPTION_FINAL_PASS_DIARIZER', {}).get('value', 'legacy') == 'legacy'
-    for host in ('backend', 'backend-sync'):
+    for host in ('backend', 'backend-sync', 'backend-sync-backfill', 'backend-integration'):
         env = manifest['dev']['cloud_run']['services'][host]['env']
+        assert env.get('TRANSCRIPTION_FINAL_PASS_DIARIZER', {}).get('value', 'legacy') == 'legacy'
+    for host in ('backend-listen', 'pusher'):
+        env = manifest['dev']['gke'][host]['env']
         assert env.get('TRANSCRIPTION_FINAL_PASS_DIARIZER', {}).get('value', 'legacy') == 'legacy'
 
 
@@ -70,7 +74,8 @@ def test_ramp_data_preserves_scope_and_capacity(monkeypatch, stage, percent, aut
     assert values['TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS'] == cap
     assert values['TRANSCRIPTION_SHADOW_ENABLED'] == 'true'
     assert values['TRANSCRIPTION_SHADOW_KILL_SWITCH'] == 'false'
-    assert values['TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED'] == 'false'
+    assert values['TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED'] == ('false' if stage == 'A' else 'true')
+    assert flags.sync_enabled_for(values['TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST']) == (stage != 'A')
     assert values['TRANSCRIPTION_SHADOW_UID_ALLOWLIST'] == values['TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST']
     assert flags.enabled_for(values['TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST'])
     if percent == '0':
