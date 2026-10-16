@@ -106,6 +106,28 @@ envFrom:
       name: dev-omi-backend-config
 
 env:
+  - name: BATCH_PIPELINE_ENABLED
+    value: "false"
+  - name: BATCH_PIPELINE_UID_ALLOWLIST
+    value: ""
+  - name: BATCH_PIPELINE_PERCENT
+    value: "0"
+  - name: BATCH_PIPELINE_SERVING_ENABLED
+    value: "false"
+  - name: BATCH_PIPELINE_WORKER_ENABLED
+    value: "false"
+  - name: BATCH_PIPELINE_API_URL
+    value: ""
+  - name: BATCH_PIPELINE_WORKER_AUDIENCE
+    value: ""
+  - name: BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT
+    value: ""
+  - name: BUCKET_BATCH_PIPELINE
+    value: ""
+  - name: BATCH_PIPELINE_UNIT_SECONDS
+    value: "3600"
+  - name: BATCH_PIPELINE_SHARED_LIVE_ENABLED
+    value: "false"
   - name: AUDIO_ARCHIVE_LIVE_ENABLED
     value: "false"
   - name: AUDIO_ARCHIVE_READ_ENABLED
@@ -147,6 +169,10 @@ env:
     value: "true"
   - name: CAPTURE_GROUP_CONTAINMENT_MODE
     value: "shadow"
+  - name: DESKTOP_PENDANT_CALL_LINK_MODE
+    value: "off"
+  - name: DESKTOP_PENDANT_CALL_LINK_PERCENT
+    value: "100"
   # Keep these aligned with the development GitHub environment variables used
   # by the Cloud Run backend; api.omiapi.com is served by backend-listen.
   - name: PUBLIC_SHARED_CONVERSATION_CHAT_FRONTEND_AUDIENCE
@@ -243,6 +269,12 @@ env:
     value: "gateway"
   - name: OMI_SHAPED_AGENT_MODE
     value: "on"
+  - name: DREAM_AGENT_ELIGIBILITY
+    value: 'allowlist'
+  - name: DREAM_AGENT_UID_ALLOWLIST
+    value: ""
+  - name: DREAM_ON_DEMAND_ENABLED
+    value: 'true'
   - name: REVIEW_SURFACE_MODE
     value: "on"
   - name: LISTEN_FINALIZATION_BYOK_ABANDONMENT_ENABLED
@@ -337,6 +369,10 @@ env:
     value: "http://172.16.48.49/nllb"
   - name: TRANSLATION_SERVICE_MODELS
     value: "nllb,gemini"
+  - name: TRANSLATION_CACHE_TTL
+    value: "86400"
+  - name: TRANSLATION_NEGATIVE_CACHE_TTL
+    value: "21600"
   - name: TRANSLATION_DEMAND_SHADOW_ENABLED
     value: "false"
   - name: TRANSLATION_DEMAND_GATE_ENABLED
