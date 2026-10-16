@@ -70,6 +70,10 @@ _TRANSLATION_LISTEN_ONLY = frozenset(
         'TRANSLATION_ONDEMAND_UID_DAILY_CHARS',
         'TRANSLATION_ONDEMAND_GLOBAL_DAILY_CHARS',
         'TRANSLATION_ONDEMAND_MAX_CATCHUP_PAGES',
+        # Translation cache TTLs belong to backend-listen and Cloud Run API
+        # callers; pusher has no TranslationService/cache callsite.
+        'TRANSLATION_CACHE_TTL',
+        'TRANSLATION_NEGATIVE_CACHE_TTL',
     }
 )
 # The API domain and the Review routes run on backend-listen. Pusher's
@@ -83,6 +87,23 @@ _DEMAND_LISTEN_ONLY = frozenset(
         'STT_LIVE_DEMAND_PERCENT',
         'STT_LIVE_DEMAND_UID_ALLOWLIST',
         'STT_LIVE_DEMAND_MIN_DWELL_SECONDS',
+    }
+)
+# main.py mounts sync intake/worker RPC and owns serving startup. pusher.main
+# mounts none of those surfaces and never starts the dedicated GPU process.
+_BATCH_PIPELINE_LISTEN_ONLY = frozenset(
+    {
+        'BATCH_PIPELINE_ENABLED',
+        'BATCH_PIPELINE_UID_ALLOWLIST',
+        'BATCH_PIPELINE_PERCENT',
+        'BATCH_PIPELINE_SERVING_ENABLED',
+        'BATCH_PIPELINE_API_URL',
+        'BATCH_PIPELINE_WORKER_ENABLED',
+        'BATCH_PIPELINE_WORKER_AUDIENCE',
+        'BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT',
+        'BATCH_PIPELINE_UNIT_SECONDS',
+        'BATCH_PIPELINE_SHARED_LIVE_ENABLED',
+        'BUCKET_BATCH_PIPELINE',
     }
 )
 LISTEN_ONLY_ALLOWED: dict[str, frozenset[str]] = {
@@ -183,7 +204,8 @@ LISTEN_ONLY_ALLOWED: dict[str, frozenset[str]] = {
     )
     | _TRANSLATION_LISTEN_ONLY
     | _REVIEW_SURFACE_LISTEN_ONLY
-    | _DEMAND_LISTEN_ONLY,
+    | _DEMAND_LISTEN_ONLY
+    | _BATCH_PIPELINE_LISTEN_ONLY,
     "prod": frozenset(
         {
             # Only listen's runtime reads these to advertise mobile control-channel
@@ -205,6 +227,9 @@ LISTEN_ONLY_ALLOWED: dict[str, frozenset[str]] = {
             "PARAKEET_WINDOW_MAX_CONTEXT_SECONDS",
             "PARAKEET_WINDOW_PACE_SECONDS",
             "PARAKEET_WINDOW_POST_TIMEOUT_SECONDS",
+            # Pusher runs keyless on Workload Identity; listen still mounts the nik-164 key until
+            # its own cut-over (credential hygiene D4 phase 2), which removes this entry.
+            "SERVICE_ACCOUNT_JSON",
             "SONIOX_CIRCUIT_COOLDOWN_SECONDS",
             "SONIOX_CIRCUIT_FAILURE_THRESHOLD",
             "SONIOX_ESTIMATED_USD_PER_HOUR",
@@ -291,7 +316,8 @@ LISTEN_ONLY_ALLOWED: dict[str, frozenset[str]] = {
     )
     | _TRANSLATION_LISTEN_ONLY
     | _REVIEW_SURFACE_LISTEN_ONLY
-    | _DEMAND_LISTEN_ONLY,
+    | _DEMAND_LISTEN_ONLY
+    | _BATCH_PIPELINE_LISTEN_ONLY,
 }
 
 # Pusher owns the process-local shadow worker; sync/backfill also runs the

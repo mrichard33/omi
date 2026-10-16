@@ -1,5 +1,5 @@
 # generated — do not edit; run: python3 backend/deploy/compose_runtime_env.py
-schema_version: 1
+schema_version: 2
 environments:
   dev:
     llm_gateway:
@@ -9,6 +9,7 @@ environments:
       env:
         PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
         PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
+        DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
       static_address_name: dev-llm-gateway-ilb-ip-address
     gcp_project: based-hardware-dev
     gke:
@@ -17,6 +18,29 @@ environments:
         - conversation.finalize.persisted
         - memory.canonical.mutate
         env:
+          BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+          BATCH_PIPELINE_UID_ALLOWLIST: {value: '', category: rollout}
+          BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+          BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+          BATCH_PIPELINE_WORKER_ENABLED:
+            value: 'false'
+            category: ops_kill
+          BATCH_PIPELINE_API_URL:
+            value: ''
+            category: service_discovery
+          BATCH_PIPELINE_WORKER_AUDIENCE:
+            value: ''
+            category: service_auth
+          BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+            value: ''
+            category: service_auth
+          BUCKET_BATCH_PIPELINE:
+            value: ''
+            category: service_discovery
+          BATCH_PIPELINE_UNIT_SECONDS:
+            value: '3600'
+            category: reliability
+          BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -46,11 +70,15 @@ environments:
           SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
           LISTEN_COMMITTED_CAPTURE_COVERAGE_ENABLED: {value: 'true', category: rollout}
           CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
           TRANSLATION_DEMAND_SHADOW_ENABLED: {value: 'false', category: rollout}
           TRANSLATION_DEMAND_GATE_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_DEMAND_LEASE_V1_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_ONDEMAND_GEMINI_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_ONOPEN_ENABLED: {value: 'true', category: rollout}
+          TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+          TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
           TRANSLATION_ONDEMAND_COHORT_PERCENT: {value: '100', category: rollout}
           TRANSLATION_ONDEMAND_UID_ALLOWLIST: {value: '', category: rollout}
           TRANSLATION_ONDEMAND_MAX_SEGMENTS: {value: '50', category: rollout}
@@ -254,6 +282,9 @@ environments:
             category: service_discovery
             value: https://api.omiapi.com
           OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+          DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+          DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+          DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
           PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
           PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
           SONIOX_ORDERED_FINALIZE: {value: 'false', category: rollout}
@@ -325,6 +356,8 @@ environments:
           CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
           LISTEN_COMMITTED_CAPTURE_COVERAGE_ENABLED: {value: 'true', category: rollout}
           CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
           FREE_TIER_LOCAL_PROCESSING: {category: rollout, value: 'true'}
           FREE_TIER_LOCAL_PROCESSING_COHORT:
             category: rollout
@@ -345,6 +378,9 @@ environments:
             category: service_discovery
             value: http://172.16.48.49/diarizer
           OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+          DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+          DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+          DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
           PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
           PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
           SONIOX_ORDERED_FINALIZE: {value: 'false', category: rollout}
@@ -628,6 +664,32 @@ environments:
               secret: SCREEN_FRAME_SIGNING_SECRET
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: '', category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            BUCKET_TEMPORAL_SYNC_LOCAL:
+              value: syncing-local-development
+              category: storage_retention
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -665,6 +727,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -673,6 +737,8 @@ environments:
             TRANSLATION_DEMAND_LEASE_V1_ENABLED: {value: 'true', category: rollout}
             TRANSLATION_ONDEMAND_GEMINI_ENABLED: {value: 'true', category: rollout}
             TRANSLATION_ONOPEN_ENABLED: {value: 'true', category: rollout}
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             TRANSLATION_ONDEMAND_COHORT_PERCENT: {value: '100', category: rollout}
             TRANSLATION_ONDEMAND_UID_ALLOWLIST: {value: '', category: rollout}
             TRANSLATION_ONDEMAND_MAX_SEGMENTS: {value: '50', category: rollout}
@@ -764,6 +830,9 @@ environments:
               value: dev-v1
               category: memory_rollout
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
             PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
             SONIOX_ORDERED_FINALIZE: {value: 'false', category: rollout}
@@ -847,6 +916,32 @@ environments:
               secret: POSTHOG_PROJECT_API_KEY
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: '', category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -871,6 +966,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-sync
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'false', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -887,6 +984,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -999,6 +1098,9 @@ environments:
               value: canonical_memory_atoms
               category: memory_rollout
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             SYNC_PHASE_METRICS_EXPORT_ENABLED:
               value: 'true'
               category: telemetry
@@ -1074,6 +1176,32 @@ environments:
               secret: POSTHOG_PROJECT_API_KEY
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: '', category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -1092,6 +1220,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-sync-backfill
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'false', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -1108,6 +1238,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -1216,6 +1348,9 @@ environments:
               value: canonical_memory_atoms
               category: memory_rollout
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             SYNC_PHASE_METRICS_EXPORT_ENABLED:
               value: 'true'
               category: telemetry
@@ -1283,6 +1418,32 @@ environments:
               secret: POSTHOG_PROJECT_API_KEY
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: '', category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: ''
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -1301,6 +1462,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-integration
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'false', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -1317,6 +1480,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -1384,6 +1549,9 @@ environments:
             GCP_LOCATION:
               value: us-central1
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: '', category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
             PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
             SONIOX_ORDERED_FINALIZE: {value: 'false', category: rollout}
@@ -1460,9 +1628,6 @@ environments:
               version: latest
             OPENAI_API_KEY:
               secret: OPENAI_API_KEY
-              version: latest
-            SERVICE_ACCOUNT_JSON:
-              secret: SERVICE_ACCOUNT_JSON
               version: latest
             ENCRYPTION_SECRET:
               secret: ENCRYPTION_SECRET
@@ -1797,6 +1962,7 @@ environments:
             name: prod-omi-backend-secrets
             key: REDIS_DB_PASSWORD
         LLM_GATEWAY_ACCOUNTING_ENABLED: {value: 'true', category: rollout}
+        DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
         OMI_CUSTOMER_DATA_PROJECT:
           value: based-hardware
           category: service_discovery
@@ -1812,6 +1978,29 @@ environments:
         - conversation.finalize.persisted
         - memory.canonical.mutate
         env:
+          BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+          BATCH_PIPELINE_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+          BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+          BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+          BATCH_PIPELINE_WORKER_ENABLED:
+            value: 'false'
+            category: ops_kill
+          BATCH_PIPELINE_API_URL:
+            value: https://backend-sync-hhibjajaja-uc.a.run.app
+            category: service_discovery
+          BATCH_PIPELINE_WORKER_AUDIENCE:
+            value: ''
+            category: service_auth
+          BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+            value: ''
+            category: service_auth
+          BUCKET_BATCH_PIPELINE:
+            value: based-hardware-batch-pipeline-staging
+            category: service_discovery
+          BATCH_PIPELINE_UNIT_SECONDS:
+            value: '3600'
+            category: reliability
+          BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
           AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -1841,11 +2030,15 @@ environments:
           SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
           LISTEN_COMMITTED_CAPTURE_COVERAGE_ENABLED: {value: 'true', category: rollout}
           CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
           TRANSLATION_DEMAND_SHADOW_ENABLED: {value: 'false', category: rollout}
           TRANSLATION_DEMAND_GATE_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_DEMAND_LEASE_V1_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_ONDEMAND_GEMINI_ENABLED: {value: 'true', category: rollout}
           TRANSLATION_ONOPEN_ENABLED: {value: 'true', category: rollout}
+          TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+          TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
           TRANSLATION_ONDEMAND_COHORT_PERCENT: {value: '100', category: rollout}
           TRANSLATION_ONDEMAND_UID_ALLOWLIST: {value: '', category: rollout}
           TRANSLATION_ONDEMAND_MAX_SEGMENTS: {value: '50', category: rollout}
@@ -2045,9 +2238,14 @@ environments:
             category: service_discovery
             value: https://omi.me
           DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-          DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
+          DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+          DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+          DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
           PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
           PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
+          POSTHOG_PRODUCT_CAPTURE_TOKEN:
+            value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y
+            category: telemetry
           PROACTIVITY_REDIS_HOST:
             config_map:
               name: prod-omi-backend-config
@@ -2193,6 +2391,8 @@ environments:
           CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
           LISTEN_COMMITTED_CAPTURE_COVERAGE_ENABLED: {value: 'true', category: rollout}
           CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+          DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
           FREE_TIER_LOCAL_PROCESSING: {category: rollout, value: 'false'}
           FREE_TIER_LOCAL_PROCESSING_COHORT: {category: rollout, value: ''}
           FREE_TIER_EMERGENCY_STOP: {category: rollout, value: 'false'}
@@ -2214,20 +2414,25 @@ environments:
           TRANSCRIPTION_FINAL_PASS_DIARIZER: {value: pyannote_shadow, category: rollout}
           TRANSCRIPTION_FINAL_PASS_BACKEND: {value: pyannote, category: rollout}
           TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-          TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '1', category: rollout}
+          TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '5', category: rollout}
           TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE: {value: 'true', category: rollout}
           TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED: {value: 'true', category: rollout}
           TRANSCRIPTION_SHADOW_ENABLED: {value: 'true', category: rollout}
           TRANSCRIPTION_SHADOW_KILL_SWITCH: {value: 'false', category: rollout}
           TRANSCRIPTION_SHADOW_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-          TRANSCRIPTION_SHADOW_PERCENT: {value: '1', category: rollout}
-          TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '80', category: rollout}
-          TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '10', category: rollout}
-          TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '1000', category: rollout}
+          TRANSCRIPTION_SHADOW_PERCENT: {value: '5', category: rollout}
+          TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '1200', category: rollout}
+          TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '150', category: rollout}
+          TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '15000', category: rollout}
           DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-          DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
+          DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+          DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+          DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
           PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
           PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
+          POSTHOG_PRODUCT_CAPTURE_TOKEN:
+            value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y
+            category: telemetry
           POSTHOG_PROJECT_API_KEY:
             secret:
               name: prod-omi-backend-secrets
@@ -2335,6 +2540,7 @@ environments:
           env_var: OMI_VERTEX_LEGACY_TASK_MIN_CAPABLE_MACOS_BUILD
           provisional: true
           category: rollout
+          value: '12435'
         OMI_VERTEX_LEGACY_TASK_MODE:
           env_var: OMI_VERTEX_LEGACY_TASK_MODE
           provisional: true
@@ -2451,6 +2657,32 @@ environments:
               secret: SCREEN_FRAME_SIGNING_SECRET
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: https://backend-sync-hhibjajaja-uc.a.run.app
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: based-hardware-batch-pipeline-staging
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            BUCKET_TEMPORAL_SYNC_LOCAL:
+              value: syncing-local
+              category: storage_retention
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -2488,6 +2720,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -2496,6 +2730,8 @@ environments:
             TRANSLATION_DEMAND_LEASE_V1_ENABLED: {value: 'true', category: rollout}
             TRANSLATION_ONDEMAND_GEMINI_ENABLED: {value: 'true', category: rollout}
             TRANSLATION_ONOPEN_ENABLED: {value: 'true', category: rollout}
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             TRANSLATION_ONDEMAND_COHORT_PERCENT: {value: '100', category: rollout}
             TRANSLATION_ONDEMAND_UID_ALLOWLIST: {value: '', category: rollout}
             TRANSLATION_ONDEMAND_MAX_SEGMENTS: {value: '50', category: rollout}
@@ -2589,16 +2825,16 @@ environments:
             TRANSCRIPTION_FINAL_PASS_DIARIZER: {value: pyannote_shadow, category: rollout}
             TRANSCRIPTION_FINAL_PASS_BACKEND: {value: pyannote, category: rollout}
             TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '1', category: rollout}
+            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '5', category: rollout}
             TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE: {value: 'true', category: rollout}
             TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_KILL_SWITCH: {value: 'false', category: rollout}
             TRANSCRIPTION_SHADOW_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_SHADOW_PERCENT: {value: '1', category: rollout}
-            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '80', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '10', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '1000', category: rollout}
+            TRANSCRIPTION_SHADOW_PERCENT: {value: '5', category: rollout}
+            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '1200', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '150', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '15000', category: rollout}
             OMI_MESSAGING_CHANNELS: {value: 'on', category: rollout}
             OMI_MESSAGING_CHANNELS_UIDS: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
             OMI_MESSAGING_CHANNEL_POLICY: {value: '{"telegram":{"enabled":true,"cohort":"*"},"imessage":{"enabled":true,"cohort":["vi7SA9ckQCe4ccobWNxlbdcNdC23"],"seat_cap":"off"}}',
@@ -2612,11 +2848,13 @@ environments:
             OMI_MESSAGING_LINK_TARGETS: {value: '{"telegram":{"provider":"telegram","address":"omi_chat_bot","deep_link_template":"https://t.me/{address}?start={proof}"},"imessage":{"provider":"linq","address":"+12062808403"}}',
               category: rollout}
             DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-            DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
-            DREAM_AGENT_PASSES_PER_DAY: {value: '2', category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
+            DREAM_AGENT_PASSES_PER_DAY: {value: '48', category: rollout}
+            DREAM_AGENT_HUNT_INTERVAL_HOURS: {value: '2', category: rollout}
             DREAM_AGENT_MANUAL_RUNS_PER_DAY: {value: '3', category: rollout}
             DREAM_AGENT_DAILY_USD: {value: '10', category: rollout}
-            DREAM_AGENT_GLOBAL_DAILY_USD: {value: '15000', category: rollout}
             DREAM_AGENT_TOKENS_PER_MINUTE: {value: '2000000', category: rollout}
             PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
             PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
@@ -2751,6 +2989,32 @@ environments:
               secret: DREAM_AGENT_FEEDBACK_SALT
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: https://backend-sync-hhibjajaja-uc.a.run.app
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: https://backend-sync-hhibjajaja-uc.a.run.app
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: batch-pipeline-worker@based-hardware.iam.gserviceaccount.com
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: based-hardware-batch-pipeline-staging
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -2775,6 +3039,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-sync
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'true', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -2791,6 +3057,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -2905,24 +3173,26 @@ environments:
             TRANSCRIPTION_FINAL_PASS_DIARIZER: {value: pyannote_shadow, category: rollout}
             TRANSCRIPTION_FINAL_PASS_BACKEND: {value: pyannote, category: rollout}
             TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '1', category: rollout}
+            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '5', category: rollout}
             TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE: {value: 'true', category: rollout}
             TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_KILL_SWITCH: {value: 'false', category: rollout}
             TRANSCRIPTION_SHADOW_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_SHADOW_PERCENT: {value: '1', category: rollout}
-            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '80', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '10', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '1000', category: rollout}
+            TRANSCRIPTION_SHADOW_PERCENT: {value: '5', category: rollout}
+            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '1200', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '150', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '15000', category: rollout}
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-            DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             REVIEW_SURFACE_MODE: {value: 'on', category: rollout}
-            DREAM_AGENT_PASSES_PER_DAY: {value: '2', category: rollout}
+            DREAM_AGENT_PASSES_PER_DAY: {value: '48', category: rollout}
+            DREAM_AGENT_HUNT_INTERVAL_HOURS: {value: '2', category: rollout}
             DREAM_AGENT_MANUAL_RUNS_PER_DAY: {value: '3', category: rollout}
             DREAM_AGENT_DAILY_USD: {value: '10', category: rollout}
-            DREAM_AGENT_GLOBAL_DAILY_USD: {value: '15000', category: rollout}
             DREAM_AGENT_TOKENS_PER_MINUTE: {value: '2000000', category: rollout}
             DREAM_AGENT_CANARY_UID: {value: dream-canary-prod-01, category: rollout}
             SYNC_PHASE_METRICS_EXPORT_ENABLED:
@@ -3025,6 +3295,32 @@ environments:
               secret: OMI_LLM_GATEWAY_SERVICE_TOKEN
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: https://backend-sync-hhibjajaja-uc.a.run.app
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: based-hardware-batch-pipeline-staging
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -3043,6 +3339,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-sync-backfill
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'true', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -3059,6 +3357,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -3169,19 +3469,21 @@ environments:
             TRANSCRIPTION_FINAL_PASS_DIARIZER: {value: pyannote_shadow, category: rollout}
             TRANSCRIPTION_FINAL_PASS_BACKEND: {value: pyannote, category: rollout}
             TRANSCRIPTION_FINAL_PASS_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '1', category: rollout}
+            TRANSCRIPTION_FINAL_PASS_PERCENT: {value: '5', category: rollout}
             TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE: {value: 'true', category: rollout}
             TRANSCRIPTION_FINAL_PASS_SYNC_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_ENABLED: {value: 'true', category: rollout}
             TRANSCRIPTION_SHADOW_KILL_SWITCH: {value: 'false', category: rollout}
             TRANSCRIPTION_SHADOW_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
-            TRANSCRIPTION_SHADOW_PERCENT: {value: '1', category: rollout}
-            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '80', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '10', category: rollout}
-            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '1000', category: rollout}
+            TRANSCRIPTION_SHADOW_PERCENT: {value: '5', category: rollout}
+            TRANSCRIPTION_SHADOW_DAILY_AUDIO_HOURS: {value: '1200', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_AUDIO_HOURS: {value: '150', category: rollout}
+            TRANSCRIPTION_SYNC_FINAL_PASS_HOURLY_REQUESTS: {value: '15000', category: rollout}
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-            DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             SYNC_PHASE_METRICS_EXPORT_ENABLED:
               value: 'true'
               category: telemetry
@@ -3281,6 +3583,32 @@ environments:
               secret: OMI_LLM_GATEWAY_SERVICE_TOKEN
               version: latest
           env:
+            BATCH_PIPELINE_ENABLED: {value: 'false', category: rollout}
+            BATCH_PIPELINE_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            BATCH_PIPELINE_PERCENT: {value: '0', category: rollout}
+            BATCH_PIPELINE_SERVING_ENABLED: {value: 'true', category: rollout}
+            BATCH_PIPELINE_WORKER_ENABLED:
+              value: 'false'
+              category: ops_kill
+            BATCH_PIPELINE_API_URL:
+              value: https://backend-sync-hhibjajaja-uc.a.run.app
+              category: service_discovery
+            BATCH_PIPELINE_WORKER_AUDIENCE:
+              value: ''
+              category: service_auth
+            BATCH_PIPELINE_WORKER_SERVICE_ACCOUNT:
+              value: ''
+              category: service_auth
+            BUCKET_BATCH_PIPELINE:
+              value: based-hardware-batch-pipeline-staging
+              category: service_discovery
+            BATCH_PIPELINE_UNIT_SECONDS:
+              value: '3600'
+              category: reliability
+            BATCH_PIPELINE_SHARED_LIVE_ENABLED: {value: 'false', category: rollout}
+            PROMETHEUS_SIDECAR_PORT:
+              value: '9090'
+              category: telemetry
             AUDIO_ARCHIVE_LIVE_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_READ_ENABLED: {value: 'false', category: rollout}
             AUDIO_ARCHIVE_STOP_PCM_ENABLED: {value: 'false', category: rollout}
@@ -3299,6 +3627,8 @@ environments:
               value: '1'
             FIRESTORE_READ_LEDGER_SERVICE:
               value: backend-integration
+            TRANSLATION_CACHE_TTL: {value: '86400', category: rollout}
+            TRANSLATION_NEGATIVE_CACHE_TTL: {value: '21600', category: rollout}
             AUDIO_TIMELINE_SPANS: {value: 'false', category: rollout}
             LIVE_SPEAKER_SPAN_RESOLUTION: {value: 'true', category: rollout}
             LIVE_CAPTURE_WINDOW_RETENTION: {value: 'false', category: rollout}
@@ -3315,6 +3645,8 @@ environments:
               category: ops_kill
             CONVERSATION_SMART_MERGE_WALLCLOCK_GAP_MODE: {value: shadow, category: rollout}
             CAPTURE_GROUP_CONTAINMENT_MODE: {value: shadow, category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_MODE: {value: 'off', category: rollout}
+            DESKTOP_PENDANT_CALL_LINK_PERCENT: {value: '100', category: rollout}
             SYNC_ASSIGNMENT_RECOVERY_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_LIVE_DEDUPE_ENABLED: {value: 'true', category: rollout}
             SYNC_LINEAGE_S1_REQUIRED: {value: 'true', category: rollout}
@@ -3380,7 +3712,9 @@ environments:
               value: us-central1
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             DREAM_AGENT_ENABLED: {value: 'true', category: rollout}
-            DREAM_AGENT_ELIGIBILITY: {value: all, category: rollout}
+            DREAM_AGENT_ELIGIBILITY: {value: allowlist, category: rollout}
+            DREAM_AGENT_UID_ALLOWLIST: {value: vi7SA9ckQCe4ccobWNxlbdcNdC23, category: rollout}
+            DREAM_ON_DEMAND_ENABLED: {value: 'true', category: rollout}
             PROACTIVITY_V2_POSTHOG_TOKEN: {value: phc_z3qUFhGUgYIOMYnfxVSrLmYISQvbgph8iREQv3sez3Y, category: rollout}
             PROACTIVITY_V2_POSTHOG_HOST: {value: 'https://us.posthog.com', category: rollout}
             MENTOR_PIPELINE: {value: cohort, category: rollout}
@@ -3467,9 +3801,6 @@ environments:
               version: latest
             OPENAI_API_KEY:
               secret: OPENAI_API_KEY
-              version: latest
-            SERVICE_ACCOUNT_JSON:
-              secret: SERVICE_ACCOUNT_JSON
               version: latest
             ENCRYPTION_SECRET:
               secret: ENCRYPTION_SECRET
