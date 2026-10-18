@@ -283,7 +283,7 @@ _add(
         'database.action_items.delete_action_items_for_conversation', base={'uid': UID, 'conversation_id': 'conv-1'}
     )
 )
-_add(DriverEntry('database.action_items.get_action_item_ids', base={'uid': UID}))
+_add(DriverEntry('database.action_items.get_action_item_ids', base={'uid': UID}, neutrals={'budget': _BUDGET}))
 _add(
     DriverEntry(
         'database.action_items.get_action_items',
@@ -335,7 +335,10 @@ _add(
 )
 _add(
     DriverEntry(
-        'database.action_items.get_visible_action_item_ids', base={'uid': UID}, domains={'completed': [False, True]}
+        'database.action_items.get_visible_action_item_ids',
+        base={'uid': UID},
+        domains={'completed': [False, True]},
+        neutrals={'budget': _BUDGET},
     )
 )
 _add(DriverEntry('database.action_items.iter_all_action_items', base={'uid': UID}))
@@ -925,6 +928,12 @@ _add(
     DriverEntry(
         'database.conversations.get_conversations_without_photos',
         base={'uid': UID},
+        domains={'list_fields_only': [False, True]},
+        patchers=(
+            lambda client: unittest.mock.patch.object(
+                importlib.import_module('database.conversations'), 'indexed_list_reads_enabled', return_value=True
+            ),
+        ),
         profiles=WITHOUT_PHOTOS_PROFILES,
         neutrals={'limit': _LIMIT, 'offset': _OFFSET, 'budget': _BUDGET},
     )
@@ -1462,7 +1471,7 @@ _add(
             'categories': [None, ['one'], ['one', 'two']],
             'extra_field_paths': [None, ('created_at',)],
         },
-        neutrals={'limit': _LIMIT, 'offset': _OFFSET},
+        neutrals={'limit': _LIMIT, 'offset': _OFFSET, 'budget': _BUDGET},
     )
 )
 _add(
@@ -2097,7 +2106,10 @@ def _seed_sync_retirement(client, combo, trial):
         }
 
 
-_SYNC_PROD = (_stub('database.sync_backfill_sequencer.production_stage', True),)
+_SYNC_PROD = (
+    _stub('database.sync_backfill_sequencer.production_stage', True),
+    _stub('database.sync_redrive.enabled', False),
+)
 
 
 def _sync_order_trial(client, combo, trial):

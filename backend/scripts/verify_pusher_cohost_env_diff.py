@@ -108,6 +108,10 @@ _BATCH_PIPELINE_LISTEN_ONLY = frozenset(
         'BATCH_PIPELINE_RECOVERY_ALL_ADMITTED',
         'BATCH_PIPELINE_CORRECTNESS_METRICS_ENABLED',
         'BATCH_PIPELINE_PROJECTION_CONTENTION_ENABLED',
+        # Only main.py's batch worker RPC and serving loop schedule merge heads
+        # and projection follow-ups; pusher mounts neither surface.
+        'BATCH_PIPELINE_HEAD_PRIORITY_ENABLED',
+        'BATCH_PIPELINE_ASYNC_PROJECTION_ENABLED',
         'BATCH_PIPELINE_EMPTY_ASR_DISPOSITION_ENABLED',
         'BATCH_PIPELINE_SPEECH_EMPTY_MULTILINGUAL_ENABLED',
         'BATCH_PIPELINE_TERMINAL_EMPTY_DISPOSITION_ENABLED',
@@ -327,7 +331,7 @@ LISTEN_ONLY_ALLOWED: dict[str, frozenset[str]] = {
     | _TRANSLATION_LISTEN_ONLY
     | _REVIEW_SURFACE_LISTEN_ONLY
     | _DEMAND_LISTEN_ONLY
-    | _BATCH_PIPELINE_LISTEN_ONLY,
+    | (_BATCH_PIPELINE_LISTEN_ONLY - {'BATCH_PIPELINE_UID_ALLOWLIST'}),
 }
 
 # Pusher owns the process-local shadow worker; sync/backfill also runs the
