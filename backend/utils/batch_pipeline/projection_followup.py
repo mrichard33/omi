@@ -13,12 +13,14 @@ import logging
 from typing import TYPE_CHECKING
 
 from database.batch_pipeline_privacy import BatchPrivacyBlocked
+from config.policy import ProjectionPolicy
 from database.batch_pipeline_projection import ProjectionBlocked, ProjectionReplay
 from database.batch_pipeline_projection_claim import projection_claim
 from utils.batch_pipeline.contracts import WorkItem
 from utils.batch_pipeline.projection import projection_phase
 from utils.batch_pipeline.scheduler import owner_key
 from utils.executors import db_executor, postprocess_executor, run_blocking, start_background_task
+from utils.batch_pipeline.projection_discovery import ProjectionDiscovery
 
 if TYPE_CHECKING:
     from utils.batch_pipeline.projection import Projector
@@ -36,20 +38,28 @@ class ProjectionFollowups:
         self.after: str | None = None
         self.pending: deque[str] = deque()
         self.closed = False
+        self.discovery = ProjectionDiscovery(projector.store.store)
 
     def candidates(self):
         store = self.projector.store
         # Assignment failures/partial multipart output must not consume the
         # follow-up slots ahead of rows that have actually persisted.
-        return [
-            sid
-            for sid in store.store.projection_pending(limit=100)
-            if (store.ref('results', sid).get().to_dict() or {}).get('projection')
-        ]
+        candidates = []
+        for sid in self.discovery.next(limit=100):
+            if not (store.ref('results', sid).get().to_dict() or {}).get('projection'):
+                continue
+            policy = ProjectionPolicy.from_dict(store.read(sid)[0]['policy_parts']['projection'])
+            if policy.async_projection:
+                candidates.append(sid)
+        return candidates
 
     async def schedule(self):
-        # No await of slow follow-ups in the serving pass. Bound in-memory work;
-        # unfinished rows remain in the existing 100-row query after restart.
+        # Finish launching this bounded page before advancing discovery. Slow
+        # tasks must not cause the next serving pass to discard queued rows.
+        if self.pending:
+            self.launch()
+            return
+        # No await of slow follow-ups. Durable rows are rediscovered after restart.
         segments = await run_blocking(db_executor, self.candidates)
         if self.after in segments:
             offset = segments.index(self.after) + 1
@@ -133,11 +143,12 @@ class ProjectionFollowups:
                 except TimeoutError:
                     logger.warning('event=batch_projection_followup action=release outcome=timeout')
 
-    async def step(self, phase, executor, function, *args, **kwargs):
-        with projection_phase(phase):
+    async def step(self, policy, phase, executor, function, *args, **kwargs):
+        with projection_phase(phase, policy):
             return await run_blocking(executor, function, *args, **kwargs)
 
     async def finish_part(self, item, binding, receipt, index):
+        policy = await run_blocking(db_executor, self.projector.store.policy, item.segment_id)
         if receipt['state'] == 'ready':
             return
         if receipt.get('conversation_id'):
@@ -146,13 +157,14 @@ class ProjectionFollowups:
             canonical = receipt['conversation_id']
             if not binding.record_origin:
                 canonical = await self.step(
-                    'bridge', postprocess_executor, finish_sync_bridges, binding.owner_id, canonical
+                    policy, 'bridge', postprocess_executor, finish_sync_bridges, binding.owner_id, canonical
                 )
             if receipt.get('audio_required') and not binding.native_record:
                 if self.projector.playback is not None:
-                    await self.step('playback', postprocess_executor, self.projector.playback, item, canonical)
+                    await self.step(policy, 'playback', postprocess_executor, self.projector.playback, item, canonical)
                 else:
                     await self.step(
+                        policy,
                         'playback',
                         postprocess_executor,
                         self.projector.persist_playback,
@@ -166,6 +178,7 @@ class ProjectionFollowups:
                     # being stored. Follow its redirect and recopy late donor
                     # audio even if an earlier bridge already checkpointed it.
                     canonical = await self.step(
+                        policy,
                         'bridge',
                         postprocess_executor,
                         finish_sync_bridges,
@@ -175,6 +188,7 @@ class ProjectionFollowups:
                     )
             if receipt['enrichment_required']:
                 await self.step(
+                    policy,
                     'enrichment',
                     db_executor,
                     self.projector.store.mark_enrichment,
