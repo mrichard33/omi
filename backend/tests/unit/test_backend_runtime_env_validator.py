@@ -64,6 +64,9 @@ def render_cloud_run_state(env_config: dict, monkeypatch) -> dict:
 
 def with_memory_env(payload: str) -> str:
     memory_env = '''\
+        {"name": "STT_CAP_DISPATCH_ENFORCEMENT", "value": "false"},
+        {"name": "STT_CAP_DISPATCH_COHORT", "value": ""},
+        {"name": "STT_CAP_DISPATCH_LANES", "value": "live"},
         {"name": "BATCH_PIPELINE_ENABLED", "value": "false"},
         {"name": "BATCH_PIPELINE_UID_ALLOWLIST", "value": ""},
         {"name": "BATCH_PIPELINE_PERCENT", "value": "0"},
@@ -179,7 +182,7 @@ def with_conversation_notes_v2_env(payload: str) -> str:
         r'("backend-sync":\s*\{.*?"env":\s*\[\s*\{"name": "GOOGLE_CLOUD_PROJECT", "value": "based-hardware"\},)',
         # backend-sync finalizes conversations, so it reads this environment's frame docs.
         flags + r'\n        {"name": "OMI_VERTEX_RESERVATION_PROJECT", "value": "based-hardware-dev"},'
-        r'\n        {"name": "BUCKET_SCREEN_FRAMES", "value": "based-hardware-dev-screen-frames"},'
+        r'\n        {"name": "BUCKET_SCREEN_FRAMES", "value": "based-hardware-prod-screen-frames"},'
         r'\n        {"name": "TYPESENSE_HOST_PORT", "value": "443"},'
         r'\n        {"name": "TYPESENSE_HOST", "valueFrom": {"secretKeyRef": {"name": "TYPESENSE_HOST", "key": "latest"}}},'
         r'\n        {"name": "TYPESENSE_API_KEY", "valueFrom": {"secretKeyRef": {"name": "TYPESENSE_API_KEY", "key": "latest"}}},',
@@ -223,7 +226,6 @@ def with_audio_timeline_span_env(payload: str) -> str:
         '        {"name": "GOOGLE_CLOUD_PROJECT", "value": "based-hardware"},',
         '        {"name": "GOOGLE_CLOUD_PROJECT", "value": "based-hardware"},\n'
         '        {"name": "AUDIO_TIMELINE_SPANS", "value": "false"},\n'
-        '        {"name": "LIVE_SPEAKER_SPAN_RESOLUTION", "value": "false"},\n'
         '        {"name": "LIVE_CAPTURE_WINDOW_RETENTION", "value": "false"},\n'
         '        {"name": "LIVE_CAPTURE_WINDOW_STRICT_PROJECTION", "value": "false"},\n'
         '        {"name": "LIVE_CAPTURE_WINDOW_MERGE_PRESERVATION", "value": "false"},\n'
@@ -367,7 +369,7 @@ def with_backend_storage_env(payload: str) -> str:
     return re.sub(
         r'("backend":\s*\{.*?"env":\s*\[\s*\{"name": "GOOGLE_CLOUD_PROJECT", "value": "based-hardware"\},)',
         r'\1\n        {"name": "BUCKET_TEMPORAL_SYNC_LOCAL", "value": "syncing-local-development"},'
-        r'\n        {"name": "BUCKET_SCREEN_FRAMES", "value": "based-hardware-dev-screen-frames"},'
+        r'\n        {"name": "BUCKET_SCREEN_FRAMES", "value": "based-hardware-prod-screen-frames"},'
         r'\n        {"name": "SCREEN_FRAME_SIGNING_SECRET", "valueFrom": {"secretKeyRef": {"name": "SCREEN_FRAME_SIGNING_SECRET", "key": "latest"}}},',
         payload,
         count=1,
@@ -432,13 +434,8 @@ def with_cloud_run_oauth_secrets(payload: str) -> str:
         flags=re.MULTILINE,
     )
     translation_defaults = {
-        'TRANSLATION_DEMAND_SHADOW_ENABLED': 'false',
         'TRANSLATION_DEMAND_GATE_ENABLED': 'true',
-        'TRANSLATION_DEMAND_LEASE_V1_ENABLED': 'true',
-        'TRANSLATION_ONDEMAND_GEMINI_ENABLED': 'true',
         'TRANSLATION_ONOPEN_ENABLED': 'true',
-        'TRANSLATION_ONDEMAND_COHORT_PERCENT': '100',
-        'TRANSLATION_ONDEMAND_UID_ALLOWLIST': '',
         'TRANSLATION_ONDEMAND_MAX_SEGMENTS': '50',
         'TRANSLATION_ONDEMAND_MAX_CHARS': '12000',
         'TRANSLATION_ONDEMAND_DEADLINE_SECONDS': '3',

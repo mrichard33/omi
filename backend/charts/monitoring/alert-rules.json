@@ -7398,7 +7398,7 @@
             "type": "__expr__",
             "uid": "__expr__"
           },
-          "expression": "$A >= 20 && $B > 0.10",
+          "expression": "$A >= 20 && $B > 0.10 && $E >= 5",
           "intervalMs": 1000,
           "maxDataPoints": 43200,
           "refId": "C",
@@ -7446,6 +7446,26 @@
           "refId": "D",
           "type": "reduce"
         }
+      },
+      {
+        "refId": "E",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 1800,
+          "to": 0
+        },
+        "datasourceUid": "prometheus",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(omi_journey_terminal_total{journey=\"chat_response\",outcome=\"failure\"}[30m]))",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "E"
+        }
       }
     ],
     "updated": "2026-07-15T00:00:00Z",
@@ -7456,11 +7476,11 @@
     "annotations": {
       "__dashboardUid__": "omi-resilience-fallbacks",
       "__panelId__": "7",
-      "summary": "Chat terminal failures exceed 10% with at least 20 terminal real requests in 30m",
-      "threshold": "failure share > 0.10; terminal outcomes >= 20",
+      "summary": "Chat terminal failures exceed 10% with at least 20 terminal real requests and at least 5 failures in 30m",
+      "threshold": "failure share > 0.10; terminal outcomes >= 20; failures >= 5",
       "user_impact": "Users may be unable to complete this Omi interaction or may experience degraded results.",
       "scope": "The Omi AI chat production service path.",
-      "verification": "Verify the condition in the linked Grafana panel and correlate it with production traffic before intervention.",
+      "verification": "2026-10-19: a quiet half hour (~22 terminals) with 4 provider_request_rejected 400s on omi:auto:chat-agent drove the 30m success share to 0.81 and set both chat rules pending. The failure floor ($E >= 5) keeps 3-4 rejects in low traffic from paging. Backtest over the full retained history (2026-10-09..10-19, 10m and 5m steps): the old and new conditions both have zero sustained firings; the worst windows are 10-15 16:43Z (success 0.74, 5.1 failures, 20 accepted: still satisfies the new condition) and 10-19 18:13Z (0.81, 4.3 failures: now suppressed). Accepted per 30m is p50 21 / p90 40, so a full outage (~20+ failures per 30m) clears the floor at once.",
       "safe_next_action": "Inspect the linked dashboard and the affected user path; mitigate through the documented service runbook only after verification."
     },
     "labels": {
@@ -10882,7 +10902,7 @@
             "type": "__expr__",
             "uid": "__expr__"
           },
-          "expression": "$A >= 20 && $B < 0.90",
+          "expression": "$A >= 20 && $B < 0.90 && $E >= 5",
           "intervalMs": 1000,
           "maxDataPoints": 43200,
           "refId": "C",
@@ -10930,6 +10950,26 @@
           "refId": "D",
           "type": "reduce"
         }
+      },
+      {
+        "refId": "E",
+        "queryType": "",
+        "relativeTimeRange": {
+          "from": 1800,
+          "to": 0
+        },
+        "datasourceUid": "prometheus",
+        "model": {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(omi_journey_terminal_total{journey=\"chat_response\",outcome=\"failure\"}[30m]))",
+          "instant": true,
+          "intervalMs": 1000,
+          "maxDataPoints": 43200,
+          "refId": "E"
+        }
       }
     ],
     "updated": "2026-08-30T00:00:00Z",
@@ -10940,11 +10980,11 @@
     "annotations": {
       "__dashboardUid__": "omi-core-features",
       "__panelId__": "4",
-      "summary": "Chat response success share below the 90% paging floor while at least 20 journeys were accepted in 30m",
-      "threshold": "accepted >= 20 per 30m and success / (success + failure) < 0.90",
+      "summary": "Chat response success share below the 90% paging floor with at least 20 journeys accepted and at least 5 failures in 30m",
+      "threshold": "accepted >= 20 per 30m and success / (success + failure) < 0.90 and failures >= 5 per 30m",
       "user_impact": "Chat requests are terminalizing as failures; users cannot get AI chat responses.",
       "scope": "The chat-response journey outcome on the Cloud Run backend, ingested via the cloud-run-application-metrics bridge.",
-      "verification": "Confirm the success tile and the accepted-vs-settled panel on the linked Core Features dashboard before intervention.",
+      "verification": "2026-10-19: a quiet half hour (~22 terminals) with 4 provider_request_rejected 400s on omi:auto:chat-agent drove the 30m success share to 0.81 and set both chat rules pending. The failure floor ($E >= 5) keeps 3-4 rejects in low traffic from paging. Backtest over the full retained history (2026-10-09..10-19, 10m and 5m steps): the old and new conditions both have zero sustained firings; the worst windows are 10-15 16:43Z (success 0.74, 5.1 failures, 20 accepted: still satisfies the new condition) and 10-19 18:13Z (0.81, 4.3 failures: now suppressed). Accepted per 30m is p50 21 / p90 40, so a full outage (~20+ failures per 30m) clears the floor at once.",
       "safe_next_action": "Follow the real-traffic journeys runbook; treat a low success share with real accepted traffic as a user-facing outage, not a capacity signal.",
       "runbook": "backend/docs/runbooks/real-traffic-journeys.md"
     },
@@ -13387,290 +13427,8 @@
     },
     "record": null
   },
-  {
-    "uid": "omi-soniox-runway-70",
-    "orgID": 1,
-    "folderUID": "betdycdziadc0e",
-    "ruleGroup": "Live STT",
-    "title": "Soniox monthly spend at 70% — top up Soniox",
-    "condition": "D",
-    "data": [
-      {
-        "refId": "A",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 300,
-          "to": 0
-        },
-        "datasourceUid": "prometheus",
-        "model": {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "max(omi_soniox_month_ceiling_usd{job=\"backend-listen-metrics\"}) * (max(time() - omi_soniox_usage_sample_timestamp_seconds{job=\"backend-listen-metrics\"}) < bool 7200)",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "A"
-        }
-      },
-      {
-        "refId": "B",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 300,
-          "to": 0
-        },
-        "datasourceUid": "prometheus",
-        "model": {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "max(omi_soniox_month_spend_usd{job=\"backend-listen-metrics\"}) / clamp_min(max(omi_soniox_month_ceiling_usd{job=\"backend-listen-metrics\"}), 1)",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "B"
-        }
-      },
-      {
-        "refId": "C",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 0,
-          "to": 0
-        },
-        "datasourceUid": "__expr__",
-        "model": {
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "$A > 0 && $B >= 0.70",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "math"
-        }
-      },
-      {
-        "refId": "D",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 0,
-          "to": 0
-        },
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [
-            {
-              "evaluator": {
-                "params": [],
-                "type": "gt"
-              },
-              "operator": {
-                "type": "and"
-              },
-              "query": {
-                "params": [
-                  "D"
-                ]
-              },
-              "reducer": {
-                "params": [],
-                "type": "last"
-              },
-              "type": "query"
-            }
-          ],
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "C",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "D",
-          "type": "reduce"
-        }
-      }
-    ],
-    "updated": "2026-09-28T00:00:00Z",
-    "noDataState": "OK",
-    "execErrState": "KeepLast",
-    "for": "10m",
-    "keep_firing_for": "0s",
-    "annotations": {
-      "dashboard_url": "https://monitor.omi.me/d/855b2e16-c098-407a-85dc-dc9ce87698a9",
-      "summary": "top up Soniox: monthly spend reached 70% of the configured ceiling.",
-      "user_impact": "Soniox monthly spend has reached 70% of the configured ceiling; paid fallback runway may narrow.",
-      "scope": "Backend-listen Soniox usage API or metered audio estimate; no uid labels.",
-      "verification": "Local rule contract only; coordinator must verify live Grafana evaluation and Telegram delivery.",
-      "safe_next_action": "Check actual Soniox balance and monthly cap; top up Soniox before runway is exhausted. No auto-top-up is configured.",
-      "runbook": "backend/docs/runbooks/live-stt-routing.md",
-      "threshold": "$A > 0 && $B >= 0.70 for 10m",
-      "evaluated_bad": "Configured ceiling above zero, fresh spend sample, and monthly spend at or above 70%.",
-      "evaluated_good": "Spend below 70%, or ceiling disabled."
-    },
-    "labels": {
-      "alert_identity": "omi-soniox-runway-70",
-      "component": "live-transcription",
-      "impact": "user-experience",
-      "severity": "warning",
-      "instatus_component": "live-transcription"
-    },
-    "isPaused": false,
-    "notification_settings": {
-      "receiver": "Omi - Services Alerting (Telegram)",
-      "group_by": ["alertname"], "group_wait": "5m", "group_interval": "1h", "repeat_interval": "24h"
-    },
-    "record": null
-  },
-  {
-    "uid": "omi-soniox-runway-90",
-    "orgID": 1,
-    "folderUID": "betdycdziadc0e",
-    "ruleGroup": "Live STT",
-    "title": "Soniox monthly spend at 90% — top up Soniox",
-    "condition": "D",
-    "data": [
-      {
-        "refId": "A",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 300,
-          "to": 0
-        },
-        "datasourceUid": "prometheus",
-        "model": {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "max(omi_soniox_month_ceiling_usd{job=\"backend-listen-metrics\"}) * (max(time() - omi_soniox_usage_sample_timestamp_seconds{job=\"backend-listen-metrics\"}) < bool 7200)",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "A"
-        }
-      },
-      {
-        "refId": "B",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 300,
-          "to": 0
-        },
-        "datasourceUid": "prometheus",
-        "model": {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "max(omi_soniox_month_spend_usd{job=\"backend-listen-metrics\"}) / clamp_min(max(omi_soniox_month_ceiling_usd{job=\"backend-listen-metrics\"}), 1)",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "B"
-        }
-      },
-      {
-        "refId": "C",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 0,
-          "to": 0
-        },
-        "datasourceUid": "__expr__",
-        "model": {
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "$A > 0 && $B >= 0.90",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "math"
-        }
-      },
-      {
-        "refId": "D",
-        "queryType": "",
-        "relativeTimeRange": {
-          "from": 0,
-          "to": 0
-        },
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [
-            {
-              "evaluator": {
-                "params": [],
-                "type": "gt"
-              },
-              "operator": {
-                "type": "and"
-              },
-              "query": {
-                "params": [
-                  "D"
-                ]
-              },
-              "reducer": {
-                "params": [],
-                "type": "last"
-              },
-              "type": "query"
-            }
-          ],
-          "datasource": {
-            "type": "__expr__",
-            "uid": "__expr__"
-          },
-          "expression": "C",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "D",
-          "type": "reduce"
-        }
-      }
-    ],
-    "updated": "2026-09-28T00:00:00Z",
-    "noDataState": "OK",
-    "execErrState": "KeepLast",
-    "for": "10m",
-    "keep_firing_for": "0s",
-    "annotations": {
-      "dashboard_url": "https://monitor.omi.me/d/855b2e16-c098-407a-85dc-dc9ce87698a9",
-      "summary": "top up Soniox: monthly spend reached 90% of the configured ceiling.",
-      "user_impact": "Soniox monthly spend has reached 90% of the configured ceiling; paid fallback runway may narrow.",
-      "scope": "Backend-listen Soniox usage API or metered audio estimate; no uid labels.",
-      "verification": "Local rule contract only; coordinator must verify live Grafana evaluation and Telegram delivery.",
-      "safe_next_action": "Top up Soniox or raise the approved monthly ceiling in config; verify vendor balance and project limits.",
-      "runbook": "backend/docs/runbooks/live-stt-routing.md",
-      "threshold": "$A > 0 && $B >= 0.90 for 10m",
-      "evaluated_bad": "Configured ceiling above zero, fresh spend sample, and monthly spend at or above 90%.",
-      "evaluated_good": "Spend below 90%, or ceiling disabled."
-    },
-    "labels": {
-      "alert_identity": "omi-soniox-runway-90",
-      "component": "live-transcription",
-      "impact": "user-experience",
-      "severity": "critical",
-      "instatus_component": "live-transcription"
-    },
-    "isPaused": false,
-    "notification_settings": {
-      "receiver": "Omi - Services Alerting (Telegram)",
-      "group_by": ["alertname"], "group_wait": "30s", "group_interval": "5m", "repeat_interval": "4h"
-    },
-    "record": null
-  },
+
+
   {
     "uid": "omi-modulate-failing-soniox",
     "orgID": 1,
@@ -13789,11 +13547,11 @@
     "keep_firing_for": "0s",
     "annotations": {
       "dashboard_url": "https://monitor.omi.me/d/855b2e16-c098-407a-85dc-dc9ce87698a9",
-      "summary": "Modulate failing — traffic on Soniox. Watch Soniox runway and provider outcome SLI.",
+      "summary": "Modulate failing — traffic on Soniox. Watch Soniox availability and provider outcome SLI.",
       "user_impact": "Modulate connection failures are sending live sessions to Soniox; paid fallback volume and cost may rise.",
       "scope": "backend-listen provider connection outcomes only; bounded provider/outcome labels.",
       "verification": "Local rule contract only; coordinator must verify live Grafana evaluation and Telegram delivery.",
-      "safe_next_action": "Inspect Modulate errors and Soniox runway; keep Soniox funded while it carries failover.",
+      "safe_next_action": "Inspect Modulate errors and Soniox provider outcome; confirm Soniox remains available while it carries failover.",
       "runbook": "backend/docs/runbooks/live-stt-routing.md",
       "threshold": "$A >= 20 && $B >= 10 for 10m",
       "evaluated_bad": "At least 20 Modulate connection failures and 10 Soniox connection successes in five minutes, sustained for 10 minutes.",

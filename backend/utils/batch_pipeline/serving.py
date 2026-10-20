@@ -7,6 +7,7 @@ import logging
 import os
 import time
 
+from config.batch_pipeline import owner_chain_projection_enabled, recovery_dispatch_interval_seconds
 from database.batch_pipeline_store import FirestoreStore
 from database.batch_pipeline_staging import reap
 from utils.batch_pipeline.intake import artifacts_for
@@ -66,10 +67,25 @@ class Serving:
             if self.merge.commit_next(owner_id, time.time()) is None:
                 break
 
-    async def reconcile_async(self, *, recover_quarantine=False, periodic=False):
-        await run_blocking(sync_executor, self.reconcile, recover_quarantine=recover_quarantine, periodic=periodic)
-        if self.projector and self.projector.has_async_followups:
-            await self.projector.start_followups()
+    async def reconcile_async(self, *, recover_quarantine=False, periodic=False, owner_id=None, recovered=None):
+        priority = await run_blocking(
+            sync_executor,
+            self.reconcile,
+            recover_quarantine=recover_quarantine,
+            periodic=periodic,
+            owner_id=owner_id,
+            recovered=recovered,
+        )
+        # Walk-owed follow-ups keep the drain scheduled until they are queued.
+        owes = getattr(self.projector, 'owes_followups', False) is True
+        if self.projector and (priority or self.projector.has_async_followups or owes):
+            await self.projector.start_followups(priority or ())
+        # Owners the sweep or a wake discovered drain continuously in this process.
+        if self.projector and getattr(self.projector, 'owes_drains', False) is True:
+            self.projector.start_drains()
+        # Deferred search/people-stats work left by walks converges off the chain.
+        if self.projector and getattr(self.projector, 'owes_index', False) is True:
+            self.projector.schedule_index_flush()
 
     def _leads(self, periodic: bool) -> bool:
         # Explicit RPC callers (POST /reconcile, post-recovery drain) always
@@ -77,16 +93,44 @@ class Serving:
         # one serving instance per lease TTL; the lease fails open.
         return not periodic or self.leader is None or self.leader.acquire()
 
-    def reconcile(self, *, recover_quarantine=False, periodic=False):
+    def reconcile(self, *, recover_quarantine=False, periodic=False, owner_id=None, recovered=None) -> list[str]:
+        """Returns async follow-ups an owner-chain wake wants run first."""
         if self._leads(periodic):
             self._maintain(recover_quarantine=recover_quarantine)
+        priority = []
+        if owner_id is not None and self.projector and owner_chain_projection_enabled():
+            # A settled recovery commits at this owner's log tail. Walk the
+            # owner's chain now instead of waiting for the global cursor. The
+            # wake is only a hint: on failure the generic sweep still runs.
+            try:
+                self.drain_owner(owner_id)
+                priority = self.projector.project_owner(owner_id, recovered=recovered)
+            except Exception as error:
+                logging.getLogger(__name__).error(
+                    'event=batch_projection action=owner_chain outcome=retry exception_type=%s', type(error).__name__
+                )
         # Projection and the local gauges stay per instance: projection is
         # throughput (ordered and fenced in its own transactions) and every
         # instance exports its own queue sample.
         if self.projector:
             self.projector.sweep()
+        # Catch-up rows this instance held for projection depth may now fit.
+        for held_owner in list(self.merge.held_owners):
+            try:
+                self.drain_owner(held_owner)
+            except Exception as error:
+                logging.getLogger(__name__).error(
+                    'event=batch_merge action=held_drain outcome=retry exception_type=%s', type(error).__name__
+                )
         if self.metrics:
             self.metrics.refresh(self.store, time.time())
+        return priority
+
+    def dispatch_recovery(self):
+        """Dispatch-loop tick: quarantine recovery only, on the maintenance leader."""
+        if self.recovery is None or not self._leads(True):
+            return None
+        return self.recovery.sweep()
 
     def _maintain(self, *, recover_quarantine: bool):
         """Idempotent, transaction-fenced maintenance: cleanup, sweeps, discovery, recovery, drain."""
@@ -109,7 +153,16 @@ class Serving:
             job = self.store.run(lambda tx: tx.get('jobs', segment))
             if job and job['owner_id'] not in owners:
                 owners.add(job['owner_id'])
-                self.drain_owner(job['owner_id'])
+                try:
+                    self.drain_owner(job['owner_id'])
+                except Exception as error:
+                    # One fenced head must not stop the other owners or the held re-offer.
+                    logging.getLogger(__name__).warning(
+                        'event=batch_merge action=ready_drain outcome=retry exception_type=%s count=1',
+                        type(error).__name__,
+                    )
+        # Held owners by durable marker: the page above can be all one held backlog.
+        self.merge.reoffer_marked(self.drain_owner)
 
 
 @lru_cache(maxsize=2)
@@ -160,7 +213,29 @@ def start_serving_from_env():
             except asyncio.TimeoutError:
                 pass
 
-    return stop, start_background_task(supervise(), name='batch_pipeline_serving')
+    async def dispatch_recovery():
+        # Quarantine -> recovery start rode the whole serving pass plus its 20 s
+        # sleep; this loop dispatches on its own short cadence.
+        while not stop.is_set():
+            interval = recovery_dispatch_interval_seconds()
+            if interval > 0:
+                try:
+                    service = await run_blocking(sync_executor, serving_for_stage, current_stage())
+                    await run_blocking(sync_executor, service.dispatch_recovery)
+                except Exception as error:
+                    logging.getLogger(__name__).error(
+                        'event=batch_serving action=recovery_dispatch outcome=retry exception_type=%s',
+                        type(error).__name__,
+                    )
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=interval if interval > 0 else 20)
+            except asyncio.TimeoutError:
+                pass
+
+    async def run():
+        await asyncio.gather(supervise(), dispatch_recovery())
+
+    return stop, start_background_task(run(), name='batch_pipeline_serving')
 
 
 async def stop_serving(runtime):
