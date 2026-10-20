@@ -1,12 +1,218 @@
 # Transcription cap at provider dispatch
 
-`STT_CAP_DISPATCH_ENFORCEMENT` is a default-off backend rollout switch. This PR
-adds no deployment binding and does not enable it. Enabling changes the policy
-for existing capped paid plans: exhausted sync uploads wait as audio rather than
-being transcribed into locked conversations. Product approval is required before
-activation. Ladder budget composition and its independent default-off execution
-admission are documented in [the listen pipeline](listen_pusher_pipeline.mdx#ladder-budget-refresh-and-execution-admission-default-off).
-No prices or deployment switches change.
+`STT_CAP_DISPATCH_ENFORCEMENT` is a default-off backend rollout switch. Its
+approved activation is a small cohort and live only. The shared cohort/lane
+scope below also applies when only ladder budget execution is enabled. Outside
+that scope the existing behavior stays unchanged.
+
+## Cohort and lane rollout (David 2026-10-18)
+
+Execution admission requires **both** an admission switch and a selected owner /
+original lane. `STT_CAP_DISPATCH_ENFORCEMENT` remains default false.
+`LADDER_V1_BUDGET_ENFORCEMENT_ENABLED` alone uses the same scope; it cannot widen
+STT execution to the fleet. `STT_CAP_DISPATCH_COHORT` unset or empty admits nobody.
+Use `uid:<COORDINATOR_TEST_UID>` (replace the placeholder before deployment),
+comma-separated UID tokens, `pct:1`, or a union such as `uid:<UID>,pct:5`.
+`all` is the explicit universal cohort. The token grammar and stable
+`sha256("free-tier-cohort:" + uid)[:8] % 100` bucket come from the retired free-tier
+parser, now shared in pure `config/rollout_cohorts.py`. The runtime token
+document below replaces the env cohort when present; no per-user membership
+read is added for this rollout. Malformed tokens invalidate the whole cohort.
+
+`STT_CAP_DISPATCH_LANES` accepts comma-separated `live,sync,batch`. Unset, empty
+or whitespace-only values select **live only**. Unknown tokens or empty tokens
+inside a list (for example `live,` or `live,,sync`) disable the whole selection.
+Unknown call-site lanes are never mapped to a permitted lane.
+
+Batch is additionally fenced off by the code-owned `_BATCH_LANE_READY = False`,
+for both admission switches and every cohort, even with explicit `batch` and
+`all`. Before that constant can change, lane8 must write `provider_reason=byok`
+into `binding.policy` at batch admission. This is a source readiness condition,
+not an environment flag. A valid lane list containing batch emits one static
+warning per process; it does not prevent explicit live/sync selection. Thus
+`live,batch` selects only live and `batch` selects nothing while the fence is
+closed. No UID or configuration data is included in the warning.
+Live receiver and provider constructors pass the authenticated UID and `live`;
+v1 intake, v2 coordinator and ordinary segment retries pass `sync`; queued GPU
+jobs, quarantine/speech retries and generated/text processing pass `batch`.
+Every GPU microbatch checks each owner separately. Generic generated work belongs
+to `batch`, so a live-only rollout does not enable its budget denial paths.
+Owner-facing summaries, consent and worker entrypoints require membership in at
+least one selected lane, then each paid audio dispatch checks the original lane.
+
+Listen checks the raw admission switches and custom-STT bypass before reading
+request identity. Active non-custom admission still requires the authenticated
+UID and live-lane scope; there is no missing-UID fallback.
+
+Managed compute uses the same batch selection before treating shared admission
+as a completed ladder budget check. An excluded UID, empty cohort or live-only
+scope falls through the existing paid-plan/free-feature policy without reading
+budget snapshots or allowance. Independent Pro feature gates still apply.
+
+### Original held-audio provenance
+
+Encrypted hold metadata owns `origin`. New sync intake and late-segment holds
+write `origin=sync`; the live writer already writes `origin=live`. Recovery reads
+that value before audio download/claim and propagates it as `cap_dispatch_lane`
+through the shared segment processor, per-call allowance and empty-result retry.
+It never replaces origin with the execution method (`batch`), device `source`, or
+sync freshness (`sync_lane=fresh|backfill`). Legacy metadata **without** `origin`
+is sync: all pre-origin hold producers were sync; every live custody version
+already supplied `origin=live`: the first live writer in `f6a358902db1` (#21488)
+wrote that marker, and the durability rewrite preserved it. An explicit
+unknown/null origin pauses recovery
+and retains the manifest/audio. No historical rewrite or new index is needed.
+Excluded backlog items spend no chosen allowance. The worker scans past disabled
+lanes for selected work and rewinds its cursors before stopping, retaining the
+choice for widening. A reserved excluded item can yield to later selected work
+only when a transaction proves it never started: the active choice token/lease,
+current month and exact debit must match; an audio manifest must still match the
+decrypted provenance and have `state=held`, zero lease, `next_attempt_at=0`,
+and no `lease_token` or `piece_plan` key at all. Key presence records claim/plan
+history even when its value is empty or null; the real release writer leaves an
+empty token and retry timestamp. Missing/nonzero retry timestamps also retain
+the reservation. There must be no dispatch receipts, ingest proofs or completion
+markers. Text must have no claim history. The same
+transaction refunds the chosen estimate once (preserving unlimited remaining),
+clears the reservation and records `scope_skipped`. It does not refund metered
+usage or remove the source; cursor rewind keeps excluded work discoverable.
+Any intent/receipt (including ambiguous dispatch), audio lease/token, text claim
+(even expired), missing legacy lease proof, unknown origin or failed read retains
+the reservation. Such ambiguous reservations conservatively block that choice
+until their lane is restored and normal recovery resolves them. A lost refund
+response leaves the choice active for a fresh read, never a second refund.
+At page completion the store refuses any actual reservation first, then consumes
+an already-authorized current-month pending upgrade into a fresh token, allowance
+and cutoff. Excluded rows do not block that upgrade. Without an eligible upgrade,
+skipped scope keeps the choice processing and atomically rewinds its cursors;
+it never finishes to waiting-choice solely because excluded rows remain.
+Custody sealing/cleanup stays active during rollback because it is
+owed persistence, not permission to dispatch STT.
+
+### Controlled expansion and rollback
+
+Both dev and prod runtime manifests bind enforcement `false`, cohort `''`, lanes
+`live`. These are inert configuration declarations, not activation. The first
+cohort requires the same env defaults on listen and the CPU recovery/sync hosts:
+
+```text
+STT_CAP_DISPATCH_ENFORCEMENT=true
+STT_CAP_DISPATCH_COHORT=uid:<COORDINATOR_TEST_UID>
+STT_CAP_DISPATCH_LANES=live
+```
+
+No authorized coordinator-test UID was identified in local project docs; the
+placeholder is intentionally unresolved and must never be deployed literally.
+Keep the ladder switch at its separately approved value; setting it true still
+cannot bypass these cohort/lane controls. Apply the scope consistently to all
+serving hosts/readers before enrolling any UID. The dedicated GPU chart exposes
+`worker.capDispatchEnforcement`, `capDispatchCohort`, `capDispatchLanes` and
+`ladderBudgetEnforcement` with the same dark/live-only defaults; future approved
+batch widening must configure it and the CPU policy host together.
+
+Ramp owner **dazheng**: coordinator test accounts -> `pct:1` -> `pct:5` held for
+**3 hours** -> `pct:25` -> `all` (100%). At each expansion, record held-audio count,
+backlog stalls, live STT error rate and client 5xx against the pre-ramp baseline;
+advance only with no unexplained regression and a synthetic consented live hold
+recovering across instance replacement. Dazheng owns each expansion and the
+**2026-10-27** completion checkpoint (runtime ramp brief, 2026-10-20); a missed checkpoint or an incomplete
+three-hour soak is a blocker to report, never authority to skip a stage. Keep
+`STT_CAP_DISPATCH_LANES=live` throughout. Sync and batch require the separate
+batch-authorize-outside-GPU-lock change (blocked by Nemotron **#22352**) and explicit
+approved widening. Batch also requires the lane8 binding-policy readiness change
+above before its code-owned fence can open; configuration alone cannot enable
+it. This change does not relocate that authorization.
+
+Rollback: set **both** admission switches false (or clear the cohort to stop only
+this execution rollout), preserving audio, processing choice and receipts. Keep
+the current reader and custody redrive running to seal/clean owed fragments;
+excluded recovery dispatch stays paused until scope is restored. Existing live
+sessions use their admitted state until reconnect/revision drain; roll the same
+configuration to all hosts and drain old sessions when changing scope. No new
+Scheduler jobs or Firestore indexes are introduced here; the existing durability
+job/index prerequisites below remain independently owned.
+
+### Runtime cohort (no restart)
+
+Once this code rides the next listen deploy (Nemotron owns listen deployment),
+**dazheng** owns runtime ramp writes through the **prod-operator** tier with
+Firestore write permission. No deployment or production write is performed by
+this PR. All serving hosts must run the resolver before expanding the doc.
+
+The existing independent ladder-only activation is preserved: setting
+`STT_CAP_DISPATCH_ENFORCEMENT=false` blocks legacy cap admission but does not
+turn off `LADDER_V1_BUDGET_ENFORCEMENT_ENABLED=true`. Both use this same cohort.
+This is a deliberate deviation from making the legacy switch a new master kill
+switch, which would disable the separately ratified ladder-only path. To stop
+both immediately for new admissions, use an empty runtime cohort; the deploy
+rollback still sets both admission switches false.
+
+The data-plane Firestore document is
+`projects/based-hardware/databases/(default)/documents/rollout_cohorts/stt-cap-dispatch`:
+
+```json
+{"environment": "prod", "tokens": "pct:1"}
+```
+
+`environment` is required and must exactly match `OMI_ENV_STAGE` (`prod`, `dev`,
+`local`, or `offline`). This is a control document, separate from the existing
+`rollout_cohorts/{uid}` membership schema. Do not write it with the per-user
+`rollout_cohort.py` command. A mismatched environment is a denial, never an
+activation. Dev experiments should use the dev data project so they cannot
+replace this prod control document. No query or new index is needed.
+
+A present valid document overrides `STT_CAP_DISPATCH_COHORT`. A missing document
+uses the env tokens, retaining the private-secret test cohort. An empty token
+string explicitly denies. Missing/wrong-type fields, malformed tokens, or an
+environment mismatch explicitly deny and log once per invalid episode. They do
+**not** fall back to env: doing so could undo an intentional runtime rollback.
+Read/scheduling errors retain the last snapshot (including denial); without a
+snapshot they retain today's env behavior. A successful deletion restores env,
+so **do not delete the doc as a rollback** unless that fallback is intended.
+
+The process cache uses a 60-second TTL and one in-flight read, with a one-second
+Firestore deadline and SDK retries disabled, on the bounded rollout executor.
+Listen and pusher poll in startup-owned background tasks; other configured hosts
+refresh lazily on scope checks. Cold and expired checks return env/last snapshot
+immediately while the read runs. The existing auth warm path schedules the same
+refresh without an extra await. There is no Firestore IO at session admission or
+per audio frame. Read errors also back off for 60 seconds. Expect roughly one
+read per active process per minute (40 single-worker pods: ~57,600 reads/day;
+multiple processes multiply that), independent of users and frame rate. Idle
+lazy hosts refresh at their next scope check. Existing live sessions retain
+their admitted state until reconnect; this does not force a reconnect or drain.
+
+Run from the repository root, after owner approval of the ramp step:
+
+```sh
+source ~/.local/bin/gcp-agent-env.sh prod-operator
+backend/.venv/bin/python backend/scripts/stt_cap_cohort.py \
+  --project based-hardware --environment prod --pct 5 --apply
+```
+
+Omit `--apply` for a hermetic validation-only dry run. Use `--pct 1`, then
+`--pct 5` for **3 hours**, then `--pct 25`, then `--all` by **2026-10-27**, with
+all earlier health/consent gates. Keep lanes `live`. Tokens use the unchanged
+stable UID hash, so percentage membership is identical between doc and env.
+For a private test cohort use `--tokens-file /private/path/to/tokens`; the file
+contains token grammar, never commit it or include its content in a PR/command.
+The writer prints neither tokens nor SDK exceptions.
+
+Runtime rollback uses the same command with `--deny` (empty tokens), or
+`--tokens-file` containing only the private test cohort. Do not roll forward if
+any pod's refresh-failure counter is rising: stale pods retain their previous
+cohort, so a Firestore outage can delay rollback. The existing deployment kill
+switches remain the emergency path; setting env enforcement false requires a
+deploy. Retain the existing custody/redrive processes during rollback.
+
+Verify per-pod `omi_stt_cap_cohort_source{source="doc|env|none"}` (one hot),
+`omi_stt_cap_cohort_percent` (0 for explicit-UID-only or denied cohorts, 100 for
+`all`), and `omi_stt_cap_cohort_refresh_failures_total{reason="read|schedule"}`.
+Source `doc` with pct 0 can be an intentional or invalid denial. Source `none`
+means no valid env cohort or no admission switch enabled. Changes emit
+`event=stt_cap_cohort_changed source=... pct=...`; invalid documents emit
+`event=stt_cap_cohort_invalid outcome=denied`. No tokens, UIDs, hashes or raw SDK
+errors are logged. The shared fallback metric also records refresh failures.
 
 ## Boundaries
 
@@ -16,7 +222,15 @@ that state, including direct registry endpoints and fallback/recovery legs.
 The state debits accepted PCM seconds across channels, replay and successors.
 The existing 60-second usage flush refreshes legacy funded allowance; ladder
 units use the bounded cadence below.
-Root counters retain their received-audio semantics. Timestamp adapters suppress
+Root counters retain their received-audio semantics, except for held audio. The
+receiver records the wall-clock receipt span of every frame it denies at receipt
+(merged, so channels and bursts count arrival time once). The usage flush
+subtracts the overlap of those spans with its billable window from
+`transcription_seconds`, and so from the shadow units derived from it. Held audio
+is metered once, when recovery transcribes it. Provider-pump suppression of audio
+the receiver already admitted is not subtracted: its receipt window may already be
+billed, so that bounded race bills as before rather than undercounting a later
+window. Sessions without an admission, or that never hold, meter unchanged. Timestamp adapters suppress
 before recording accepted-provider spans. Denial is a policy pause, not provider
 death: receiving, pusher audio and existing private-cloud/raw archive paths
 continue. Accepted provider queues drain. When dispatch enforcement pauses managed live audio, the server retains that
@@ -134,7 +348,7 @@ source and frozen pieces only after content/usage settlement.
 `event=stt_cap_recovery_reconciliation` logs include hold id and piece name, never
 content. Metric labels contain no uid, hold id or piece name. New recovery and
 its signals are inert when both dispatch and ladder enforcement are off. WS-only and inactive
-accounts wait for their next authenticated HTTP request; there is no new cron.
+accounts can also resume through the existing durable-redrive sweep after an explicit processing choice.
 Turning both admission switches off pauses recovery, preserving its audio.
 
 ## Launch configuration and measurement
@@ -212,7 +426,7 @@ activation decision for David; default-off deployment preserves today's policy.
 
 ## Ladder-v1 admission in #21488
 
-`LADDER_V1_BUDGET_ENFORCEMENT_ENABLED` independently installs the live provider
+Within the selected cohort/lanes, `LADDER_V1_BUDGET_ENFORCEMENT_ENABLED` installs the live provider
 suppression and sync hold/recovery paths. Ladder allowance comes from units;
 legacy accounts bypass provider dispatch when only the ladder switch is enabled. Both
 switches default off. Upload intake never raises the ladder budget 402: v1 holds
