@@ -83,7 +83,15 @@ def register_batch_artifact(
 
     @firestore.transactional
     def register(transaction):
-        job = client.collection(f'{namespace}_jobs').document(segment_id).get(transaction=transaction).to_dict() or {}
+        table = 'shadow_jobs' if getattr(item, 'shadow', False) else 'jobs'
+        job = (
+            client.collection(f'{namespace}_{table}').document(segment_id).get(transaction=transaction).to_dict() or {}
+        )
+        shadow = getattr(item, 'shadow', False)
+        if shadow and (kind != 'audio' or job.get('shadow') is not True or job.get('state') != 'staging'):
+            raise BatchPrivacyBlocked('shadow_artifact_state')
+        if shadow and job.get('owner_key') != privacy_owner_key(uid):
+            raise BatchPrivacyBlocked('shadow_artifact_owner')
         binding = job.get('projection_binding') or {}
         conversation_ids = [
             value
@@ -148,7 +156,7 @@ def register_batch_artifact(
             and not terminal_write
         ):
             raise BatchPrivacyBlocked('result_lease_lost')
-        if job and job.get('owner_id') != uid:
+        if job and not shadow and job.get('owner_id') != uid:
             raise ValueError('artifact owner mismatch')
         if not job and (item is None or item.owner_id != uid or kind != 'audio'):
             raise ValueError('result requires an existing owner job')
@@ -165,6 +173,11 @@ def register_batch_artifact(
                     'kind': kind,
                     'privacy_generation': expected_generation,
                     'write_pending_until': datetime.now(timezone.utc) + timedelta(seconds=UPLOAD_PENDING_SECONDS),
+                    **(
+                        {'shadow': True, 'cleanup_after': datetime.now(timezone.utc) + timedelta(hours=1)}
+                        if shadow
+                        else {}
+                    ),
                 },
             )
 
@@ -182,6 +195,8 @@ def expire_completed_segment(store: Any, uid: str, segment_id: str, now: float) 
         job_ref = client.collection(f'{namespace}_jobs').document(segment_id)
         result_ref = client.collection(f'{namespace}_results').document(segment_id)
         job = job_ref.get(transaction=transaction).to_dict() or {}
+        if job.get('shadow'):
+            return False
         result = result_ref.get(transaction=transaction).to_dict() or {}
         artifacts = queries.segment_artifacts(client, namespace, segment_id, transaction)
         intake_id = (job.get('projection_binding') or {}).get('job_id')
@@ -212,7 +227,29 @@ def expire_completed_segment(store: Any, uid: str, segment_id: str, now: float) 
             transaction.update(artifact.reference, {'cleanup_after': completed_at + retention})
         return True
 
-    return expire(client.transaction())
+    return run_retention_transaction(client, expire)
+
+
+def run_retention_transaction(client: Any, operation: Callable[[Any], Any]) -> Any:
+    """Run a retention transaction with the projection path's bounded retries.
+
+    A bare ``operation(client.transaction())`` is retried by the SDK only for a
+    commit ``Aborted``, reusing one transaction id: a read-time ``Aborted``, an
+    expired transaction (``InvalidArgument`` on commit) and the SDK's
+    exhausted-commit ``ValueError`` all escaped and failed the completion's
+    retention phase. Aborted and expired transactions write nothing, and the
+    body rereads every document, so a fresh transaction replays it safely.
+    """
+    from database._client import run_transactional
+    from database.firestore_transaction_retry import run_with_transaction_contention_retry
+
+    return run_with_transaction_contention_retry(
+        # One SDK commit attempt per transaction: the outer helper is the only
+        # commit-contention budget (5 bodies, not 5 x 5).
+        lambda: client.transaction(max_attempts=1),
+        lambda transaction: run_transactional(client, operation, initial_transaction=transaction),
+        operation_name='batch_retention',
+    )
 
 
 def cleanup_completed_artifacts(
@@ -229,7 +266,7 @@ def cleanup_completed_artifacts(
         delete_uri(data['owner_id'], data['uri'])
         # Deletion races must never recreate a purged metadata document.
         try:
-            if data.get('erasure_requested'):
+            if data.get('erasure_requested') or data.get('shadow'):
                 artifact.reference.delete()
                 cleaned += 1
                 continue

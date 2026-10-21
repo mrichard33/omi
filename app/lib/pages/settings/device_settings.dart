@@ -16,8 +16,16 @@ import 'package:omi/pages/home/omiglass_ota_update.dart';
 import 'package:omi/pages/onboarding/interactive_device_onboarding/interactive_device_onboarding_wrapper.dart';
 import 'package:omi/pages/settings/device/device_control_sheets.dart';
 import 'package:omi/pages/settings/device/device_info_groups.dart';
+import 'package:omi/pages/settings/device/device_live_sections.dart';
+import 'package:omi/pages/episodes/episode_presentation.dart';
+import 'package:omi/pages/episodes/live_episode_page.dart';
+import 'package:omi/backend/schema/conversation.dart';
+import 'package:omi/providers/conversation_provider.dart';
+import 'package:omi/providers/episode_provider.dart';
+import 'package:omi/utils/sync/offline_sync_amounts.dart';
 import 'package:omi/pages/settings/device/device_page_header.dart';
 import 'package:omi/pages/settings/device_diagnostics.dart';
+import 'package:omi/pages/settings/transcription_settings_page.dart';
 import 'package:omi/providers/capture_provider.dart';
 import 'package:omi/providers/device_provider.dart';
 import 'package:omi/providers/sync_provider.dart';
@@ -459,7 +467,7 @@ class _DeviceSettingsState extends State<DeviceSettings> {
     final paired = provider.pairedDevice;
     final connected = provider.connectedDevice;
     final isRayBan = paired?.type == DeviceType.raybanMeta;
-    final pendingSeconds = _maybeProvider<SyncProvider>(context)?.missingWalsInSeconds ?? 0;
+    final pendingSeconds = context.select<SyncProvider?, int>((s) => s?.missingWalsInSeconds ?? 0);
     // getDeviceInfo() leaves pairedDevice as BtDevice.empty() (id '') when nothing is remembered;
     // native diagnostics are keyed by device id, so an empty id has no history to send.
     final diagnosticsId = (paired?.id.isNotEmpty ?? false) ? paired!.id : connected?.id;
@@ -513,6 +521,13 @@ class _DeviceSettingsState extends State<DeviceSettings> {
           trailing: pendingSeconds > 0 ? _PendingSyncChip(seconds: pendingSeconds) : null,
           showChevron: true,
           onTap: () => _openOfflineSync(provider),
+        ),
+        // Language is chosen in one place; the device page links to it.
+        OmiSettingsRow(
+          key: const Key('device_transcription_language'),
+          leading: const FaIcon(FontAwesomeIcons.language),
+          title: l10n.transcriptionLanguage,
+          onTap: () => routeToPage(context, const TranscriptionSettingsPage()),
         ),
         // Omi devices only: opt out of syncing offline recordings automatically on connect.
         if (paired?.type == DeviceType.omi)
@@ -571,10 +586,16 @@ class _DeviceSettingsState extends State<DeviceSettings> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DeviceProvider>();
-    final capture = _maybeProvider<CaptureProvider>(context);
+    final capture = context.read<CaptureProvider?>();
+    // Audio metrics/transcript notifications must not rebuild the settings page.
+    final (deviceSource, devicePaused, canPause) = context.select<CaptureProvider?, (String?, bool, bool)>(
+      (c) => (c?.liveCaptureSource, c?.isPaused ?? false, c != null && EpisodePresentation.canPause(c)),
+    );
     final paired = provider.pairedDevice;
     final connected = provider.connectedDevice;
     const gap = SizedBox(height: OmiSpacing.xxl);
+
+    final deviceStreaming = capture != null && deviceSource != null && deviceSource != 'phone';
 
     return Scaffold(
       backgroundColor: OmiColors.surface0,
@@ -582,10 +603,21 @@ class _DeviceSettingsState extends State<DeviceSettings> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(OmiSpacing.md, OmiSpacing.xs, OmiSpacing.md, 48),
         children: [
-          DevicePageHeader(pairedDevice: paired, connectedDevice: connected),
+          DevicePageHeader(
+            pairedDevice: paired,
+            connectedDevice: connected,
+            listening: connected != null && deviceStreaming && !devicePaused,
+            paused: connected != null && deviceStreaming && devicePaused,
+          ),
           const SizedBox(height: OmiSpacing.xl),
-          if (connected != null && provider.batteryLevel > 0) ...[
-            DeviceBatteryGroup(batteryLevel: provider.batteryLevel, isCharging: provider.isCharging),
+          _liveSections(
+            connected: connected != null,
+            batteryLevel: connected == null ? 0 : provider.batteryLevel,
+            isCharging: connected != null && provider.isCharging,
+          ),
+          DeviceRecentlyGroup(load: provider.disconnectHistory),
+          if (deviceStreaming && canPause) ...[
+            DeviceControlsGroup(paused: devicePaused, onToggle: () => _togglePause(capture)),
             gap,
           ],
           if (provider.isConnected)
@@ -602,13 +634,109 @@ class _DeviceSettingsState extends State<DeviceSettings> {
           ),
           gap,
           _forgetGroup(provider),
-          if (connected != null && capture != null && capture.havingRecordingDevice) ...[
-            gap,
-            DeviceStreamingMetrics(bleReceiveKbps: capture.bleReceiveRateKbps, wsSendKbps: capture.wsSendRateKbps),
-          ],
+          if (connected != null)
+            Builder(builder: (context) {
+              final metrics = context.select<CaptureProvider?, (bool, double, double)>(
+                (c) => c == null || !c.havingRecordingDevice
+                    ? (false, 0, 0)
+                    : (true, c.bleReceiveRateKbps, c.wsSendRateKbps),
+              );
+              return metrics.$1
+                  ? Column(children: [
+                      gap,
+                      DeviceStreamingMetrics(bleReceiveKbps: metrics.$2, wsSendKbps: metrics.$3),
+                    ])
+                  : const SizedBox.shrink();
+            }),
         ],
       ),
     );
+  }
+}
+
+extension _DeviceLiveSections on _DeviceSettingsState {
+  Widget _liveSections({required bool connected, required int batteryLevel, required bool isCharging}) {
+    const gap = SizedBox(height: OmiSpacing.xxl);
+    return Builder(builder: (context) {
+      // One WAL pass per sync notification, shared by Stats and Right now.
+      // Capture/episode updates subscribe below this builder and never rescan it.
+      final sync = context.select<SyncProvider?, ({bool syncing, int onDevice, int waiting, int moved})>((s) {
+        if (s == null) return (syncing: false, onDevice: 0, waiting: 0, moved: 0);
+        final amounts = SyncPipelineAmounts.of(s.allWals);
+        return (
+          syncing: s.isSyncing,
+          onDevice: amounts.onDeviceSeconds,
+          waiting: amounts.onDeviceSeconds + amounts.onPhoneSeconds + amounts.processingSeconds,
+          moved: amounts.onPhoneSeconds + amounts.processingSeconds,
+        );
+      });
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (connected) ...[
+            Builder(
+                builder: (context) => DeviceStatsRow(
+                      batteryLevel: batteryLevel,
+                      isCharging: isCharging,
+                      heardTodaySeconds: _heardTodaySeconds(context),
+                      onDeviceSeconds: sync.onDevice,
+                    )),
+            gap,
+          ],
+          Builder(builder: (context) {
+            final rightNow = _rightNow(context, syncing: sync.syncing, waiting: sync.waiting, moved: sync.moved);
+            return rightNow.hasContent ? Column(children: [rightNow, gap]) : const SizedBox.shrink();
+          }),
+        ],
+      );
+    });
+  }
+
+  /// Speech heard today, by the conversation list's own length rule.
+  int _heardTodaySeconds(BuildContext context) {
+    return context.select<ConversationProvider?, int>((conversations) {
+      final today = DateUtils.dateOnly(DateTime.now());
+      return (conversations?.groupedConversations[today] ?? const <ServerConversation>[])
+          .where((c) => !c.discarded)
+          .fold<int>(0, (sum, c) => sum + c.getDurationInSeconds());
+    });
+  }
+
+  DeviceRightNowGroup _rightNow(BuildContext context,
+      {required bool syncing, required int waiting, required int moved}) {
+    final capture = context.read<CaptureProvider?>();
+    // Only the visible source and running length depend on capture, not its
+    // transcript text, socket state, or BLE/network rate samples.
+    final (source, _) = context.select<CaptureProvider?, (String?, double)>(
+      (c) => (c?.liveCaptureSource, c?.segments.lastOrNull?.end ?? 0),
+    );
+    final deviceStreaming = source != null && source != 'phone';
+    final episodes = _maybeProvider<EpisodeProvider>(context);
+    final live = episodes != null && episodes.enabled && deviceStreaming ? episodes.live : null;
+    final l10n = context.l10n;
+    return DeviceRightNowGroup(
+      liveTitle: live == null ? null : (live.title.isEmpty ? l10n.episodeListeningNow : live.title),
+      liveLength: live == null || capture == null
+          ? null
+          : EpisodePresentation.runningLength(EpisodePresentation.elapsed(live, capture, episodes!.now()), l10n),
+      onOpenLive: capture == null
+          ? null
+          : () => routeToPage(context, LiveEpisodePage(topConversationId: capture.topConversationId)),
+      catchingUp: syncing && waiting > 0 ? (doneSeconds: moved, totalSeconds: waiting) : null,
+    );
+  }
+
+  Future<void> _togglePause(CaptureProvider capture) async {
+    try {
+      OmiHaptics.medium();
+      if (capture.isPaused) {
+        await capture.resumeCapture();
+      } else {
+        await capture.pauseCapture();
+      }
+    } catch (_) {
+      if (mounted) OmiFeedback.error(context, context.l10n.somethingWentWrong);
+    }
   }
 }
 

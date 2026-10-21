@@ -31,7 +31,6 @@ from models.memories import MemoryCategory, Memory, MemoryDB
 from utils.free_tier_processing_policy import client_summaries_at_cap_enabled
 from models.client_processing import ClientProcessing
 from config.action_item_reminder_triggers import action_item_write_affects_reminder
-from config.capture_evidence import capture_evidence_dark_write_enabled
 from utils.capture_evidence import MAX_ENVELOPE_BYTES
 from utils.metrics import OMI_CAPTURE_EVIDENCE_ENVELOPES_TOTAL
 from models.conversation import (
@@ -1154,6 +1153,13 @@ class CreateConversationRequest(BaseModel):
     language: Optional[str] = Field(default='en', description="Language code (ISO 639-1, e.g., 'en', 'es', 'fr')")
     geolocation: Optional[GeolocationInput] = Field(default=None, description="Geolocation where conversation occurred")
 
+    @field_validator('started_at', 'finished_at')
+    @classmethod
+    def read_naive_timestamp_as_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        # Naive next to aware made the handler's finished_at < started_at comparison a TypeError (500).
+        # Two naive values were always accepted here, so read them as UTC instead of the from-segments 422.
+        return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
+
 
 class ConversationResponse(BaseModel):
     model_config = ConfigDict(title='ConversationCreateResponse')
@@ -2071,7 +2077,7 @@ def _apply_late_from_segments_context(
     stored_calendar_context = None
     if calendar_context is not None and 'calendar_meeting_context' not in external_data:
         # Dotted path, so a concurrent writer's other external_data keys survive.
-        stored_calendar_context = calendar_context.model_dump(mode='json')
+        stored_calendar_context = calendar_context.to_storage_dict()
         updates['external_data.calendar_meeting_context'] = stored_calendar_context
 
     if not updates or not conversations_db.update_conversation(uid, conversation_id, updates):
@@ -2228,8 +2234,7 @@ def _create_conversation_from_segments(
     # validated metadata payload enters the existing conversation write.
     capture_evidence = None
     evidence_status = 'missing'
-    evidence_enabled = capture_evidence_dark_write_enabled()
-    if evidence_enabled and request.capture_evidence is not None:
+    if request.capture_evidence is not None:
         candidate = request.capture_evidence.model_dump()
         if (
             candidate['capture_root'] != request.client_session_id
@@ -2242,7 +2247,7 @@ def _create_conversation_from_segments(
         else:
             capture_evidence = candidate
             evidence_status = 'lineage' if candidate['lineage'] == 'complete' else 'incomplete'
-    if evidence_enabled and capture_evidence is None:
+    if capture_evidence is None:
         capture_evidence = {
             'version': 1,
             'capability': 'unknown',
@@ -2250,8 +2255,7 @@ def _create_conversation_from_segments(
             'origin': 'from_segments',
             'reason': evidence_status,
         }
-    if evidence_enabled:
-        OMI_CAPTURE_EVIDENCE_ENVELOPES_TOTAL.labels(path='from_segments', status=evidence_status).inc()
+    OMI_CAPTURE_EVIDENCE_ENVELOPES_TOTAL.labels(path='from_segments', status=evidence_status).inc()
 
     # Create conversation object with transcript segments
     if conversation_id:
@@ -2553,10 +2557,22 @@ def delete_conversation_endpoint(
 
     # Lazy: keep developer routes off the merge/memory import graph so stubbed
     # ``utils.memory.*`` tests can load this module without a complete retraction_scope.
-    from utils.conversations.merge_conversations import delete_conversation_with_sync_sources
+    from services.conversation_frame_evidence import delete_conversation_and_frame_evidence
+    from utils.other.storage import delete_owner_prompt_embedding_cache
+    from utils.screen_frames.store import delete_conversation_screen_frames
 
     conversation_tombstones.record_deletion(uid, conversation_id)
-    delete_conversation_with_sync_sources(uid, conversation_id)
+    # Prompt vectors are derived evidence even when primary audio is retained.
+    delete_owner_prompt_embedding_cache(uid, conversation_id)
+    # Must run before delete_conversation_and_frame_evidence purges the parent doc
+    # below: Firestore does not cascade subcollection deletes, and the GCS objects
+    # have no other cleanup path once the parent doc is gone.
+    delete_conversation_screen_frames(uid, conversation_id)
+    # Deletes the conversation doc itself (and any sync-merge sources) as its
+    # default deleter, alongside photo/frame-request GCS evidence.
+    delete_conversation_and_frame_evidence(uid, conversation_id)
+    vector_db.delete_vector(uid, conversation_id)
+    vector_db.delete_transcript_chunk_vectors(uid, conversation_id)
     return {"success": True}
 
 

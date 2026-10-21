@@ -12,16 +12,22 @@ from fastapi.responses import JSONResponse
 from config.batch_pipeline import priority_for
 from config.policy import BatchUnitPolicy, resolve_batch_policy
 from config.batch_pipeline_providers import provider_config
+from config.prerecorded_language import language_guard_enabled, language_class
 from config.stt_provider_policy import normalized_stt_language, PARAKEET_SUPPORTED_LANGUAGES_BY_MODEL
 from database.batch_pipeline_intake import admit, cache_completed
 from database.batch_pipeline_privacy import BatchPrivacyBlocked
 from database.batch_pipeline_store import FirestoreStore
-from database.sync_ledger import is_valid_completed_sync_content_result
+from database.sync_ledger import (
+    BATCH_PARTIAL_STATUS,
+    is_valid_completed_sync_content_result,
+    is_valid_partial_sync_content_result,
+)
 from utils.batch_pipeline.artifacts import ArtifactStore
 from utils.batch_pipeline.artifact_policy import create_artifact_store
 from utils.batch_pipeline.audio import with_context
 from utils.batch_pipeline.capture_decode import decode_units
 from utils.batch_pipeline.contracts import ProjectionBinding, WorkItem
+from utils.batch_pipeline.language_metrics import record_route
 from utils.batch_pipeline.retention import batch_artifact_authorize
 from utils.batch_pipeline.scheduler import Scheduler, owner_key
 from utils.executors import db_executor, run_blocking, storage_executor, sync_executor
@@ -98,10 +104,9 @@ def _held_status(jobs: list[dict]) -> tuple[str, str | None] | None:
 
 def _deleted_conversation_status(ledger: dict, intake: dict, job_id: str) -> dict | None:
     result = ledger.get('result')
-    if (
-        ledger.get('status') != 'completed'
-        or not isinstance(result, dict)
-        or not is_valid_completed_sync_content_result(result)
+    if not isinstance(result, dict) or not (
+        (ledger.get('status') == 'completed' and is_valid_completed_sync_content_result(result))
+        or (ledger.get('status') == BATCH_PARTIAL_STATUS and is_valid_partial_sync_content_result(result))
     ):
         return None
     total = result['total_segments']
@@ -167,6 +172,25 @@ def durable_status(store, uid: str, job_id: str) -> dict | None:
         if not completed:
             for job in jobs:
                 Scheduler.redrive_in_transaction(tx, job, time.time())
+        if ledger.get('status') == BATCH_PARTIAL_STATUS and is_valid_partial_sync_content_result(result):
+            # Terminal for the phone: projected siblings are published, the held
+            # units' audio stays server-side, and a later recovery upgrades the
+            # ledger. Released apps ACK `completed`.
+            held_count, total = result['held_segments'], result['total_segments']
+            return {
+                'job_id': job_id,
+                'status': 'completed',
+                'lane': intake['lane'],
+                'total_files': intake['total_files'],
+                'total_segments': total,
+                'processed_segments': total - held_count,
+                'successful_segments': total - held_count,
+                'failed_segments': held_count,
+                'errors': [],
+                'result': result,
+                'reason_code': HELD_REASON_CODE,
+                'poll_after_ms': 0,
+            }
         recovering = any(
             job.get('state') == 'quarantined' and job.get('recovery_state') in {'held', 'prepared', 'running'}
             for job in jobs
@@ -313,6 +337,10 @@ async def accept_upload(
             # Existing legacy ownership includes capped/retryable/missing-Redis
             # recovery. Its original claimant remains the sole authority.
             return None
+        if not policy.batch_enabled:
+            # The owner-load filter applies only after durable dispatch
+            # ownership checks. Accepted batch receipts above always drain.
+            return None
         if byok_enabled:
             return JSONResponse(
                 status_code=503,
@@ -356,6 +384,17 @@ async def accept_upload(
         if target.get('record_lane_owner') == 'legacy_final_pass_v1':
             return None
         language = normalized_stt_language(target.get('language') or user.get('language'))
+        # Match legacy sync's effective input: a primary app language is not a
+        # promise that the audio is monolingual. Do this only before new custody;
+        # previous batch receipts above always stay owned by their original lane.
+        prefs = user.get('transcription_preferences') or {}
+        input_language = normalized_stt_language(user.get('language')) if prefs.get('single_language_mode') else 'multi'
+        if language_guard_enabled() and language_class(input_language) == 'unsupported':
+            record_route('intake', input_language, 'multilingual')
+            record_fallback(
+                component='stt_selection', from_mode='batch', to_mode='modulate', reason='other', outcome='recovered'
+            )
+            return None
         if policy.live_record_enabled and language not in (
             PARAKEET_SUPPORTED_LANGUAGES_BY_MODEL['nvidia/parakeet-tdt-0.6b-v3'] - {'multi'}
         ):
@@ -384,6 +423,26 @@ async def accept_upload(
         while unit := await run_blocking(sync_executor, _next_unit, iterator):
             if len(items) >= 128:
                 raise ValueError('capture bundle exceeds bounded conversation-unit limit')
+            from utils.stt.batch_language import resolve_language
+            from config.stt_cap_dispatch import execution_admission_enabled
+            from utils.stt_cap_dispatch import sync_allowed
+
+            # Classification runs on the CPU intake host, never under the GPU
+            # lock or with vendor credentials on a worker. Cap refusal does not
+            # license a probe; the worker retains uncertain speech for recovery.
+            language_decision = await run_blocking(
+                sync_executor,
+                resolve_language,
+                input_language,
+                unit.wav,
+                before_probe=lambda duration=unit.duration_seconds: not execution_admission_enabled(uid, 'batch')
+                or sync_allowed(uid, duration, 'modulate', lane='batch'),
+            )
+            frozen_language = (
+                language_decision.language
+                if language_decision.parakeet_safe or language_class(language_decision.language) == 'unsupported'
+                else 'und' if language_guard_enabled() else input_language
+            )
             item = replace(
                 seed,
                 segment_id=hashlib.sha256(f'{content_id}:{len(items)}'.encode()).hexdigest(),
@@ -412,7 +471,9 @@ async def accept_upload(
                     'conversation_id': conversation_id,
                     # Resolved conversation/user STT language ('' when unknown).
                     # The worker skips a Parakeet-only retry for other languages.
-                    'stt_language': language,
+                    'stt_language': frozen_language,
+                    'stt_language_evidence': language_decision.evidence,
+                    'stt_language_confidence': language_decision.confidence,
                 },
             )
             uri = await run_blocking(storage_executor, artifacts.stage_audio, item, frozen)
