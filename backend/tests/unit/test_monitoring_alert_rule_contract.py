@@ -1878,3 +1878,51 @@ def test_chat_journey_rules_require_a_failure_floor_before_firing():
             nodes = {node["refId"]: node["model"] for node in rules[uid]["data"]}
             assert nodes["E"]["expr"] == failures, f"{export_name}:{uid}"
             assert nodes["C"]["expression"] == gate, f"{export_name}:{uid}"
+
+
+def test_live_stt_session_exhaustion_and_availability_escape_alerts():
+    # 2026-10-20: a listen roll benched Soniox; with no target at stage 100 the
+    # router's availability escape served benched Modulate and session
+    # exhaustion ran 6-11% for over an hour with no alert.
+    for export_name, rules in _all_rule_exports().items():
+        ratio = {node["refId"]: node["model"] for node in rules["omi-stt-chain-exhausted-ratio"]["data"]}
+        assert "omi_stt_chain_exhausted_total" in ratio["B"]["expr"], export_name
+        assert ratio["C"]["expression"] == "$A >= 600 && $B > 0.08", export_name
+        assert "[60m]" in ratio["B"]["expr"], export_name
+        assert rules["omi-stt-chain-exhausted-ratio"]["for"] == "20m", export_name
+        escape = rules["omi-stt-no-full-stage-target"]
+        expr = escape["data"][0]["model"]["expr"]
+        assert "min by (target)" in expr and "== 100" in expr, export_name
+        # NaN is a pristine GateState (stage 100) and must count as full.
+        assert "!=" in expr, export_name
+        assert escape["data"][1]["model"]["expression"] == "$A == 0", export_name
+        assert escape["for"] == "10m", export_name
+        assert escape["noDataState"] == "OK", export_name
+
+
+def test_sync_failure_reason_and_firestore_commit_exhaustion_alerts():
+    # 2026-10-16: the fresh-lane switch raised sync upstream_error ~8x and went
+    # unnoticed for 5 days; Firestore Commit RESOURCE_EXHAUSTED windows expire
+    # in-flight transactions. Both must key on their real labels.
+    for export_name, rules in _all_rule_exports().items():
+        sync = {node["refId"]: node["model"] for node in rules["omi-sync-failure-reason-step"]["data"]}
+        assert "sum by (namespace, outcome)" in sync["A"]["expr"], export_name
+        assert "[7d] offset 60m" in sync["B"]["expr"], export_name
+        # 2026-10-21: #22977 split internal failures out of upstream_error; a relabel
+        # must not page, so a reason also needs the service's total failure share up.
+        assert sync["C"]["expression"] == "$A >= 50 && $B > 3 && $G > 1.5", export_name
+        assert "sum by (namespace) (" in sync["G"]["expr"], export_name
+        assert "[7d] offset 60m" in sync["G"]["expr"], export_name
+        assert "backend-integration" not in sync["A"]["expr"], export_name
+        ceiling = rules["omi-sync-total-failure-share-ceiling"]
+        ceiling_nodes = {node["refId"]: node["model"] for node in ceiling["data"]}
+        assert ceiling_nodes["C"]["expression"] == "$A > 0.08 && $B >= 200", export_name
+        assert "sum by (namespace)" in ceiling_nodes["A"]["expr"], export_name
+        assert ceiling["labels"]["severity"] == "warning", export_name
+        assert ceiling["for"] == "30m", export_name
+        assert rules["omi-sync-failure-reason-step"]["labels"]["severity"] == "critical", export_name
+        fs = rules["omi-firestore-commit-resource-exhausted"]
+        filters = fs["data"][0]["model"]["timeSeriesList"]["filters"]
+        assert "Commit" in filters and "RESOURCE_EXHAUSTED" in filters, export_name
+        assert fs["data"][2]["model"]["expression"] == "$B > 10", export_name
+        assert fs["for"] == "5m", export_name

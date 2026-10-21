@@ -16,6 +16,7 @@ import time
 
 from config.policy import resolve_batch_policy
 from database.batch_pipeline_policy import load_job_policy
+from database.batch_ramp import ramp_admission_policy
 from config.batch_pipeline import Priority, RecordOwnerContention, record_capture_eligible
 from database.conversations import claim_record_lane_owner
 from database.batch_pipeline_intake import admit
@@ -45,9 +46,12 @@ def reserve_recording(uid: str, conversation: dict) -> str | None:
     owner = conversation.get('record_lane_owner')
     if owner:
         return owner
+    policy = resolve_batch_policy(uid)
     if conversation.get('status') not in {'in_progress', 'processing'} or not record_capture_eligible(
-        uid, conversation
+        uid, conversation, policy=policy
     ):
+        return None
+    if not ramp_admission_policy(uid, policy).live_record_enabled:
         return None
     revision = claim_record_lane_owner(uid, conversation['id'], OWNER, conversation.get('updated_at'))
     if revision is None:
@@ -209,7 +213,11 @@ async def admit_recording(store, pending, *, now=None):
     client = await run_blocking(storage_executor, create_storage_client)
     bucket = os.getenv('BUCKET_BATCH_PIPELINE', '').strip()
     artifacts = create_artifact_store(store, client, bucket, os.getenv('ENCRYPTION_SECRET', '').encode())
-    chunks = await run_blocking(storage_executor, list_audio_chunks, uid, conversation_id, max_count=4096)
+    # A failed raw-archive listing raises (drain retries in 60 s) rather than
+    # admitting a recording whose later packs are silently missing.
+    chunks = await run_blocking(
+        storage_executor, list_audio_chunks, uid, conversation_id, max_count=4096, require_archive=True
+    )
     if not chunks:
         raise ValueError('retained capture not durable yet')
     seed = WorkItem(
@@ -283,6 +291,11 @@ async def admit_recording(store, pending, *, now=None):
             'client_device_id': binding.client_device_id,
             'client_platform': binding.client_platform,
             'conversation_id': conversation_id,
+            # Native record admission already requires a fully supported
+            # declared language profile. Preserve that proof in its manifest.
+            'stt_language': binding.language or '',
+            'stt_language_evidence': 'declared',
+            'stt_language_confidence': 1.0,
         }
         manifest = {
             'owner_id': uid,
