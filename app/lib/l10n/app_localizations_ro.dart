@@ -13452,9 +13452,6 @@ class AppLocalizationsRo extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Continuă cu planul gratuit';
-
-  @override
   String get paywallTrialCancelNote => 'Anulează oricând. Fără taxe, fără penalități.';
 
   @override
@@ -14547,4 +14544,9 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get deviceControls => 'Comenzi';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'De asemenea: $items';
+  }
 }

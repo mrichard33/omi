@@ -13395,9 +13395,6 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Tiếp tục với gói miễn phí';
-
-  @override
   String get paywallTrialCancelNote => 'Hủy bất cứ lúc nào. Không phí, không phạt.';
 
   @override
@@ -14486,4 +14483,9 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get deviceControls => 'Điều khiển';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Ngoài ra: $items';
+  }
 }

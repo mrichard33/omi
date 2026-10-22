@@ -44,7 +44,7 @@ from database.vector_db import (
     upsert_action_item_vectors_batch,
     delete_action_item_vectors_batch,
 )
-from database.apps import record_app_usage, get_omi_personas_by_uid_db, get_app_by_id_db
+from database.apps import record_app_usage, get_omi_personas_by_uid_db
 from database.vector_db import upsert_vector2, update_vector_metadata
 from models.app import App, UsageHistoryType
 from models.memories import MemoryCaptureContext, MemoryDB, Memory, MemoryCategory, SubjectAttribution
@@ -71,6 +71,7 @@ from utils.conversations.deterministic_minimum import (
 )
 from utils.conversations.duration import conversation_duration_seconds
 from utils.conversations.duplicate_capture import link_duplicate_captures
+from utils.conversations.processing_trigger import is_recovery_trigger
 from utils.conversations.processing_trigger import PROCESSING_MODES, ProcessingTrigger
 from utils.conversations.recovery import (
     RECOVERY_QUIET_MINIMUM_MAX_WORDS,
@@ -166,7 +167,6 @@ from utils.executors import llm_executor, postprocess_executor, submit_with_cont
 from utils.llm.conversation_processing import (
     get_app_result,
     should_discard_conversation,
-    get_suggested_apps_for_conversation,
     get_conversation_notes,
     validate_structured_source_segment_ids,
 )
@@ -308,11 +308,6 @@ APP_RESULT_FAILED_ERROR_DETAIL = {
 }
 
 
-def conversation_apps_opt_in_only() -> bool:
-    """Summarization apps require explicit selection on the notes v2 path."""
-    return True
-
-
 def _stored_meeting_lookup_enabled() -> bool:
     # Defaults ON: this is a bounded, read-only query of the user's own stored
     # meetings, wrapped in try/except, and it is the only identity source that
@@ -347,7 +342,7 @@ def _get_structured(
     llm_hashes: dict[str, str] | None = None,
 ) -> Tuple[Structured, bool]:
     try:
-        if trigger is ProcessingTrigger.SERVER_RECOVERY and not recovery_transcript_decoded:
+        if is_recovery_trigger(trigger) and not recovery_transcript_decoded:
             # An unreadable stored blob is never evidence of an empty capture.
             # Keep the pre-discard typed minimum failure before persistence.
             return Structured(), False
@@ -710,38 +705,6 @@ def _get_conversation_obj(
         return main_conv
 
 
-# Function to get conversation summary apps from Redis
-def get_default_conversation_summarized_apps() -> List[App]:
-    """
-    Get conversation summary apps from Redis.
-    Falls back to environment variable if Redis is empty.
-    """
-    default_apps: List[App] = []
-
-    # Try to get from Redis first
-    redis_app_ids = redis_db.get_conversation_summary_app_ids()
-
-    if redis_app_ids:
-        # Use apps from Redis. A malformed/legacy stored app doc must be skipped, not fail the
-        # whole conversation's processing (same class as the chat/app fetch guards).
-        for app_id in redis_app_ids:
-            app = App.deserialize_safe(get_app_by_id_db(app_id.strip()))
-            if app:
-                default_apps.append(app)
-    else:
-        # Fallback to environment variable for backward compatibility
-        env_app_ids = os.getenv(
-            'CONVERSATION_SUMMARIZED_APP_IDS', 'summary_assistant,action_item_extractor,insight_analyzer'
-        ).split(',')
-
-        for app_id in env_app_ids:
-            app = App.deserialize_safe(get_app_by_id_db(app_id.strip()))
-            if app:
-                default_apps.append(app)
-
-    return default_apps
-
-
 @spelling_context_run
 def trigger_conversation_apps(
     uid: str,
@@ -772,21 +735,12 @@ def trigger_conversation_apps(
             AppUsageAttribution.NON_USER_REPROCESS if is_reprocess else AppUsageAttribution.AUTOMATIC_PROCESSING
         )
 
-    # Get default apps for auto-selection
-    opt_in_only = conversation_apps_opt_in_only()
-    default_apps = [] if opt_in_only else get_default_conversation_summarized_apps()
-    default_apps_dict = {app.id: app for app in default_apps}
-
-    # Also get user's installed apps (only used for preferred app lookup and reprocessing)
+    # User's installed apps (only used for preferred app lookup and reprocessing)
     apps: List[App] = get_available_apps(uid)
     conversation_apps = [app for app in apps if app.works_with_memories() and app.enabled]
 
-    # Combined dict for looking up preferred apps or specific app_id requests
+    # Dict for looking up preferred apps or specific app_id requests
     all_apps_dict = {app.id: app for app in conversation_apps}
-    all_apps_dict.update(default_apps_dict)
-
-    # Combined list for suggestions: default apps + user's installed apps (no duplicates)
-    all_suggestion_apps = list(all_apps_dict.values())
 
     app_to_run: Optional[App] = None
 
@@ -798,7 +752,7 @@ def trigger_conversation_apps(
     elif first_party_only:
         logger.info('First-party summary requested; skipping preferred and suggested apps')
     else:
-        # Check preferred app first — skip the suggestion LLM call if user has one
+        # Summarization apps are opt-in: only a usable preferred app runs automatically.
         preferred_app_id = redis_db.get_user_preferred_app(uid)
         if preferred_app_id and preferred_app_id in all_apps_dict:
             app_to_run = cast(App, all_apps_dict.get(preferred_app_id))
@@ -819,26 +773,9 @@ def trigger_conversation_apps(
             else:
                 logger.warning(
                     f"Preferred app {preferred_app_id} is set but unusable "
-                    f"(missing={candidate is None}); falling back to suggestions {uid}"
+                    f"(missing={candidate is None}); skipping automatic app selection {uid}"
                 )
-        if app_to_run is None and not opt_in_only:
-            # Only run suggestion LLM call when no usable preferred app is set
-            if not conversation.suggested_summarization_apps:
-                if resumable_effect_authorizer is not None:
-                    resumable_effect_authorizer()
-                with track_usage(uid, Features.CONVERSATION_APPS):
-                    suggested_apps, _reasoning = get_suggested_apps_for_conversation(conversation, all_suggestion_apps)
-                conversation.suggested_summarization_apps = suggested_apps
-                logger.info(f"Generated suggested apps for conversation {conversation.id}: {suggested_apps}")
-
-            if conversation.suggested_summarization_apps:
-                first_suggested_app_id = conversation.suggested_summarization_apps[0]
-                app_to_run = all_apps_dict.get(first_suggested_app_id)
-                if app_to_run:
-                    logger.info(f"Using first suggested app: {app_to_run.name}")
-                else:
-                    logger.warning(f"First suggested app '{first_suggested_app_id}' not found in apps.")
-        elif app_to_run is None:
+        if app_to_run is None:
             logger.info('Summarization apps are opt-in only; skipping automatic app selection')
 
     completed_app_ids = {result.app_id for result in conversation.apps_results} if preserve_existing_results else set()
@@ -2506,6 +2443,7 @@ def process_conversation(
     ``DERIVED_EFFECTS_TRANSCRIPT_FIELD`` digest: the transcript the stored
     memories, tasks and goal progress were last derived from.
     """
+    silent_backfill = trigger is ProcessingTrigger.SILENT_BACKFILL
     backlog_authorized = trigger is ProcessingTrigger.BACKLOG_CHOICE
     mode = PROCESSING_MODES[trigger]
     force_process, is_reprocess = mode.run_now, mode.reprocess
@@ -2562,13 +2500,15 @@ def process_conversation(
             derived_effects_disposition_observer(derived_effects)
         # Sync/REST callers finalize here; leased jobs defer this metadata work
         # to finalizer.py after the fanout fence, including completed replays.
-        if current and completed is not None and not defer_derived_effects:
+        if current and completed is not None and not defer_derived_effects and not silent_backfill:
             link_duplicate_captures(uid, completed)
 
     is_initial_creation = _is_ingress_create(conversation)
     if funded_processing.enabled(uid, 'batch'):
         waiting = bool(getattr(conversation, 'processing_deferred', False))
         if (waiting and not backlog_authorized) or not funded_processing.processing_allowed(uid):
+            if silent_backfill:
+                raise RecoveryStructureUnavailableError('silent backfill processing budget unavailable')
             raw_capture = (
                 not is_initial_creation
                 and conversation.status == ConversationStatus.processing
@@ -2683,10 +2623,11 @@ def process_conversation(
         report_persistence(False)
         return cast(Conversation, conversation)
 
-    _enrich_meeting_context(uid, conversation)
+    if not silent_backfill:
+        _enrich_meeting_context(uid, conversation)
     # Everything below reads speaker_id as one voice; capture only guarantees that per piece.
     with identity_pass(None if already_observed else 'first'):
-        speaker_receipt_applied = resolve_speakers_for_processing(uid, conversation)
+        speaker_receipt_applied = False if silent_backfill else resolve_speakers_for_processing(uid, conversation)
     if speaker_receipt_observer is not None:
         speaker_receipt_observer(speaker_receipt_applied)
 
@@ -2746,7 +2687,7 @@ def process_conversation(
         conversation.discarded, relevance.as_record() if relevance is not None else None
     )
     if (
-        trigger is ProcessingTrigger.SERVER_RECOVERY
+        is_recovery_trigger(trigger)
         and not structured_is_rich(structured)
         and not explicit_recovery_discard
         and not recovery_minimum_fallback
@@ -2770,11 +2711,7 @@ def process_conversation(
         )
         sys.stdout.flush()
         raise RecoveryStructureUnavailableError('server recovery produced no enriched structure')
-    if (
-        trigger is ProcessingTrigger.SERVER_RECOVERY
-        and explicit_recovery_discard
-        and not structured_is_rich(structured)
-    ):
+    if is_recovery_trigger(trigger) and explicit_recovery_discard and not structured_is_rich(structured):
         sys.stdout.write(
             json.dumps({'event': 'selfheal_guard', 'outcome': 'accepted', 'reason': 'explicit_discard'}) + '\n'
         )
@@ -2799,7 +2736,7 @@ def process_conversation(
     if relevance is not None:
         # Server-side audit record, deliberately outside the client wire model.
         payload[RELEVANCE_DECISION_FIELD] = relevance.as_record()
-    if recovery_minimum_fallback:
+    if recovery_minimum_fallback or silent_backfill:
         payload[TERMINAL_NO_DERIVED_EFFECTS_FIELD] = True
     if conversation.processing_state is not None:
         # The payload merge-clears the stale state (an upgraded-then-reprocessed
@@ -2815,7 +2752,7 @@ def process_conversation(
         )
     else:
         persisted = lifecycle_service.persist_processed_conversation(uid, payload)
-    if recovery_minimum_fallback:
+    if recovery_minimum_fallback or silent_backfill:
         report_persistence(
             persisted,
             completed=conversation,
@@ -2829,6 +2766,13 @@ def process_conversation(
             uid,
             conversation.id,
         )
+        return conversation
+
+    if silent_backfill:
+        # Historical enrichment is summary-only. No extraction/reminder, app,
+        # goal, webhook, lazy-effects queue or notification can escape this seam.
+        if derived_effects_disposition_observer is not None:
+            derived_effects_disposition_observer(DerivedEffectsDisposition.TERMINAL_NO_DERIVED_EFFECTS)
         return conversation
 
     record_final(uid, conversation)
@@ -3002,7 +2946,7 @@ def process_conversation(
             if not (template_only or app_failed):
                 submit_with_context(postprocess_executor, update_goal_progress, uid, conversation)
         # Recovery preserves admitted audio ids instead of rebuilding old chunks.
-        capture_audio = trigger is not ProcessingTrigger.SERVER_RECOVERY
+        capture_audio = not is_recovery_trigger(trigger)
         if not is_reprocess and conversation.private_cloud_sync_enabled and capture_audio:
             try:
                 audio_files = conversations_db.create_audio_files_from_chunks(uid, conversation.id)

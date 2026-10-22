@@ -4106,7 +4106,6 @@
     "paywallTrialBilledYearly": "Оплата щорічно",
     "paywallTrialSaveAmount": "Заощадьте {amount}",
     "paywallTrialCta": "Почати за {price}",
-    "paywallTrialSecondary": "Продовжити з безкоштовним планом",
     "paywallTrialCancelNote": "Скасувати будь-коли. Без комісій, без штрафів.",
     "paywallTrialStarted": "Ваша {days}-денна безкоштовна пробна версія Omi Pro розпочалася.",
     "paywallCancelAnytime": "Скасовуйте будь-коли.",
@@ -4407,5 +4406,6 @@
     "deviceCatchingUpProgress": "{done} з {total} хв",
     "deviceRecently": "Нещодавно",
     "deviceDisconnectedFor": "Відключено на {duration}",
-    "deviceControls": "Керування"
+    "deviceControls": "Керування",
+    "homeBackgroundLine": "Також: {items}"
 }

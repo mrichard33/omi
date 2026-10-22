@@ -13480,9 +13480,6 @@ class AppLocalizationsEl extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Συνέχιση με το δωρεάν πρόγραμμα';
-
-  @override
   String get paywallTrialCancelNote => 'Ακύρωση ανά πάσα στιγμή. Χωρίς χρεώσεις, χωρίς ποινές.';
 
   @override
@@ -14579,4 +14576,9 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get deviceControls => 'Χειριστήρια';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Επίσης: $items';
+  }
 }

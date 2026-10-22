@@ -1382,6 +1382,18 @@ REVIEW_QUEUE_BY_STATUS_ID_QUERY = FirestoreQuerySpec(
     ),
 )
 
+DUE_IN_PROGRESS_CONTENT_QUERY = FirestoreQuerySpec(
+    identifier='conversations_in_progress_content_due',
+    collection_group='conversations',
+    query_scope='COLLECTION_GROUP',
+    filters=(
+        FirestoreQueryFilter('status', '==', 'status'),
+        FirestoreQueryFilter('has_content', '==', 'has_content'),
+        FirestoreQueryFilter('finished_at', '<=', 'content_due_before'),
+    ),
+    index_fields=(_asc('status'), _asc('has_content'), _asc('finished_at'), _asc('__name__')),
+)
+
 STALE_IN_PROGRESS_CONVERSATIONS_QUERY = FirestoreQuerySpec(
     identifier='conversations_in_progress_by_finished_at',
     collection_group='conversations',
@@ -1391,6 +1403,18 @@ STALE_IN_PROGRESS_CONVERSATIONS_QUERY = FirestoreQuerySpec(
         _asc('status'),
         _asc('finished_at'),
         _asc('__name__'),
+    ),
+)
+
+STALE_RECOVERY_PAGE_QUERY = FirestoreQuerySpec(
+    identifier='conversations_stale_recovery_newest_page',
+    collection_group='conversations',
+    query_scope='COLLECTION',
+    filters=(FirestoreQueryFilter('status', '==', 'status'), FirestoreQueryFilter('finished_at', '<', 'cutoff')),
+    index_fields=(
+        _asc('status'),
+        _desc('finished_at'),
+        _desc('__name__'),
     ),
 )
 
@@ -1959,7 +1983,9 @@ QUERY_SPECS = (
     EXPIRY_URGENT_SHORT_TERM_BY_STORED_EXPIRY_QUERY,
     ACTIVE_ATTENTION_OVERRIDE_QUERY,
     LEGACY_CONVERSATION_RECOVERY_QUERY,
+    DUE_IN_PROGRESS_CONTENT_QUERY,
     STALE_IN_PROGRESS_CONVERSATIONS_QUERY,
+    STALE_RECOVERY_PAGE_QUERY,
     CONVERSATIONS_BY_STATUS_FINISHED_AFTER_QUERY,
     SCREEN_ACTIVITY_KEYWORD_RANGE_QUERY,
     CHAT_FIRST_DEFERRALS_DUE_QUERY,
@@ -2147,6 +2173,16 @@ FIELD_INDEX_REQUIREMENTS: tuple[FieldIndexRequirement, ...] = MESSAGING_FIELD_RE
         ('ASCENDING',),
     ),
     FieldIndexRequirement('memory_outbox_status_group_ascending', 'memory_outbox', 'status', ('ASCENDING',)),
+    # Legacy dark zero-lost census (scripts/legacy_dark/lost_recordings.py, soak check 5).
+    FieldIndexRequirement(
+        'sync_content_ledger_created_at_group_ascending', 'sync_content_ledger', 'created_at', ('ASCENDING',)
+    ),
+    # Legacy dark final-pass re-home sweep (scripts/legacy_dark/final_pass_rehome.py,
+    # the legacy_final_pass_rehomed draining precondition): every conversation still
+    # routed to legacy_final_pass_v1, across users.
+    FieldIndexRequirement(
+        'conversations_record_lane_owner_group_ascending', 'conversations', 'record_lane_owner', ('ASCENDING',)
+    ),
     FieldIndexRequirement(
         'task_recurrence_inbox_status_group_ascending', 'task_recurrence_inbox', 'status', ('ASCENDING',)
     ),

@@ -13377,11 +13377,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String paywallTrialCta(String price) {
-    return 'Start for $price';
+    return 'Try for $price';
   }
-
-  @override
-  String get paywallTrialSecondary => 'Continue with the free plan';
 
   @override
   String get paywallTrialCancelNote => 'Cancel anytime. No fees, no penalties.';
@@ -14470,4 +14467,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceControls => 'Controls';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Also: $items';
+  }
 }

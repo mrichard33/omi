@@ -13402,9 +13402,6 @@ class AppLocalizationsMr extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'मोफत योजनेसह सुरू ठेवा';
-
-  @override
   String get paywallTrialCancelNote => 'कधीही रद्द करा. कोणतेही शुल्क नाही, कोणतीही दंडात्मक कारवाई नाही.';
 
   @override
@@ -14496,4 +14493,9 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String get deviceControls => 'नियंत्रणे';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'तसेच: $items';
+  }
 }

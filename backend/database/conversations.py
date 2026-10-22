@@ -53,7 +53,6 @@ from .capture_groups import CAPTURE_GROUP_FIELD, leave_capture_group, transcript
 from .firestore_index_registry import (
     CONVERSATIONS_BY_STATUS_FINISHED_AFTER_QUERY,
     MCP_CONVERSATION_CARD_QUERY_SPECS,
-    STALE_IN_PROGRESS_CONVERSATIONS_QUERY,
 )
 from .firestore_read_metrics import FirestoreReadOutcome, FirestoreReadSite, record_document_read
 from .conversation_revisions import ensure_timezone_aware, firestore_revision_datetime
@@ -1254,7 +1253,7 @@ def persist_processing_result_with_lifecycle(
             ):
                 raise RecoveryStructureUnavailableError('server recovery discard lost to protected content')
         decision = write_data.get('relevance_decision')
-        if isinstance(decision, dict) and decision.get('trigger') == 'server_recovery':
+        if isinstance(decision, dict) and decision.get('trigger') in {'server_recovery', 'silent_backfill'}:
             # Recovery enriches the durable capture; neither model normalization
             # nor a stale snapshot owns its encoding, audio, or speaker metadata.
             for field in (
@@ -2616,48 +2615,6 @@ def get_processing_conversations(uid: str):
     return conversations
 
 
-def select_stale_in_progress(conversations, cutoff: datetime, limit: int):
-    """Oldest-first bounded selection of orphaned in-progress conversations (#9809).
-
-    A conversation owned by any live session refreshes `finished_at` on every
-    segment and that session's lifecycle loop processes it within the
-    conversation timeout, so anything idle past the cutoff has no owner.
-    Missing or non-datetime `finished_at` is excluded: without a trustworthy
-    idle clock the row cannot be proven orphaned.
-    """
-    stale = []
-    for conversation in conversations:
-        if is_soft_deleted(conversation):
-            continue
-        finished_at = conversation.get('finished_at')
-        if isinstance(finished_at, datetime) and finished_at < cutoff:
-            stale.append(conversation)
-    stale.sort(key=lambda conversation: conversation['finished_at'])
-    return stale[:limit]
-
-
-def get_stale_in_progress_conversations(uid: str, *, older_than_seconds: int, limit: int = 10, firestore_client=None):
-    """In-progress conversations whose last activity predates the cutoff (#9809).
-
-    The composite index orders by the last activity clock, so the bounded read
-    always reaches the oldest candidates. Without that ordering, an arbitrary
-    first page could keep old orphaned rows beyond it invisible forever.
-    """
-    client = firestore_client or get_firestore_client()
-    user_ref = client.collection('users').document(uid)
-    conversations_ref = (
-        STALE_IN_PROGRESS_CONVERSATIONS_QUERY.build(
-            user_ref.collection(conversations_collection),
-            {'status': ConversationStatus.in_progress.value},
-            field_filter_factory=FieldFilter,
-        )
-        .order_by('finished_at', direction=firestore.Query.ASCENDING)
-        .limit(limit)
-    )
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
-    return select_stale_in_progress((doc.to_dict() for doc in conversations_ref.stream()), cutoff, limit)
-
-
 @prepare_for_read(decrypt_func=prepare_conversation_for_read)
 def get_conversations_finished_after(
     uid: str,
@@ -2808,17 +2765,20 @@ def set_conversation_as_discarded(uid: str, conversation_id: str):
     _sync_conversation_search_index(uid, conversation_id)
 
 
-def discard_by_relevance(
+def rule_discard_outcome(
     uid: str,
     conversation_id: str,
     relevance_decision: dict,
     *,
     expected_sync_content_revision: Optional[int] = None,
-) -> bool:
+) -> str:
     """Hide a row the relevance rules settled after the fact (backfill).
 
     Transactional so it never overrides what happened since the scan: a
-    deleted, already hidden, or user-restored row is left alone.
+    deleted, user-restored or revised row is ``refused``. A row that is already
+    stored hidden is ``already_discarded``: that state is what the caller wanted,
+    but nothing changed, so no cache or index side effect runs. Only a write
+    returns ``discarded``.
     """
     user_ref = db.collection('users').document(uid)
     conversation_ref = user_ref.collection(conversations_collection).document(conversation_id)
@@ -2827,24 +2787,47 @@ def discard_by_relevance(
     def _discard(transaction):
         snapshot = conversation_ref.get(transaction=transaction)
         if not getattr(snapshot, 'exists', False):
-            return False
+            return 'refused'
         current = snapshot.to_dict() or {}
+        if is_soft_deleted(current):
+            return 'refused'
+        if current.get('discarded'):
+            return 'already_discarded'
         status = getattr(current.get('status'), 'value', current.get('status'))
-        if is_soft_deleted(current) or current.get('discarded') or status != 'completed' or is_user_curated(current):
-            return False
+        if status != 'completed' or is_user_curated(current):
+            return 'refused'
         if (
             expected_sync_content_revision is not None
             and current.get('sync_content_revision') != expected_sync_content_revision
         ):
-            return False
+            return 'refused'
         transaction.update(conversation_ref, {'discarded': True, 'relevance_decision': relevance_decision})
-        return True
+        return 'discarded'
 
-    discarded = run_transactional(db, _discard)
-    if discarded:
+    outcome = run_transactional(db, _discard)
+    if outcome == 'discarded':
         invalidate_people_stats_cache(uid)
         _sync_conversation_search_index(uid, conversation_id)
-    return discarded
+    return outcome
+
+
+def discard_by_relevance(
+    uid: str,
+    conversation_id: str,
+    relevance_decision: dict,
+    *,
+    expected_sync_content_revision: Optional[int] = None,
+) -> bool:
+    """True only when this call hid the row; see ``rule_discard_outcome``."""
+    return (
+        rule_discard_outcome(
+            uid,
+            conversation_id,
+            relevance_decision,
+            expected_sync_content_revision=expected_sync_content_revision,
+        )
+        == 'discarded'
+    )
 
 
 def restore_conversation_from_discarded(uid: str, conversation_id: str):

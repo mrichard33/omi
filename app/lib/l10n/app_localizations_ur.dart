@@ -13410,9 +13410,6 @@ class AppLocalizationsUr extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'مفت پلان کے ساتھ جاری رکھیں';
-
-  @override
   String get paywallTrialCancelNote => 'کسی بھی وقت منسوخ کریں۔ کوئی فیس نہیں، کوئی جرمانہ نہیں۔';
 
   @override
@@ -14498,4 +14495,9 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get deviceControls => 'کنٹرولز';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'نیز: $items';
+  }
 }

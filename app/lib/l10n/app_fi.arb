@@ -4106,7 +4106,6 @@
     "paywallTrialBilledYearly": "Laskutetaan vuosittain",
     "paywallTrialSaveAmount": "Säästä {amount}",
     "paywallTrialCta": "Aloita hintaan {price}",
-    "paywallTrialSecondary": "Jatka ilmaisella suunnitelmalla",
     "paywallTrialCancelNote": "Peruuta milloin tahansa. Ei maksuja, ei sakkoja.",
     "paywallTrialStarted": "Omi Pro -palvelun {days} päivän ilmainen kokeilujaksosi on alkanut.",
     "paywallCancelAnytime": "Peruuta milloin tahansa.",
@@ -4407,5 +4406,6 @@
     "deviceCatchingUpProgress": "{done}/{total} min",
     "deviceRecently": "Äskettäin",
     "deviceDisconnectedFor": "Yhteys katkesi {duration} ajaksi",
-    "deviceControls": "Säätimet"
+    "deviceControls": "Säätimet",
+    "homeBackgroundLine": "Lisäksi: {items}"
 }

@@ -13426,9 +13426,6 @@ class AppLocalizationsBs extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Nastavite sa besplatnim planom';
-
-  @override
   String get paywallTrialCancelNote => 'Otkažite bilo kada. Bez naknada, bez kazni.';
 
   @override
@@ -14514,4 +14511,9 @@ class AppLocalizationsBs extends AppLocalizations {
 
   @override
   String get deviceControls => 'Kontrole';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Također: $items';
+  }
 }

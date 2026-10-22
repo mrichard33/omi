@@ -13392,9 +13392,6 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'ادامه با طرح رایگان';
-
-  @override
   String get paywallTrialCancelNote => 'هر زمان خواستید لغو کنید. بدون کارمزد، بدون جریمه.';
 
   @override
@@ -14480,4 +14477,9 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get deviceControls => 'کنترل‌ها';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'همچنین: $items';
+  }
 }

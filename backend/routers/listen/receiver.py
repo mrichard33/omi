@@ -73,6 +73,7 @@ from utils.stt.live_failure import (
     live_stt_socket_is_dead,
     live_stt_terminal_reason,
     live_stt_upstream_failure,
+    local_tail_terminal_reason,
     send_live_stt_audio,
     settle_terminal_socket,
     terminate_live_stt_session,
@@ -271,7 +272,7 @@ def _strip_capture_word_ranges(segments: List[Dict[str, Any]]) -> None:
 
 class ListenReceiver(ReplayFilterMixin):
     def __init__(self, host: Any, channel_configs: List[ChannelConfig], channel_id_to_index: Dict[int, int]):
-        self.soniox_idle_budget = SonioxIdleBudget()
+        self.soniox_idle_budget = SonioxIdleBudget(uid_provider=lambda: host.request.uid)
         self.host = host
         self.cap_admission: LiveAdmission | None = None
         if stt_cap_dispatch_configured() and not host.use_custom_stt:
@@ -2001,11 +2002,13 @@ class ListenReceiver(ReplayFilterMixin):
                             self._recover_ingested_audio(), name='stt_replay_recovery'
                         )
                     if self.recovery.exhausted and not self.recovery.client_has_left():
+                        # Not accepted means the live tail hit one of its own
+                        # bounds; this site never votes on the provider circuit.
                         await terminate_live_stt_session(
                             request.websocket,
                             self.host.state,
                             failure=live_stt_upstream_failure(self._serving_provider()),
-                            reason='capacity_full',
+                            reason=local_tail_terminal_reason(delivery),
                             platform=self._telemetry_platform(),
                         )
                     return
