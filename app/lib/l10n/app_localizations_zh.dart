@@ -13190,9 +13190,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => '继续使用免费计划';
-
-  @override
   String get paywallTrialCancelNote => '随时取消。无费用，无罚款。';
 
   @override
@@ -14261,4 +14258,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceControls => '控制';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return '另外：$items';
+  }
 }

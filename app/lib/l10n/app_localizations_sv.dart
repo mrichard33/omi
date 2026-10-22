@@ -13402,9 +13402,6 @@ class AppLocalizationsSv extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Fortsätt med gratisplanen';
-
-  @override
   String get paywallTrialCancelNote => 'Avbryt när som helst. Inga avgifter, inga påföljder.';
 
   @override
@@ -14493,4 +14490,9 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get deviceControls => 'Kontroller';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Även: $items';
+  }
 }

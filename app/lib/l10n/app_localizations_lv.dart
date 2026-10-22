@@ -13427,9 +13427,6 @@ class AppLocalizationsLv extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Turpināt ar bezmaksas plānu';
-
-  @override
   String get paywallTrialCancelNote => 'Atcelt jebkurā laikā. Bez maksas, bez soda sankcijām.';
 
   @override
@@ -14517,4 +14514,9 @@ class AppLocalizationsLv extends AppLocalizations {
 
   @override
   String get deviceControls => 'Vadīklas';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Arī: $items';
+  }
 }

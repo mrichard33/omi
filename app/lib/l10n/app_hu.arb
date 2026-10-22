@@ -4202,7 +4202,6 @@
     "paywallTrialBilledYearly": "Éves számlázás",
     "paywallTrialSaveAmount": "Spórolj {amount}-t",
     "paywallTrialCta": "Kezdd el {price}-ért",
-    "paywallTrialSecondary": "Folytatás az ingyenes csomaggal",
     "paywallTrialCancelNote": "Bármikor lemondható. Nincsenek díjak, nincsenek büntetések.",
     "paywallTrialStarted": "Elindult az Omi Pro {days} napos ingyenes próbaverziója.",
     "paywallCancelAnytime": "Bármikor lemondható.",
@@ -4503,5 +4502,6 @@
     "deviceCatchingUpProgress": "{done}/{total} perc",
     "deviceRecently": "Nemrég",
     "deviceDisconnectedFor": "{duration} szétkapcsolva",
-    "deviceControls": "Vezérlők"
+    "deviceControls": "Vezérlők",
+    "homeBackgroundLine": "Továbbá: {items}"
 }

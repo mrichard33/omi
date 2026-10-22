@@ -13502,9 +13502,6 @@ class AppLocalizationsTl extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Magpatuloy sa libreng plano';
-
-  @override
   String get paywallTrialCancelNote => 'Magkansela anumang oras. Walang bayad, walang multa.';
 
   @override
@@ -14599,4 +14596,9 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get deviceControls => 'Mga Kontrol';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Gayundin: $items';
+  }
 }

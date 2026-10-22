@@ -13323,9 +13323,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'استمر بالخطة المجانية';
-
-  @override
   String get paywallTrialCancelNote => 'يمكنك الإلغاء في أي وقت. لا توجد رسوم أو غرامات.';
 
   @override
@@ -14405,4 +14402,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get deviceControls => 'عناصر التحكم';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'أيضًا: $items';
+  }
 }

@@ -25,6 +25,8 @@ from utils.executors import db_executor, storage_executor, run_blocking
 from utils.observability.held_content import record_capture
 from utils.sync import cap_hold, live_cap_manifest, live_cap_capacity, live_cap_codec, live_cap_staging, live_cap_upload
 from utils.sync.live_cap_publication import Publication
+from utils.sync.live_cap_tail import TailGrace
+from utils.sync.live_cap_capture import OrderedCapture
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +153,8 @@ class LiveHeldAudio:
         self._summary_ready = False
         self._charged: set[str] = set()
         self._publications: dict[str, Publication] = {}
-        self._buffer_opened = {}
+        self._tails = TailGrace()
+        self._capture = OrderedCapture()
         self._lock = asyncio.Lock()
 
     def append(self, data: bytes, rate: int, timestamp: float, conversation_id: str | None, channel: int = 0) -> None:
@@ -189,15 +192,13 @@ class LiveHeldAudio:
         if key in self.buffers:
             existing, start = self.buffers[key]
             expected = start + len(existing) / (2 * rate)
-            if (
-                abs(timestamp - expected) > 0.1
-                or datetime.fromtimestamp(start, timezone.utc).month
-                != datetime.fromtimestamp(timestamp, timezone.utc).month
-            ):
+            if abs(timestamp - expected) > 0.1 or datetime.fromtimestamp(start, timezone.utc).strftime(
+                '%Y-%m'
+            ) != datetime.fromtimestamp(timestamp, timezone.utc).strftime('%Y-%m'):
                 self._queue(key)  # Preserve real clock gaps, never concatenate them.
         if key not in self.buffers:
             self.buffers[key] = [bytearray(), timestamp]
-            self._buffer_opened[key] = time.monotonic()
+        self._tails.appended(key)
         buffer, start = self.buffers[key]
         buffer.extend(data)
         emitted = False
@@ -209,14 +210,16 @@ class LiveHeldAudio:
             start += self.bound
             emitted = True
         if emitted:
-            self._buffer_opened[key] = time.monotonic()
+            self._tails.opened[key] = time.monotonic()
         self.buffers[key][1] = start
         if self.buffered_seconds() > self.bound + 1e-9:
             raise RuntimeError('live held audio persistence backpressure')
 
     def buffered_seconds(self) -> float:
-        return sum(len(item[0]) / (2 * item[1]) for item in self.pending) + sum(
-            len(value[0]) / (2 * key[1]) for key, value in self.buffers.items()
+        return (
+            self._capture.seconds
+            + sum(len(item[0]) / (2 * item[1]) for item in self.pending)
+            + sum(len(value[0]) / (2 * key[1]) for key, value in self.buffers.items())
         )
 
     async def _packet_parts(self, data: bytes, rate: int):
@@ -227,7 +230,7 @@ class LiveHeldAudio:
         while data:
             frames = int((self.bound - self.buffered_seconds()) * rate + 1e-6)
             if frames <= 0:
-                await self.flush(force=True, seal=False)
+                await self.flush(force=True, seal=False, final=True)
                 continue
             size = min(len(data), frames * 2)
             yield data[:size]
@@ -247,16 +250,16 @@ class LiveHeldAudio:
 
     def _queue(self, key: tuple[int, int, str | None]) -> None:
         buffer, start = self.buffers.pop(key)
-        self._buffer_opened.pop(key, None)
+        self._tails.queued(key)
         if buffer:
             channel, rate, owner = key
             self.pending.append((bytes(buffer), rate, start, owner, channel))
             self.pending_bytes += len(buffer)
 
-    async def flush(self, *, force: bool = False, seal: bool = True) -> None:
+    async def flush(self, *, force: bool = False, seal: bool = True, final: bool = False) -> None:
         # Callers include host-owned updater/receive tasks. Their cancellation
         # must not release the lock or delete a source beneath an executor upload.
-        custody = asyncio.create_task(self._flush(force=force, seal=seal), name='stt_cap_live_publish')
+        custody = asyncio.create_task(self._flush(force=force, seal=seal, final=final), name='stt_cap_live_publish')
         self._custody = custody
         custody.add_done_callback(observe_publication)
         try:
@@ -296,10 +299,19 @@ class LiveHeldAudio:
             )
             self.capacity_identity = None
 
-    async def _flush(self, *, force: bool = False, seal: bool = True) -> None:
+    async def _flush(self, *, force: bool = False, seal: bool = True, final: bool = False) -> None:
         async with self._lock:
+            for span in self._capture.take(self.bound, force=force or final):
+                key = (0, span.rate, span.owner)
+                if key in self.buffers:
+                    self._queue(key)  # Distinct capture runs keep their holes.
+                self.append(bytes(span.data), span.rate, span.timestamp, span.owner)
+                if key in self.buffers:
+                    self._tails.opened[key] = min(self._tails.opened[key], span.opened)
+            seal_tail = self._tails.expired()
             for key in list(self.buffers):
-                if force or time.monotonic() - self._buffer_opened[key] >= self.bound:
+                seconds = len(self.buffers[key][0]) / (2 * key[1])
+                if self._tails.ready(key, seconds, self.bound, force=force, final=final):
                     self._queue(key)
             if self.fragmented and self._group_parts == live_cap_staging.MAX_FRAGMENTS:
                 await self._seal_group()
@@ -426,12 +438,10 @@ class LiveHeldAudio:
                     getattr(getattr(self.host.state, 'stt_cap_admission', None), 'reason', '')
                     == 'plan_allowance_exhausted',
                 )
-            if self.fragmented and force and seal:
+            if self.fragmented and seal and (force or final or seal_tail) and not self.buffers:
                 await self._seal_group()
 
     async def seal(self, channel: int | None = None) -> None:
-        # Source groups are immutable and born sealed in their publication tx.
-        # Preserve the explicit flush barrier used by resume and close callers.
         await self.flush(force=True)
 
     async def notice(self, *, paused: bool | None = None) -> None:
@@ -484,12 +494,15 @@ class LiveHeldAudio:
                             timestamp = (
                                 timeline.wall(first) if timeline is not None else time.time() - (end - first) / rate
                             )
-                            self.append(
-                                data[(first - start) * 2 : (last - start) * 2],
-                                rate,
-                                timestamp,
-                                receiver._owner_for_sample(first),
-                            )
+                            part = data[(first - start) * 2 : (last - start) * 2]
+                            if self.buffered_seconds() + len(part) / (2 * rate) > self.bound + 1e-9:
+                                raise RuntimeError('live held audio packet exceeds custody bound')
+                            self.paused = True
+                            owner = receiver._owner_for_sample(first)
+                            if self.fragmented:
+                                self._capture.add(first, part, rate, timestamp, owner)
+                            else:
+                                self.append(part, rate, timestamp, owner)
                 cursor = max(cursor, right)
                 if cursor >= end:
                     break
@@ -533,8 +546,7 @@ class LiveHeldAudio:
 
     async def close(self) -> None:
         try:
-            await self.flush(force=True)
-            await self.seal()
+            await self.flush(force=True, final=True)
             if self.capacity is not None and not self._capacity_uncertain:
                 await run_blocking(db_executor, live_cap_capacity.release, self.capacity)
                 self.capacity = None

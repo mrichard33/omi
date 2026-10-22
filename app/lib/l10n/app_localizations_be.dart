@@ -13432,9 +13432,6 @@ class AppLocalizationsBe extends AppLocalizations {
   }
 
   @override
-  String get paywallTrialSecondary => 'Працягнуць з бясплатным планам';
-
-  @override
   String get paywallTrialCancelNote => 'Адмяніць у любы час. Без камісій і штрафаў.';
 
   @override
@@ -14521,4 +14518,9 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get deviceControls => 'Кіраванне';
+
+  @override
+  String homeBackgroundLine(String items) {
+    return 'Таксама: $items';
+  }
 }
