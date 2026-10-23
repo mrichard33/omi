@@ -75,6 +75,8 @@ class CaptureHarness:
 
     async def call(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         name = fn.__name__
+        if fn.__module__ in {'utils.episodes.boundaries', 'utils.episodes.boundary_runtime'}:
+            return fn(*args, firestore_client=self.store, **kwargs)
         if name == 'arm':
             return fn(*args, firestore_client=self.store, **kwargs)
         if name == 'open_live_recording_session':
@@ -192,7 +194,7 @@ async def test_live_meeting_stamp_reaches_finalization_and_meeting_aware_summary
     monkeypatch.setattr(pc, 'conversation_transcripts_for_llm', lambda *args: (transcript, transcript, {0: 'David'}))
     monkeypatch.setattr(pc, 'track_usage', lambda *args, **kwargs: nullcontext())
     # Isolate the persisted meeting stamp from optional roster/background reads.
-    monkeypatch.setattr(pc, 'rich_notes_inputs', lambda *args, **kwargs: (None, None, False, ()))
+    monkeypatch.setattr(pc, 'rich_notes_inputs', lambda *args, **kwargs: (None, None, False, (), 0))
     monkeypatch.setattr(pc, '_fetch_dedup_candidates_for_query', lambda *args: [])
     notes = Mock(return_value=Structured(title='Project launch', overview='Launch next week; review on Friday.'))
     monkeypatch.setattr(pc, 'get_conversation_notes', notes)
