@@ -14601,4 +14601,70 @@ class AppLocalizationsFr extends AppLocalizations {
   String homeBackgroundLine(String items) {
     return 'Aussi : $items';
   }
+
+  @override
+  String get deviceOnboardingPressButtonTitle => 'Appuie sur le bouton de ton Omi';
+
+  @override
+  String get deviceOnboardingPressButtonSubtitle => 'Une pression courte. Puis demande ce que tu veux.';
+
+  @override
+  String get deviceOnboardingAskNowTitle => 'Pose ta question';
+
+  @override
+  String get deviceOnboardingAskNowSubtitle => 'Dis-le à voix haute. Omi écoute.';
+
+  @override
+  String get deviceOnboardingPressAgainHint => 'Terminé ? Appuie à nouveau sur le bouton pour envoyer.';
+
+  @override
+  String trialUpsellTitle(int days) {
+    return 'Tu passes à $days jours gratuits';
+  }
+
+  @override
+  String trialUpsellBody(int days) {
+    return '$days jours d\'Omi Pro offerts. On te prévient avant tout prélèvement. Annulable à tout moment.';
+  }
+
+  @override
+  String trialUpsellClaim(int days) {
+    return 'Profiter de mon essai de $days jours';
+  }
+
+  @override
+  String settingsUpgradeTrialSubtitle(int days) {
+    return 'Commence ton essai gratuit de $days jours';
+  }
+
+  @override
+  String get pairingPowerOnTitle => 'Allume ton Omi';
+
+  @override
+  String get pairingPowerOnSubtitle => 'Appuie une fois sur le bouton et garde-le près du téléphone.';
+
+  @override
+  String get walkthroughBackgroundRecordingNote =>
+      'C\'est tout. Omi continue d\'enregistrer tes conversations en arrière-plan.';
+
+  @override
+  String get noThanks => 'Non merci';
+
+  @override
+  String get recapInTheBackground => 'En arrière-plan';
+
+  @override
+  String retentionOfferAccept(int percent) {
+    return 'Rester avec $percent % de réduction';
+  }
+
+  @override
+  String retentionOfferBody(String price, int months) {
+    return 'Restez et payez $price par mois pendant les $months prochains mois.';
+  }
+
+  @override
+  String retentionOfferApplied(int percent, int months) {
+    return 'C\'est fait. $percent % de réduction pendant les $months prochains mois.';
+  }
 }

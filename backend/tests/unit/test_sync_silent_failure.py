@@ -20,6 +20,9 @@ from pydantic import BaseModel
 
 from models import conversation_continuity  # noqa: F401 - retain pure policy across the legacy models package stub
 from models.transcript_segment import SpeakerIdentityStatus
+from utils.capture import coverage  # noqa: F401 - retain lazy ledger authority before database stubs
+from utils.stt import transcript_admission  # noqa: F401 - retain pure admission contract before enum/package stubs
+from utils.speakers import context  # noqa: F401 - retain speaker metric owner before package stubs
 from utils import dream_vocabulary  # noqa: F401 - retain shared keyterms before legacy database stubs
 from utils.observability import speaker_identification  # noqa: F401 - retain telemetry across legacy sanitizer stubs
 
@@ -814,7 +817,7 @@ class TestProcessSegmentReal:
         # Install stubs
         for mod_name in _STUB_MODULES:
             sys.modules[mod_name] = ModuleType(mod_name)
-        sys.modules['models'].__path__ = []
+        sys.modules['models'].__path__ = [os.path.join(os.path.dirname(__file__), '..', '..', 'models')]
         # Keep receipt policy + allocator real: assignment.py imports them at
         # module scope, and the stubbed models.transcript_segment is not a package
         # that can load the policy's real TranscriptSegment binding.
