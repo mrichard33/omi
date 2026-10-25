@@ -116,6 +116,25 @@ If a run says "already current", it did nothing, which is the correct outcome.
 > train, so upstream's inherited workflows run here too (for example the weekly
 > guardrail pulse that opened issue #9, since removed upstream).
 
+### Upstream's deploy and monitoring workflows are kept off (2026-10-25)
+
+Upstream's workflows that run Omi's own infrastructure (Codemagic mobile builds,
+Google Cloud and GKE deploys, Grafana, PostHog, Vercel, Mintlify) cannot work
+here: they need Omi's accounts and secrets. They failed on every push and every
+schedule and emailed each failure (214 in the week to 2026-10-25; "Mobile
+internal builds" failed every three hours with `CODEMAGIC_API_TOKEN is
+required`).
+
+`.github/workflows/reece-disable-upstream-ops.yml` disables every workflow named
+in `.github/scripts/reece-upstream-sync/upstream-only-workflows.txt`. It runs after
+each upstream sync, daily, and on demand. A workflow's on/off state lives in
+GitHub, not in its file, so it stays off through every sync and no upstream file
+is edited. To bring one back: delete its line from the list, then Actions →
+the workflow → Enable workflow.
+
+Upstream's test workflows (Backend Unit Tests, Repo Checks, Main Nightly Full and
+the rest) are not on the list: they need no secrets and stay on.
+
 ## Cutting a Windows build
 
 You do not cut one by hand. `.github/workflows/windows-release.yml` builds and

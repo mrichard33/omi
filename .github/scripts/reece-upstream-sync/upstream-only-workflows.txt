@@ -1,0 +1,33 @@
+# Upstream workflows that run Omi's own infrastructure (Codemagic, Google Cloud,
+# GKE, Grafana, PostHog, Vercel, Mintlify). They need Omi's accounts and secrets,
+# which this fork does not have and must not have, so here they can only fail:
+# 214 failed runs from 2026-10-18 to 10-25, each one a failure email.
+# reece-disable-upstream-ops.yml keeps every workflow listed here disabled.
+# One file name per line. Delete a line, then enable the workflow in Actions,
+# to bring it back.
+
+# Mobile builds and rollout (Codemagic)
+mobile_internal_build.yml
+mobile_rollout_watch.yml
+
+# Desktop release monitoring (PostHog)
+desktop_release_doctor.yml
+
+# Deploys to Omi's Google Cloud / GKE
+desktop_backend_auto_dev.yml
+gcp_admin.yml
+gcp_app.yml
+gcp_backend_auto_dev.yml
+gcp_backend_listen_helm.yml
+gcp_backend_pusher_auto_deploy.yml
+gcp_cloud_run_metrics_egress.yml
+gcp_firestore_indexes.yml
+gcp_frontend.yml
+gcp_memory_maintenance_job_auto_dev.yml
+gcp_storage_lifecycle.yml
+firestore_read_reconcile.yml
+
+# Omi's dashboards, docs and prototypes
+grafana_dashboard_provisioning.yml
+sync-docs.yml
+reid_onboarding_vercel.yml

@@ -2911,6 +2911,24 @@
       },
       "runs_on": "windows-latest"
     },
+    "reece-disable-upstream-ops.yml/disable": {
+      "budget_p50_minutes": 1,
+      "display_name": "disable",
+      "expected_runs_class": "non-pr",
+      "expected_runs_per_day": 2,
+      "if": null,
+      "matrix": {},
+      "matrix_size": 1,
+      "needs": [],
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Reece fork only: one checkout and up to 18 gh workflow disable calls, after each upstream sync plus a daily backstop (2026-10-25)",
+      "reusable": null,
+      "runner": "linux",
+      "runner_counts": {
+        "linux": 1
+      },
+      "runs_on": "ubuntu-latest"
+    },
     "reece-upstream-sync-tests.yml/test": {
       "budget_p50_minutes": 2,
       "display_name": "Sync scripts",
@@ -5984,6 +6002,46 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "reece-disable-upstream-ops.yml": {
+      "name": "Disable upstream-only workflows (Reece fork)",
+      "owner": "Reece fork (mrichard33)",
+      "rationale": "Reece fork only: keeps upstream's deploy and monitoring workflows, which need Omi's secrets, disabled after every upstream sync (2026-10-25).",
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/scripts/reece-upstream-sync/upstream-only-workflows.txt",
+            ".github/scripts/reece-upstream-sync/disable-upstream-ops.sh",
+            ".github/workflows/reece-disable-upstream-ops.yml"
+          ]
+        },
+        "schedule": [
+          {
+            "cron": "30 13 * * *"
+          }
+        ],
+        "workflow_dispatch": {
+          "inputs": {
+            "dry_run": {
+              "default": "false",
+              "description": "Only list what would be disabled",
+              "required": "false",
+              "type": "boolean"
+            }
+          }
+        },
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Upstream sync (Reece fork)"
+          ]
         }
       }
     },

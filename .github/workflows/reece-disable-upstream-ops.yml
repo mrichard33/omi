@@ -1,0 +1,56 @@
+name: Disable upstream-only workflows (Reece fork)
+
+# Keeps Omi's own deploy and monitoring workflows switched off in this fork.
+# They need Omi's Codemagic, Google Cloud, Grafana, PostHog and Vercel accounts,
+# so here they only fail and send a failure email (2026-10-25: 214 failures in a
+# week, "Mobile internal builds" every three hours). The list and the reason are
+# in .github/scripts/reece-upstream-sync/upstream-only-workflows.txt.
+#
+# Runs after each upstream sync (a sync can bring a workflow back under a new
+# file), daily as a backstop, and on demand.
+
+on:
+  workflow_run:
+    workflows: ["Upstream sync (Reece fork)"]
+    types: [completed]
+  schedule:
+    - cron: "30 13 * * *"
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/reece-upstream-sync/upstream-only-workflows.txt'
+      - '.github/scripts/reece-upstream-sync/disable-upstream-ops.sh'
+      - '.github/workflows/reece-disable-upstream-ops.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be disabled"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: reece-disable-upstream-ops
+  cancel-in-progress: false
+
+env:
+  # Abort a git HTTP transfer that stays under 1 KB/s for 60 s, so actions/checkout
+  # retries instead of hanging 7-10 min until the TCP reset (#22890).
+  GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+  GIT_HTTP_LOW_SPEED_TIME: "60"
+
+jobs:
+  disable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Disable the listed workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: .github/scripts/reece-upstream-sync/disable-upstream-ops.sh
