@@ -151,6 +151,7 @@ jobs:
             1. KEEP OURS: docs/reece-fork.md, scripts/push-all.ps1,
                .github/workflows/upstream-sync.yml, .github/workflows/windows-release.yml,
                .github/workflows/reece-upstream-sync-tests.yml,
+               .github/workflows/reece-disable-upstream-ops.yml,
                .github/scripts/reece-upstream-sync/**, and every Windows release/updater
                setting that points at mrichard33/omi-desktop-releases
                (desktop/windows/electron-builder.config.mjs `publish`,
