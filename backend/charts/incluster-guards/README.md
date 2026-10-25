@@ -1,7 +1,9 @@
 # In-cluster safety guards
 
-This independent Helm release replaces the **Parakeet** laptop rollback loop.
-It does not modify any serving pod template or deploy the Parakeet chart.
+This independent Helm release provides **Parakeet** and Cloud Run **batch**
+rollback Jobs. See [BATCH.md](BATCH.md) for dedicated WIF, env-preserving rollback,
+and the aggregate producer required before replacing the P90 laptop owner.
+It does not modify the Parakeet serving pod template or deploy its chart.
 The lead deploys after review; developing/testing this chart requires no cloud credentials.
 
 ## Deployment and kill switch
@@ -34,7 +36,10 @@ merge; any spec/image/generation identity change still resets arming.
 
 Every five minutes, a bounded Job reads the exact HPA spec, deployment images,
 readiness, recent Pod FailedScheduling events, and direct in-cluster Prometheus.
-Only floor 5/8 without `parakeet_request_latency_p99` is armed. The state identity
+Any workload-only floor below the 12-replica rollback cap without
+`parakeet_request_latency_p99` is armed; the floor is read from the HPA itself,
+so operator floor changes cannot silently disarm the guard (the former 5/8
+enumeration read NOOP at floor 10 on 2026-10-24/25). The state identity
 includes the entire HPA spec, HPA generation and deployment images. Ordinary
 autoscaling replica changes do not restart the clock. Configuration/image changes
 reset the 15-minute clock. Readiness shortfall uses HPA desiredReplicas, not the
@@ -57,8 +62,21 @@ fallback. At a 6.3% baseline, the trip threshold is 8.375%. Values and the compu
 `reading.refusal_threshold` are logged. This guard version restarts the arming clock.
 
 Other P77 thresholds are unchanged: first-text p95 >= 30s, post/v2 p95 >=
-3s, first-text >30s count >12, no-text deadline count >36 in 15m. Under 20
-first-text/admission samples, latency/fraction thresholds are observations only;
+3s, first-text >30s count >12, no-text deadline count >36 in 15m. The
+first-text p95 trip additionally requires a decisive sample (2026-10-24 06:19Z
+and 2026-10-25 05:40Z rolled floor 8 back on 26-37 first texts whose 95th
+percentile saturated at the histogram's 60s top bucket): a measured value
+strictly inside the histogram (the exported buckets end at 60s, and
+`histogram_quantile` clamps to that boundary when the quantile lands beyond
+it), at least 5 texts over 30s, and a 15-minute count of at least
+`max(100, 0.5 * the weekly same-hour count's 15-minute equivalent)` (the
+baseline counts one hour, so its window share is halved, never the raw hour
+against the live window; 100 when that baseline is unavailable). A
+regression-shaped reading below
+that sample floor is **unmeasured**: it reads BLIND (ERROR log, nonzero exit,
+alertable) and never rolls back; it also never counts toward the
+three-consecutive-blind rollback, which missing/stale data still drives.
+Under 20 first-text/admission samples, latency/fraction thresholds are observations only;
 absolute error counts, readiness and scheduling trips remain independent.
 Missing/nonfinite data, stale counters (>120s), or absent GPU activity are blind,
 never clean. Fresh low sample counts with successful NaN histogram/ratio arithmetic are
@@ -94,11 +112,11 @@ PR #23425's floor/workload-only changes are included in this proposal.
 The mutable, nonsecret state ConfigMap is created by Helm. The Job may only
 get/patch that exact ConfigMap, using a resourceVersion test. It records verdicts
 in data and annotations, last observation time, and the blind/arming state.
-There are no cluster permissions, secrets, pod/exec, GCP identity annotations,
-or cloud API calls. RBAC cannot constrain *fields* of an HPA patch; the patch
+The Parakeet Job has no cluster permissions, secrets, pod/exec, GCP identity
+annotations, or cloud API calls. RBAC cannot constrain *fields* of an HPA patch; the patch
 builder and its behavioral tests enforce that narrower application boundary.
 
-## Batch v1 coverage and blockers
+## Batch queue observer coverage and blockers
 
 Available worker metrics (`utils/batch_pipeline/metrics.py`, also allowed by
 `deploy/cloud_run_gmp_sync.yaml`) are oldest admitted uncommitted age, retry age,
@@ -121,8 +139,9 @@ There is no exported metric for **new projection obligations >15m**, pinned
 object custody loss, or VAD-proven unrecovered speech. Those P90 signals require
 Firestore/GCS metadata readers and serving-revision/ramp clocks. No such readers,
 permissions or invented metrics are introduced here. **Keep the P90 safety owner
-running** until those gaps have a separately reviewed implementation. No Cloud
-Run env or revision is read in v1.
+running** until those gaps have a verified aggregate producer. The separate
+[batch rollback Job](BATCH.md) reads serving Cloud Run revisions and consumes
+trusted P90 aggregates without customer metadata access.
 
 Every reading emits JSON `batch_safety` / `parakeet_guard` records without IDs,
 workload env, event messages, or HTTP bodies. A batch TRIP/BLIND or Parakeet
@@ -169,43 +188,22 @@ No GPU requests/tolerations; required node affinity rejects GKE accelerator
 nodes as well as named Parakeet/batch pools. Non-root, read-only filesystem,
 dropped capabilities, and bounded CPU/memory keep the Job small.
 
-## Future Cloud Run rollback: specific approval required
+## Cloud Run rollback: approved scoped identity
 
-`batch.cloudRunRollbackEnabled=false` is reserved and fails Helm rendering if
-set true in v1. It cannot silently become a no-op or install broad credentials.
-The follow-up implementation must verify **each traffic-serving revision and its
-percentage**, preserve unrelated env/image/traffic, set only
-`BATCH_PIPELINE_PERCENT=0` across `backend`, `backend-sync`,
-`backend-sync-backfill`, `backend-integration` in `us-central1`, and leave admitted
-custody/recovery obligations intact. It must use fresh first-write/all-serving
-clocks and a full P90 lookback after the new serving state. Updating the newest
-service template alone is insufficient.
-
-Proposed **lead/David access ask**, not applied by this PR. These bindings apply
-Google's [GKE service-account impersonation procedure](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
-and [Cloud Run permission definitions](https://docs.cloud.google.com/run/docs/reference/iam/permissions);
-service updates also require the documented [runtime service-account permission](https://docs.cloud.google.com/run/docs/configuring/services/environment-variables):
-
-1. A GSA `omi-incluster-guards@based-hardware.iam.gserviceaccount.com` and
-   `roles/iam.workloadIdentityUser` on that GSA for
-   `serviceAccount:based-hardware.svc.id.goog[prod-omi-backend/prod-omi-incluster-guards]`.
-   Annotate only that KSA with
-   `iam.gke.io/gcp-service-account=omi-incluster-guards@based-hardware.iam.gserviceaccount.com`.
-2. A custom `projects/based-hardware/roles/omiBatchAdmissionGuard` with
-   `run.services.get`, `run.services.update`, `run.revisions.get`, bound to that
-   GSA on each of those four regional Cloud Run services. Reads alone need
-   `run.services.get` and `run.revisions.get`; Kubernetes RBAC grants neither.
-3. `run.operations.get` in a separate custom role bound at project scope for
-   waiting for asynchronous updates. `roles/iam.serviceAccountUser` on each
-   actual runtime service account referenced by those services if the update
-   requires `iam.serviceAccounts.actAs`. Resolve those identities at review time;
-   do not guess them or grant project-wide Service Account User.
-4. Separate, explicitly scoped Firestore/GCS **metadata-only** read approval if
-   the missing P90 safety signals cannot first be exported to Prometheus.
-
-These grants alone do not make the rollback implementation safe or complete.
-No binding, SA creation, WI annotation, IAM write, or production call is made
-while developing this chart.
+Production keeps `batch.enabled: false` (see `prod_omi_incluster_guards_values.yaml`)
+until the deployer RBAC for the `-batch` objects is approved (access change,
+David) and g2's trusted producer exists; `batch.cloudRunRollbackEnabled` stays
+true there so re-enabling needs only the `batch.enabled` flip. Development
+leaves the writer off entirely.
+The dedicated KSA/GSA, four service-level `roles/run.developer` bindings,
+runtime-SA actAs if required, and exact-KSA WIF binding are described in
+[BATCH.md](BATCH.md). David approved that resource-scoped role on 2026-10-24.
+No project-wide operations role is needed: the guard polls service readbacks.
+The lead applies IAM and deploys; developing this chart applies neither.
+Disabling removes the batch resources including its state ConfigMap, leaving the
+Parakeet guard. Save state before removal; use dry run to stop writes while
+retaining pending rollback intent. Retain P90 until the
+trusted aggregate producer and real alert delivery have been verified.
 
 ## Local verification
 
