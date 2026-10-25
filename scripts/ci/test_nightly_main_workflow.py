@@ -25,6 +25,13 @@ def jobs(text):
 # boundary. Its behavioral tests still run via backend-unit-tests.yml.
 PR_SCHEMA_WRITERS = {"gcp_firestore_indexes.yml"}
 
+# Reece fork (mrichard33/omi) only: the upstream-sync tests gate the fork's
+# own sync scripts on the PRs that change them. The nightly graph checks out
+# upstream's test suites, and these scripts change only through a PR, so a
+# nightly run would retest an unchanged file. Without this entry every fork PR
+# that touches a workflow failed Hygiene (PR #38, 2026-10-25).
+FORK_ONLY_PR_WORKFLOWS = {"reece-upstream-sync-tests.yml"}
+
 INTENTIONAL_BUDGET_CHANGES = {
     # iOS Compile Check: the 40-min ceiling sat below the measured cold path
     # (39:25 real steps + ~1 min post-job Post Setup Flutter cache save, run
@@ -59,7 +66,11 @@ class WorkflowTests(unittest.TestCase):
         for path in WORKFLOWS.glob("*.yml"):
             text = path.read_text()
             triggers = text.split("\njobs:\n", 1)[0]
-            if re.search(r"(?m)^  pull_request:", triggers) and path.name not in PR_SCHEMA_WRITERS:
+            if (
+                re.search(r"(?m)^  pull_request:", triggers)
+                and path.name not in PR_SCHEMA_WRITERS
+                and path.name not in FORK_ONLY_PR_WORKFLOWS
+            ):
                 expected.add(path.name)
         self.assertEqual(set(self.calls.values()), expected)
 
