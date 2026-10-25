@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 import ssl
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,20 @@ LATENCY = {
 WINDOW = 900
 BLIND_LIMIT = 3
 REFUSAL_GATE_VERSION = 'same-hour-of-week-12-pod-v2'
+REFUSAL_ABSOLUTE_CEILING = 0.02
+ROLLBACK_REPLICAS = 12
+FIRST_P95_FLOOR = 30
+FIRST_P95_BASELINE_FACTOR = 1.2
+FIRST_P95_MIN_SLOW_TEXTS = 5
+FIRST_P95_BASELINE_MIN_COUNT = 20
+FIRST_P95_MIN_COUNT = 100
+FIRST_P95_BASELINE_COUNT_SHARE = 0.5
+# The weekly baseline counts one hour; the live sample counts WINDOW seconds.
+WINDOW_SHARE_OF_BASELINE = WINDOW / 3600
+# live_metrics.py buckets end at (2, 5, 10, 15, 20, 25, 30, 45, 60): a quantile
+# that lands beyond the last finite bucket is reported as exactly this
+# boundary, not measured.
+FIRST_P95_TOP_BUCKET = 60.0
 FAST_SCALE_UP = {
     'stabilizationWindowSeconds': 0,
     'selectPolicy': 'Max',
@@ -83,7 +98,12 @@ def refusal_baseline_queries(namespace):
 
 
 def refusal_limit(values):
-    """None means unqualified evidence, never an implicit 2% fallback."""
+    """The same-hour-of-week relative limit, or None when that baseline is unqualified.
+
+    None is not a limit: evaluate substitutes REFUSAL_ABSOLUTE_CEILING rather
+    than blinding, so a coverage series younger than the 7d offset cannot roll
+    the floor back on blindness alone (2026-10-24 16:05Z, blind_runs=4).
+    """
     if not all(finite(values.get(k)) for k in refusal_baseline_queries('unused')):
         return None
     if not 0 <= values['refusal_baseline_fraction'] <= 1 or values['refusal_baseline_count'] < 20:
@@ -102,7 +122,42 @@ def refusal_limit(values):
         )
     ):
         return None
-    return max(0.02, values['refusal_baseline_fraction'] * 1.25 + 0.005)
+    return max(REFUSAL_ABSOLUTE_CEILING, values['refusal_baseline_fraction'] * 1.25 + 0.005)
+
+
+def first_p95_limit(values):
+    """The 30s floor, or 1.2x the same rolling UTC hour a week ago when that baseline is qualified.
+
+    The weekly baseline is used only when its own hour carried at least 20 first
+    texts; a sparse historical hour (one 60s observation prices its p95 near 59s)
+    would otherwise lift the threshold to ~71s and mask a live regression. An
+    unavailable or unqualified baseline is the documented fallback (floor plus
+    the slow-text gate in evaluate), never blindness: a missing weekly series
+    must not itself roll the floor back.
+    """
+    baseline = values.get('first_p95_baseline')
+    if (
+        finite(baseline)
+        and finite(values.get('first_count_baseline'))
+        and values['first_count_baseline'] >= (FIRST_P95_BASELINE_MIN_COUNT)
+    ):
+        return max(FIRST_P95_FLOOR, FIRST_P95_BASELINE_FACTOR * baseline)
+    return FIRST_P95_FLOOR
+
+
+def first_p95_sample_floor(values):
+    """max(100, half the weekly same-hour rate); 100 when that baseline is unavailable.
+
+    first_count_baseline counts a whole hour; first_count counts the live
+    15-minute window. Convert the baseline to its per-window equivalent
+    (x 15/60) before halving, or the floor would always demand roughly twice
+    the historical window rate and a real regression at normal volume could
+    never collect a decisive sample (review r1 P1).
+    """
+    baseline = values.get('first_count_baseline')
+    if finite(baseline):
+        return max(FIRST_P95_MIN_COUNT, FIRST_P95_BASELINE_COUNT_SHARE * WINDOW_SHARE_OF_BASELINE * baseline)
+    return FIRST_P95_MIN_COUNT
 
 
 def queries(namespace):
@@ -121,6 +176,12 @@ def queries(namespace):
     return {
         **refusal_baseline_queries(namespace),
         'first_p95': f'histogram_quantile(0.95,sum by(le)(rate(omi_stt_window_first_text_seconds_bucket{sel}[15m])))',
+        # Same rolling UTC hour a week ago: a 15-minute window carries only ~40
+        # first texts, so two slow sessions alone can push its p95 past 60s.
+        'first_p95_baseline': (
+            'histogram_quantile(0.95,sum by(le)(rate(omi_stt_window_first_text_seconds_bucket' f'{sel}[1h] offset 7d)))'
+        ),
+        'first_count_baseline': f'sum(increase(omi_stt_window_first_text_seconds_count{sel}[1h] offset 7d))',
         'first_count': inc('omi_stt_window_first_text_seconds_count'),
         'first_over30': inc('omi_stt_window_first_text_seconds_count')
         + ' - '
@@ -143,7 +204,11 @@ def queries(namespace):
 
 
 def workload_only(spec):
-    return spec.get('minReplicas') in (5, 8) and not any(
+    # Every workload-only floor below the rollback cap is armed; the floor is
+    # read from the HPA itself. The old (5, 8) enumeration read NOOP at the
+    # 10-23 baseline floor 10 (2026-10-25 11:29Z), leaving the fleet unguarded
+    # whenever the operator moved the floor off the enumerated pair.
+    return spec.get('minReplicas') < ROLLBACK_REPLICAS and not any(
         m.get('external', {}).get('metric', {}).get('name') == 'parakeet_request_latency_p99'
         for m in spec.get('metrics', [])
     )
@@ -184,7 +249,7 @@ def build_rollback(old):
     restored.append(copy.deepcopy(LATENCY))
     return [
         {'op': 'test', 'path': '/spec', 'value': copy.deepcopy(old)},
-        {'op': 'replace', 'path': '/spec/minReplicas', 'value': 12},
+        {'op': 'replace', 'path': '/spec/minReplicas', 'value': ROLLBACK_REPLICAS},
         {'op': 'replace', 'path': '/spec/metrics', 'value': restored},
     ]
 
@@ -202,25 +267,56 @@ def evaluate(values):
     # distinguish that expected lack of samples from a missing series/query error
     # (None). It remains LOW_SAMPLE, never CLEAN, without rolling back quiet hours.
     idle_nan = {'first_p95', 'post_p95', 'v2_p95', 'refusal_fraction'} if low and fresh else set()
+    # The weekly first_p95 evidence (quantile + its sample count) is optional
+    # (retention, metric age, sparse hour): its absence selects the fallback
+    # threshold instead of blinding the whole reading. The weekly refusal
+    # baseline is optional the same way: missing or unqualified selects the
+    # absolute refusal ceiling below, never blindness.
+    optional_weekly = ('first_p95_baseline', 'first_count_baseline', *refusal_baseline_queries('unused'))
     blind = [
         f'missing_or_nonfinite_{k}'
         for k in queries('unused')
-        if not finite(values.get(k))
+        if k not in optional_weekly
+        and not finite(values.get(k))
         and not (k in idle_nan and isinstance(values.get(k), float) and math.isnan(values[k]))
     ]
     blind += [k for k in stale_keys if finite(values.get(k)) and (values[k] > 120 or values[k] < 0)]
     if finite(values.get('dcgm_nonzero')) and values['dcgm_nonzero'] <= 0 and not low:
         blind.append('dcgm_no_real_nonzero_value')
     trips = []
+    unmeasured = []
     refusal_threshold = refusal_limit(values)
+    refusal_mode = 'relative'
     if refusal_threshold is None:
-        blind.append('unqualified_refusal_baseline')
+        # An unqualified weekly baseline (coverage series younger than its 7d
+        # offset, sparse hour, missing series) left this guard BLIND on every
+        # run and rolled floor 8 back with zero refusals. Fail closed on the
+        # absolute ceiling instead; missing or stale CURRENT refusal data
+        # still blinds via the keys above.
+        refusal_threshold = REFUSAL_ABSOLUTE_CEILING
+        refusal_mode = 'absolute_fallback'
     if not low:
-        trips += [
-            k
-            for k, limit in [('first_p95', 30), ('post_p95', 3), ('v2_p95', 3)]
-            if finite(values.get(k)) and values[k] >= limit
-        ]
+        trips += [k for k, limit in [('post_p95', 3), ('v2_p95', 3)] if finite(values.get(k)) and values[k] >= limit]
+        # 2026-10-25 05:40Z (floor 8) and 2026-10-24 06:19Z: 26-37 first texts
+        # pushed the 95th percentile into the 60s top bucket and rolled the
+        # floor back on an unmeasured p95 while the fleet was healthy. Trip only
+        # on a value interpolated inside the histogram (the top-bucket boundary
+        # 60.0 is saturation, not a measurement), several slow texts, and a
+        # 15-minute sample of at least max(100, half the weekly same-hour
+        # count). A regression-shaped reading below that sample floor is
+        # unmeasured evidence: BLIND alert, never rollback, never counted
+        # toward the three-blind-strike rollback.
+        if finite(values.get('first_p95')) and values['first_p95'] >= first_p95_limit(values):
+            if (
+                values['first_p95'] < FIRST_P95_TOP_BUCKET
+                and finite(values.get('first_over30'))
+                and values['first_over30'] >= FIRST_P95_MIN_SLOW_TEXTS
+                and finite(values.get('first_count'))
+                and values['first_count'] >= first_p95_sample_floor(values)
+            ):
+                trips.append('first_p95')
+            else:
+                unmeasured.append('first_p95')
         if (
             refusal_threshold is not None
             and finite(values.get('refusal_fraction'))
@@ -232,7 +328,16 @@ def evaluate(values):
         for k, limit in [('first_over30', 12), ('no_text_deadline', 36)]
         if finite(values.get(k)) and values[k] > limit
     ]
-    return {'trips': trips, 'blind': blind, 'low_sample': low, 'refusal_threshold': refusal_threshold}
+    return {
+        'trips': trips,
+        'blind': blind,
+        'unmeasured': unmeasured,
+        'low_sample': low,
+        'refusal_threshold': refusal_threshold,
+        'refusal_mode': refusal_mode,
+        'first_p95_threshold': first_p95_limit(values),
+        'first_p95_sample_floor': first_p95_sample_floor(values),
+    }
 
 
 def scheduling_failures(events, name, now):
@@ -301,7 +406,10 @@ def decide(hpa, deployment, events, values, state, now):
         verdict = 'WARMUP'
     elif reading['trips'] or state['blind'] >= BLIND_LIMIT:
         verdict = 'TRIP'
-    elif reading['blind']:
+    elif reading['blind'] or reading['unmeasured']:
+        # unmeasured (thin-sample first_p95) alerts like blind but never
+        # accumulates: advance() counts only reading['blind'], so a thin
+        # sample cannot reach the three-strike rollback.
         verdict = 'BLIND'
     else:
         verdict = 'LOW_SAMPLE' if reading['low_sample'] else 'CLEAN'
@@ -469,6 +577,10 @@ def run(client, dry_run, now=None):
 
 
 def main():
+    if sys.argv[1:] == ['--batch']:
+        from batch_guard import main as batch_main
+
+        return batch_main()
     client = Client(
         os.environ['PROMETHEUS_URL'], os.environ['NAMESPACE'], os.environ['HPA_NAME'], os.environ['STATE_NAME']
     )
