@@ -8587,6 +8587,9 @@ class AppLocalizationsSk extends AppLocalizations {
       'Prepis nie je k dispozícii — nahrávanie pokračuje a váš zvuk sa ukladá.';
 
   @override
+  String get captureNoAudioFromPendant => 'Žiadny zvuk z prívesku';
+
+  @override
   String get capturing => 'Záznam';
 
   @override
@@ -11080,6 +11083,12 @@ class AppLocalizationsSk extends AppLocalizations {
       'Bluetoothové prepojenie s vaším zariadením Omi sa zastavilo, takže zvuk sa do aplikácie nedostáva. Omi naďalej nahráva na zariadení a po obnovení prepojenia sa synchronizuje. Opätovný pokus prepojenie znovu naviaže; ak to naďalej zlyháva, skontrolujte zariadenie v Nastavenia > Zariadenie.';
 
   @override
+  String get captureConnecting => 'Pripája sa…';
+
+  @override
+  String get captureNoAudioDetail => 'Prívesok je pripojený, ale žiadny zvuk sa nedostáva do vášho telefónu';
+
+  @override
   String get captureIngressNeedsReconnect => 'Zvuk sa do aplikácie nedostáva — znovu pripojte Omi';
 
   @override
@@ -12239,12 +12248,6 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Skontrolujte pripojenie';
-
-  @override
-  String get forYou => 'Pre vás';
-
-  @override
-  String get stopThese => 'Zastaviť tieto';
 
   @override
   String get dismiss => 'Skryť';
@@ -14566,4 +14569,31 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Ostatní';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Hotovo';
+
+  @override
+  String get openLoopAnswerRemind => 'Pripomenúť neskôr';
+
+  @override
+  String get openLoopAnswerDrop => 'Zahodiť';
 }

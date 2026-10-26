@@ -8622,6 +8622,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'La transcripción no está disponible — la grabación continúa y tu audio se guarda.';
 
   @override
+  String get captureNoAudioFromPendant => 'Sin audio del colgante';
+
+  @override
   String get capturing => 'Capturando';
 
   @override
@@ -11122,6 +11125,12 @@ class AppLocalizationsEs extends AppLocalizations {
       'El enlace Bluetooth con tu Omi se ha detenido, por lo que el audio no llega a la aplicación. Omi sigue grabando en el dispositivo y se sincronizará cuando el enlace se recupere. Reintentar vuelve a conectar el enlace; si sigue fallando, revisa tu dispositivo en Ajustes > Dispositivo.';
 
   @override
+  String get captureConnecting => 'Conectando…';
+
+  @override
+  String get captureNoAudioDetail => 'El colgante está conectado, pero ningún audio llega a tu teléfono';
+
+  @override
   String get captureIngressNeedsReconnect => 'El audio no llega a la aplicación — vuelve a conectar tu Omi';
 
   @override
@@ -12283,12 +12292,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Comprueba la conexión';
-
-  @override
-  String get forYou => 'Para ti';
-
-  @override
-  String get stopThese => 'Dejar de recibir esto';
 
   @override
   String get dismiss => 'Descartar';
@@ -14616,4 +14619,31 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Otros';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Hecho';
+
+  @override
+  String get openLoopAnswerRemind => 'Recuérdamelo más tarde';
+
+  @override
+  String get openLoopAnswerDrop => 'Descartar';
 }

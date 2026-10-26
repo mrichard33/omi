@@ -8613,6 +8613,9 @@ class AppLocalizationsUr extends AppLocalizations {
       'ٹرانسکرپشن دستیاب نہیں — ریکارڈنگ جاری ہے اور آپ کا آڈیو محفوظ ہو رہا ہے۔';
 
   @override
+  String get captureNoAudioFromPendant => 'پینڈنٹ سے کوئی آڈیو نہیں';
+
+  @override
   String get capturing => 'کیپچر ہو رہا ہے';
 
   @override
@@ -11102,6 +11105,12 @@ class AppLocalizationsUr extends AppLocalizations {
       'آپ کے Omi سے بلوٹوتھ کنکشن رکاوٹ کا شکار ہے، اس لیے آڈیو ایپ تک نہیں پہنچ رہا۔ Omi ڈیوائس پر ریکارڈنگ جاری رکھتا ہے اور کنکشن بحال ہوتے ہی سنک ہو جائے گا۔ دوبارہ کوشش کرنے سے کنکشن دوبارہ قائم ہوتا ہے؛ اگر یہ بار بار ناکام ہو، تو سیٹنگز > ڈیوائس میں اپنا ڈیوائس چیک کریں۔';
 
   @override
+  String get captureConnecting => 'کنیکٹ ہو رہا ہے…';
+
+  @override
+  String get captureNoAudioDetail => 'پینڈنٹ منسلک ہے، لیکن کوئی آڈیو آپ کے فون تک نہیں پہنچ رہا';
+
+  @override
   String get captureIngressNeedsReconnect => 'آڈیو ایپ تک نہیں پہنچ رہا — اپنا Omi دوبارہ جوڑیں';
 
   @override
@@ -12259,12 +12268,6 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'کنکشن چیک کریں';
-
-  @override
-  String get forYou => 'آپ کے لیے';
-
-  @override
-  String get stopThese => 'یہ روکیں';
 
   @override
   String get dismiss => 'چھپائیں';
@@ -14584,4 +14587,31 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'دیگر';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'مکمل';
+
+  @override
+  String get openLoopAnswerRemind => 'بعد میں یاد دلائیں';
+
+  @override
+  String get openLoopAnswerDrop => 'چھوڑ دیں';
 }

@@ -8659,6 +8659,9 @@ class AppLocalizationsEl extends AppLocalizations {
       'Η απομαγνητοφώνηση δεν είναι διαθέσιμη — η εγγραφή συνεχίζεται και ο ήχος σας αποθηκεύεται.';
 
   @override
+  String get captureNoAudioFromPendant => 'Δεν υπάρχει ήχος από το μενταγιόν';
+
+  @override
   String get capturing => 'Καταγραφή';
 
   @override
@@ -11163,6 +11166,12 @@ class AppLocalizationsEl extends AppLocalizations {
       'Η σύνδεση Bluetooth με το Omi σου διακόπηκε, οπότε ο ήχος δεν φτάνει στην εφαρμογή. Το Omi συνεχίζει να καταγράφει στη συσκευή και θα συγχρονιστεί μόλις επανέλθει η σύνδεση. Η επανάληψη επανασυνδέει τη σύνδεση· αν εξακολουθεί να αποτυγχάνει, έλεγξε τη συσκευή σου στις Ρυθμίσεις > Συσκευή.';
 
   @override
+  String get captureConnecting => 'Σύνδεση…';
+
+  @override
+  String get captureNoAudioDetail => 'Το μενταγιόν είναι συνδεδεμένο, αλλά κανένας ήχος δεν φτάνει στο τηλέφωνό σας';
+
+  @override
   String get captureIngressNeedsReconnect => 'Ο ήχος δεν φτάνει στην εφαρμογή — συνδέστε ξανά το Omi';
 
   @override
@@ -12325,12 +12334,6 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Ελέγξτε τη σύνδεση';
-
-  @override
-  String get forYou => 'Για εσάς';
-
-  @override
-  String get stopThese => 'Διακοπή αυτών';
 
   @override
   String get dismiss => 'Απόρριψη';
@@ -14667,4 +14670,31 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Άλλοι';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Ολοκληρώθηκε';
+
+  @override
+  String get openLoopAnswerRemind => 'Υπενθύμιση αργότερα';
+
+  @override
+  String get openLoopAnswerDrop => 'Απόρριψη';
 }

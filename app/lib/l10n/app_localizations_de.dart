@@ -8669,6 +8669,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Transkription nicht verfügbar — die Aufnahme läuft weiter und Ihr Audio wird gespeichert.';
 
   @override
+  String get captureNoAudioFromPendant => 'Kein Ton vom Anhänger';
+
+  @override
   String get capturing => 'Aufnahme läuft';
 
   @override
@@ -11179,6 +11182,12 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die Bluetooth-Verbindung zu deinem Omi ist ins Stocken geraten, deshalb erreicht das Audio die App nicht. Omi nimmt auf dem Gerät weiter auf und synchronisiert, sobald die Verbindung wiederhergestellt ist. Erneut versuchen stellt die Verbindung wieder her; wenn es weiter fehlschlägt, prüfe dein Gerät unter Einstellungen > Gerät.';
 
   @override
+  String get captureConnecting => 'Verbindung wird hergestellt…';
+
+  @override
+  String get captureNoAudioDetail => 'Der Anhänger ist verbunden, aber kein Ton erreicht dein Telefon';
+
+  @override
   String get captureIngressNeedsReconnect => 'Audio erreicht die App nicht — verbinde Omi erneut';
 
   @override
@@ -12340,12 +12349,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Verbindung prüfen';
-
-  @override
-  String get forYou => 'Für dich';
-
-  @override
-  String get stopThese => 'Diese stoppen';
 
   @override
   String get dismiss => 'Ausblenden';
@@ -14680,4 +14683,31 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Andere';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Erledigt';
+
+  @override
+  String get openLoopAnswerRemind => 'Später erinnern';
+
+  @override
+  String get openLoopAnswerDrop => 'Verwerfen';
 }

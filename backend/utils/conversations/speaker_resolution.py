@@ -10,6 +10,7 @@ from config.batch_conversation_speakers import (
     BATCH_CONVERSATION_SCOPE,
     enabled as batch_speakers_enabled,
     has_batch_authority,
+    sync_off_enabled,
 )
 from config.refactor_modes import serving_for
 from utils.speakers import processing as speaker_evidence
@@ -23,7 +24,6 @@ import os
 import struct
 import time
 from dataclasses import dataclass
-from datetime import timezone
 from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import config.speaker_match_scores as match_scores
@@ -34,13 +34,14 @@ import numpy as np
 import database.speaker_resolution_updates as identity_updates_db
 import database.conversations as conversations_db
 import database.users as users_db
-from database.audio_timeline import COVERAGE_TOLERANCE_SECONDS, chunk_span_bounds
+from database.audio_timeline import COVERAGE_TOLERANCE_SECONDS
 from models.conversation import Conversation, ConversationSpeakers
 from models.transcript_segment import SpeakerIdentityStatus, TranscriptSegment
 from utils.conversations.audio_placement import (
     AudioPlacement,
     PreparedAudioCoverage,
     locate,
+    manifest_inventory as _manifest_inventory,
     prepare_audio_coverage,
     text_window_refusal,
 )
@@ -49,6 +50,8 @@ from utils.conversations.speaker_resolution_inputs import (
     manual_speakers as _manual_speakers,
     measured_embedding_seconds,
     batch_provider_keys,
+    started_at as _started_at,
+    manifest_span_load as _manifest_span_load,
 )
 from utils.manual_speaker_assignments import apply_manual_assignments, manual_rejected_speakers
 from utils.metrics import (
@@ -88,9 +91,12 @@ from utils.stt.conversation_speakers import (
 )
 from utils.stt.owner_profile import load_owner_embedding, validated_embedding
 from utils.stt.speaker_embedding import extract_embedding_from_bytes, speaker_embedding_configured
+from utils.conversations.sync_off_speakers import resolve_sync_off
 from utils.stt.speaker_identity import OMI_SPEAKER_ID_SENTINEL
 from utils.speaker_permissions import named_speaker_prompts_allowed
 from utils.stt.voiceprints import usable_person_voiceprint
+from utils.speakers import auto_enroll
+from database import speaker_auto_enroll as auto_enroll_db
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +138,11 @@ def _max_new_embeddings() -> int:
 CacheEntries = Dict[str, Tuple[float, np.ndarray]]
 
 
-def encode_cache(entries: CacheEntries, evidence_seconds: Optional[Mapping[str, float]] = None) -> bytes:
+def encode_cache(
+    entries: CacheEntries,
+    evidence_seconds: Optional[Mapping[str, float]] = None,
+    enrollment_bindings: Optional[Mapping] = None,
+) -> bytes:
     ids = list(entries)
     optional_header = {}
     try:
@@ -151,6 +161,15 @@ def encode_cache(entries: CacheEntries, evidence_seconds: Optional[Mapping[str, 
             'ids': ids,
             'durations': [round(entries[i][0], 3) for i in ids],
             'dim': int(entries[ids[0]][1].size) if ids else 0,
+            **(
+                {
+                    'enrollment_model': auto_enroll.MODEL,
+                    'enrollment_binding_version': 2,
+                    'enrollment_bindings': enrollment_bindings,
+                }
+                if enrollment_bindings is not None and ids and all(entries[i][1].size == auto_enroll.DIM for i in ids)
+                else {}
+            ),
         }
     ).encode()
     matrix = np.vstack([entries[i][1].reshape(1, -1) for i in ids]).astype('<f2').tobytes() if ids else b''
@@ -181,24 +200,8 @@ def decode_cache(data: Optional[bytes], evidence_seconds: Optional[Dict[str, flo
 # --- inputs ------------------------------------------------------------------
 
 
-def _started_at(conversation: Conversation) -> Optional[float]:
-    moment = conversation.started_at or conversation.created_at
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.timestamp()
-
-
 def _duration(segment: TranscriptSegment) -> float:
     return max(0.0, float(segment.end) - float(segment.start))
-
-
-def _manifest_span_load(audio_file: Any) -> int:
-    count = 0
-    for key in ('chunk_spans', 'chunk_timestamps'):
-        value = audio_file.get(key) if isinstance(audio_file, Mapping) else getattr(audio_file, key, None)
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-            count = max(count, len(value))
-    return count
 
 
 def load_voiceprints_for_resolution(uid: str, *, allow_audio_repair: bool = True) -> Dict[str, np.ndarray]:
@@ -220,6 +223,9 @@ def load_voiceprints_for_resolution(uid: str, *, allow_audio_repair: bool = True
         return prints
     try:
         people = users_db.get_people(uid)
+        enrollment_allowed = (
+            auto_enroll_db.context(uid) if any(p.get(auto_enroll.POOL_FIELD) for p in people or []) else {}
+        )
         reuse_people_for_spellings(uid, people)
     except Exception as error:
         logger.warning(
@@ -227,7 +233,11 @@ def load_voiceprints_for_resolution(uid: str, *, allow_audio_repair: bool = True
         )
         return prints
     for person in people or []:
-        embedding = validated_embedding(usable_person_voiceprint(person))
+        embedding = validated_embedding(
+            usable_person_voiceprint(person, uid=uid, auto_enroll_allowed=enrollment_allowed)
+            if enrollment_allowed
+            else usable_person_voiceprint(person)
+        )
         if (
             embedding is not None
             and person.get('id')
@@ -262,7 +272,9 @@ def _inward_sample(bound: float, origin: float, *, exclusive_end: bool) -> int:
     return math.floor(offset) if exclusive_end else math.ceil(offset)
 
 
-def _verified_clip(session: AudioChunkReadSession, start: float, end: float) -> Tuple[Optional[bytes], str]:
+def _verified_clip(
+    session: AudioChunkReadSession, start: float, end: float, *, windows: Optional[List[Tuple[float, float]]] = None
+) -> Tuple[Optional[bytes], str]:
     """Assemble at most 15s from the invocation's generation-pinned decoded cache.
 
     No downloads, padding, or interpolation. Only a tolerance-sized leading or
@@ -297,6 +309,8 @@ def _verified_clip(session: AudioChunkReadSession, start: float, end: float) -> 
         last_sample = min(len(pcm) // 2, _inward_sample(stop, chunk_start, exclusive_end=True))
         last_sample = min(last_sample, first_sample + remaining_samples)
         piece = pcm[first_sample * 2 : last_sample * 2]
+        if piece and windows is not None:
+            windows.append((chunk_start + first_sample / SAMPLE_RATE, chunk_start + last_sample / SAMPLE_RATE))
         pieces.append(piece)
         remaining_samples -= len(piece) // 2
         position = stop
@@ -321,6 +335,7 @@ def _embed_missing(
     session: Optional[AudioChunkReadSession] = None,
     diagnostics: Optional[EmbeddingDiagnostics] = None,
     evidence_seconds: Optional[Dict[str, float]] = None,
+    measured_windows: Optional[Dict[str, Tuple[float, float]]] = None,
     max_attempts: Optional[int] = None,
 ) -> Tuple[int, str]:
     """Embed ``pending`` segments from stored audio into ``cache``; returns (count, stop reason)."""
@@ -364,7 +379,7 @@ def _embed_missing(
                 # read only the already generation-verified invocation cache.
                 chunks = sorted(read_session.chunks, key=lambda c: c.get('span', {}).get('start', c['timestamp']))
                 for index, chunk in enumerate(chunks):
-                    if time.monotonic() > deadline or not read_session.in_budget():
+                    if time.monotonic() > deadline:
                         return
                     chunk_start = chunk.get('span', {}).get('start', chunk['timestamp'])
                     following = chunks[index + 1] if index + 1 < len(chunks) else None
@@ -402,14 +417,16 @@ def _embed_missing(
                         continue
                     if segment.id is not None:
                         base_ids.add(segment.id)
-                yield segment, clip
+                actual_start = chunk_start + max(0, int(round((begin - chunk_start) * SAMPLE_RATE))) / SAMPLE_RATE
+                yield segment, clip, (actual_start, actual_start + len(clip) / (SAMPLE_RATE * 2))
         if session is not None:
             for segment in pending:
                 if segment.id in base_ids:
                     continue
-                if time.monotonic() > deadline or not session.in_budget():
+                if time.monotonic() > deadline:
                     return
-                clip, reason = _verified_clip(session, *window_of(segment))
+                windows: List[Tuple[float, float]] = []
+                clip, reason = _verified_clip(session, *window_of(segment), windows=windows)
                 if clip is None:
                     diagnostics.clip_skips += 1
                     if reason == 'clip_too_short':
@@ -417,14 +434,16 @@ def _embed_missing(
                     elif reason == 'chunk_boundary':
                         diagnostics.chunk_boundary += 1
                     continue
-                yield segment, clip
+                if not windows:
+                    continue
+                yield segment, clip, (windows[0][0], windows[-1][1])
 
     with httpx.Client(timeout=EMBED_TIMEOUT_SECONDS) as client:
         if session is not None and time.monotonic() > deadline:
             return embedded, 'budget'
         if session is not None and limit <= 0:
             return embedded, 'max_embeddings'
-        for segment, clip in clips():
+        for segment, clip, measured_window in clips():
             segment_id = segment.id
             if segment_id is None or segment_id in done:
                 continue
@@ -456,51 +475,13 @@ def _embed_missing(
                 except Exception:
                     match_scores.record_failure(logger)
             cache[cache_key] = (_duration(segment), np.asarray(vector, dtype=np.float32).reshape(-1))
+            if measured_windows is not None:
+                measured_windows[segment_id] = measured_window
             done.add(segment_id)
             embedded += 1
     if session is not None and time.monotonic() > deadline:
         return embedded, 'budget'
     return embedded, 'complete'
-
-
-def _manifest_inventory(audio_files: Any) -> Optional[List[Tuple[float, Optional[Tuple[float, float]]]]]:
-    """Expected ``(timestamp, span bounds)`` pairs from the manifest, or None when malformed.
-
-    A file without ``chunk_timestamps`` contributes nothing; a file whose
-    ``chunk_spans`` is present must pair one well-formed span per timestamp.
-    """
-    expected: List[Tuple[float, Optional[Tuple[float, float]]]] = []
-    if not isinstance(audio_files, Sequence) or isinstance(audio_files, (str, bytes)):
-        return expected
-    for audio_file in audio_files:
-        if not isinstance(audio_file, Mapping):
-            return None
-        timestamps: Any = audio_file.get('chunk_timestamps')
-        file_spans: Any = audio_file.get('chunk_spans')
-        if not isinstance(timestamps, Sequence) or isinstance(timestamps, (str, bytes)):
-            continue
-        if file_spans is None:
-            file_spans = []
-        elif (
-            not isinstance(file_spans, Sequence)
-            or isinstance(file_spans, (str, bytes))
-            or len(file_spans) != len(timestamps)
-        ):
-            return None
-        for index, timestamp in enumerate(timestamps):
-            try:
-                ts = float(timestamp)
-            except (TypeError, ValueError):
-                return None
-            if not math.isfinite(ts):
-                return None
-            bounds = None
-            if file_spans:
-                bounds = chunk_span_bounds(file_spans[index])
-                if bounds is None:
-                    return None
-            expected.append((ts, bounds))
-    return expected
 
 
 def _finite_number(value: Any) -> Optional[float]:
@@ -545,10 +526,11 @@ def _verified_read_session(
     placements: Mapping[str, AudioPlacement],
     deadline: float,
 ) -> Optional[AudioChunkReadSession]:
-    """Generation-pin, decode and verify the bounded blob inventory before embedding.
+    """Prove each window from generation-pinned PCM within one shared I/O budget.
 
-    Declared spans must match decoded extents covering each pending window;
-    malformed, raced or over-budget input refuses before any cache write.
+    Validate the inventory once, then decode only objects that could intersect
+    the requested windows. A failed window abstains; previously proven windows
+    remain usable when another window is missing, ambiguous or over budget.
     """
     session = AudioChunkReadSession(uid, conversation.id, SAMPLE_RATE)
     session.deadline = min(session.deadline, deadline)
@@ -611,65 +593,98 @@ def _verified_read_session(
             ):
                 resolver_reason('inventory_pair_mismatch')
                 return None
-    decoded: Dict[str, bytes] = {}
+    bounds_by_path = {}
     for chunk in chunks:
-        pcm = session.fetch(chunk['path'])
-        if pcm is None or len(pcm) % 2 or session.limit_hit:
-            resolver_reason(
-                'read_budget'
-                if session.limit_hit
-                else {
-                    'missing_blob': 'blob_missing',
-                    'decode_failed': 'blob_decode_failed',
-                    'download_failed': 'blob_read_failed',
-                }.get(session.reason, 'blob_decode_failed')
-            )
+        bounds = _chunk_actual_bounds(chunk)
+        if bounds is None:
+            resolver_reason('inventory_metadata_invalid')
             return None
-        decoded[chunk['path']] = pcm
-    extents: List[Tuple[float, float]] = []
-    for chunk in chunks:
-        pcm = decoded[chunk['path']]
-        span = chunk.get('span')
-        if isinstance(span, Mapping):
-            bounds = _chunk_actual_bounds(chunk)
-            if bounds is None or bounds[1] is None:
-                resolver_reason('inventory_metadata_invalid')
-                return None
-            declared = bounds[1] - bounds[0]
-            decoded_duration = len(pcm) / (SAMPLE_RATE * 2)
-            if declared <= 0 or abs(decoded_duration - declared) > 0.002:
-                resolver_reason('decoded_duration_mismatch')
-                return None
-            extents.append((bounds[0], bounds[1]))
-        else:
-            start = cast(float, _finite_number(chunk['timestamp']))
-            extents.append((start, start + len(pcm) / (SAMPLE_RATE * 2)))
-    for first in range(len(extents)):
-        for second in range(first + 1, len(extents)):
-            overlap = min(extents[first][1], extents[second][1]) - max(extents[first][0], extents[second][0])
-            if overlap > COVERAGE_TOLERANCE_SECONDS and (
-                not serving_for('SPEAKER_EVIDENCE_MODE', uid)
-                or any(
-                    window[0] < min(extents[first][1], extents[second][1])
-                    and window[1] > max(extents[first][0], extents[second][0])
-                    for s in pending
-                    if s.id is not None
-                    if (placement := placements.get(s.id)) is not None
-                    if (window := placement.window) is not None
-                )
-            ):
-                # refactor: superseded by per-window evidence when SPEAKER_EVIDENCE_MODE=serve
-                resolver_reason('decoded_overlap')
-                return None
+        bounds_by_path[chunk['path']] = bounds
+    verified: set[str] = set()
+    decoded: Dict[str, Tuple[float, float]] = {}
+    rejected_extents: List[Tuple[float, float]] = []
+    first_refusal = None
     for segment in pending:
         placement = placements.get(segment.id) if segment.id is not None else None
         window = placement.window if placement is not None else None
         if window is None:
-            resolver_reason('no_proven_window')
-            return None
-        if not _window_covered(extents, window[0], window[1]):
-            resolver_reason('decoded_coverage_hole')
-            return None
+            first_refusal = first_refusal or 'no_proven_window'
+            continue
+        extents = []
+        refusal = None
+        for chunk in chunks:
+            start, upper_end = bounds_by_path[chunk['path']]
+            # Unknown Opus durations are deliberately unbounded: never assume
+            # the next filename proves the previous object's end/non-overlap.
+            if start >= window[1] or (upper_end is not None and upper_end <= window[0]):
+                continue
+            extent = decoded.get(chunk['path'])
+            if extent is None:
+                pcm = session.fetch(chunk['path'])
+                if pcm is None or len(pcm) % 2 or session.limit_hit:
+                    # fetch caches before the decoded-proof checks. Rejected
+                    # bytes must not reach a later boundary-assembled clip.
+                    session.cache[chunk['path']] = (None, 'decode_failed')
+                    refusal = (
+                        'read_budget'
+                        if session.limit_hit
+                        else {
+                            'missing_blob': 'blob_missing',
+                            'decode_failed': 'blob_decode_failed',
+                            'download_failed': 'blob_read_failed',
+                        }.get(session.reason, 'blob_decode_failed')
+                    )
+                    break
+                duration = len(pcm) / (SAMPLE_RATE * 2)
+                if isinstance(chunk.get('span'), Mapping):
+                    if upper_end is None or abs(duration - (upper_end - start)) > 0.002:
+                        session.cache[chunk['path']] = (None, 'decode_failed')
+                        rejected_extents.append((start, max(upper_end or start, start + duration)))
+                        refusal = 'decoded_duration_mismatch'
+                        break
+                # Actual decoded samples, rather than a declared rounded end,
+                # are the authority for coverage and overlap checks.
+                extent = (start, start + duration)
+                decoded[chunk['path']] = extent
+            extents.append(extent)
+        if refusal is None:
+            for index, first in enumerate(extents):
+                if any(
+                    min(first[1], second[1], window[1]) - max(first[0], second[0], window[0])
+                    > COVERAGE_TOLERANCE_SECONDS
+                    for second in extents[index + 1 :]
+                ):
+                    refusal = 'decoded_overlap'
+                    break
+        if refusal is None and not _window_covered(extents, *window):
+            refusal = 'decoded_coverage_hole'
+        if refusal is None and segment.id is not None:
+            verified.add(segment.id)
+        else:
+            first_refusal = first_refusal or refusal
+    # A contradiction discovered later also revokes earlier provisional proof.
+    # Keep its observed extent even after its PCM is removed from the cache.
+    verified.difference_update(
+        segment_id
+        for segment_id, placement in placements.items()
+        if (window := placement.window) is not None
+        and any(start < window[1] and end > window[0] for start, end in rejected_extents)
+    )
+    logger.info(
+        'event=conversation_speaker_audio_evidence pending=%d verified=%d refused=%d '
+        'downloads=%d bytes=%d read_budget_hit=%s reason=%s',
+        len(pending),
+        len(verified),
+        len(pending) - len(verified),
+        getattr(session, 'downloads', 0),
+        getattr(session, 'bytes', 0),
+        session.limit_hit,
+        first_refusal or 'none',
+    )
+    if not verified:
+        resolver_reason(first_refusal or 'no_proven_window')
+        return None
+    session.verified_segment_ids = verified
     return session
 
 
@@ -927,7 +942,7 @@ def resolve_speakers_for_processing(
                 )
         # Batch authority survives admission rollback and subsequent resolution.
         batch_record = has_batch_authority(conversation.transcript_segments)
-        batch_resolution = conversation.private_cloud_sync_enabled and batch_speakers_enabled(
+        batch_resolution = (conversation.private_cloud_sync_enabled or sync_off_enabled()) and batch_speakers_enabled(
             conversation.transcript_segments
         )
         # The kill switch also stops linking/naming when speaker evidence serves.
@@ -1200,6 +1215,12 @@ def _resolve(
 ) -> None:
     began = time.monotonic()
     segments = conversation.transcript_segments
+    if not conversation.private_cloud_sync_enabled and sync_off_enabled() and batch_speakers_enabled(segments):
+        resolution = resolve_sync_off(
+            uid, conversation, receipt, deadline, load_voiceprints_for_resolution, apply_speaker_resolution
+        )
+        resolver_reason('no_vectors' if resolution is None else 'resolved' if resolution.coverage >= 0.9 else 'partial')
+        return
     batch_resolution = conversation.private_cloud_sync_enabled and batch_speakers_enabled(segments)
     input_ids = len({s.speaker_id for s in segments if s.speaker_id != OMI_SPEAKER_ID_SENTINEL})
     if not conversation.private_cloud_sync_enabled or not speaker_embedding_configured():
@@ -1271,7 +1292,10 @@ def _resolve(
             placements[segment.id] = place_segment(segment, mapping, index)
 
     clip_seconds: Dict[str, float] = {}
-    cache = decode_cache(download_speaker_embedding_cache(uid, conversation.id), clip_seconds)
+    cache_data = download_speaker_embedding_cache(uid, conversation.id)
+    cache = decode_cache(cache_data, clip_seconds)
+    cache_snapshot = dict(cache)
+    prior_enrollment = auto_enroll.decode_evidence(cache_data)
     keys: Dict[str, str] = {}
     for segment in segments:
         if not segment.id or segment.id in invalid_text_ids:
@@ -1401,8 +1425,13 @@ def _resolve(
         if read_session is None:
             _without_resolution(conversation, 'unaligned_audio', reason='unverified_inventory', force_unavailable=True)
             return
+        verified = getattr(read_session, 'verified_segment_ids', None)
+        if verified is not None:
+            abstained.update(s.id for s in pending if s.id is not None and s.id not in verified)
+            pending = [s for s in pending if s.id in verified]
     speaker_evidence.window_abstentions(placements, abstained)
     diagnostics = EmbeddingDiagnostics()
+    measured_windows: Dict[str, Tuple[float, float]] = {}
     new_embeddings, stop = _embed_missing(
         uid,
         conversation,
@@ -1414,6 +1443,7 @@ def _resolve(
         session=read_session,
         diagnostics=diagnostics,
         evidence_seconds=clip_seconds,
+        measured_windows=measured_windows,
         max_attempts=max_embedding_attempts,
     )
     owner_diagnostics.resolver_counts(
@@ -1424,12 +1454,14 @@ def _resolve(
         pending=len(pending),
         stop=stop,
     )
-    if read_session is not None and read_session.limit_hit:
-        resolver_reason('read_budget')
-        _without_resolution(conversation, 'unaligned_audio', reason='unverified_inventory', force_unavailable=True)
-        return
     if new_embeddings or stale:
-        upload_speaker_embedding_cache(uid, conversation.id, encode_cache(cache, clip_seconds))
+        bindings = auto_enroll.evidence_bindings(segments, keys, placements, measured_windows, prior_enrollment)
+        bindings = auto_enroll.accepted_bindings(bindings, cache, cache_snapshot, prior_enrollment)
+        upload_speaker_embedding_cache(
+            uid,
+            conversation.id,
+            encode_cache(cache, clip_seconds, bindings),
+        )
 
     vectors = {
         segment.id: cache[keys[segment.id]][1]

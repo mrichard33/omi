@@ -8648,6 +8648,9 @@ class AppLocalizationsIt extends AppLocalizations {
       'Trascrizione non disponibile — la registrazione continua e l\'audio viene salvato.';
 
   @override
+  String get captureNoAudioFromPendant => 'Nessun audio dal ciondolo';
+
+  @override
   String get capturing => 'Acquisizione in corso';
 
   @override
@@ -11150,6 +11153,12 @@ class AppLocalizationsIt extends AppLocalizations {
       'Il collegamento Bluetooth con il tuo Omi si è interrotto, quindi l\'audio non arriva all\'app. Omi continua a registrare sul dispositivo e si sincronizzerà non appena il collegamento si ripristina. Riprova riconnette il collegamento; se continua a non funzionare, controlla il dispositivo in Impostazioni > Dispositivo.';
 
   @override
+  String get captureConnecting => 'Connessione…';
+
+  @override
+  String get captureNoAudioDetail => 'Il pendente è collegato, ma nessun audio raggiunge il tuo telefono';
+
+  @override
   String get captureIngressNeedsReconnect => 'L\'audio non raggiunge l\'app — riconnetti il tuo Omi';
 
   @override
@@ -12311,12 +12320,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Controlla la connessione';
-
-  @override
-  String get forYou => 'Per te';
-
-  @override
-  String get stopThese => 'Interrompi questi';
 
   @override
   String get dismiss => 'Ignora';
@@ -14648,4 +14651,31 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Altri';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Fatto';
+
+  @override
+  String get openLoopAnswerRemind => 'Ricordamelo più tardi';
+
+  @override
+  String get openLoopAnswerDrop => 'Ignora';
 }

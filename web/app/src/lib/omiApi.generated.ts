@@ -3794,6 +3794,27 @@ export interface OnboardingStateUpdate {
   device_onboarding_completed?: boolean | null;
 }
 
+export interface OpenLoopAnswerRequest {
+  action: "done" | "remind" | "drop";
+}
+
+export interface OpenLoopAnswerResponse {
+  card_id: string;
+  date: string;
+  state: "done" | "remind" | "dropped";
+}
+
+export interface OpenLoopCard {
+  card_id: string;
+  context_line: string;
+  date: string;
+  question: string;
+}
+
+export interface OpenLoopCardsResponse {
+  cards?: Array<OpenLoopCard>;
+}
+
 export interface OpenLoopDescriptor {
   blocking_on_id?: string | null;
   kind: OpenLoopKind;
@@ -6285,6 +6306,8 @@ export interface routers__memories__BatchMemoriesResponse {
 }
 
 export interface routers__payment__PricingOption {
+  billing_total?: string | null;
+  currency?: string;
   description?: string | null;
   eyebrow?: string | null;
   id: string;
@@ -6790,6 +6813,10 @@ export interface OmiApiSchemas {
   "OfflineQueueInstruction": OfflineQueueInstruction;
   "OnboardingStateResponse": OnboardingStateResponse;
   "OnboardingStateUpdate": OnboardingStateUpdate;
+  "OpenLoopAnswerRequest": OpenLoopAnswerRequest;
+  "OpenLoopAnswerResponse": OpenLoopAnswerResponse;
+  "OpenLoopCard": OpenLoopCard;
+  "OpenLoopCardsResponse": OpenLoopCardsResponse;
   "OpenLoopDescriptor": OpenLoopDescriptor;
   "OpenLoopKind": OpenLoopKind;
   "OpenLoopSnapshot": OpenLoopSnapshot;
@@ -10415,6 +10442,26 @@ export interface OmiApiPaths {
       operationId: "answer_review_item_v1_review_items__item_id__answer_post";
       responses: {
         "200": ReviewAnswerReceipt;
+        "401": void;
+        "422": HTTPValidationError;
+      };
+    };
+  };
+  "/v1/review/open-loops": {
+    get: {
+      operationId: "get_review_open_loops_v1_review_open_loops_get";
+      responses: {
+        "200": OpenLoopCardsResponse;
+        "401": void;
+        "422": HTTPValidationError;
+      };
+    };
+  };
+  "/v1/review/open-loops/{date}/{card_id}/answer": {
+    post: {
+      operationId: "answer_review_open_loop_v1_review_open_loops__date___card_id__answer_post";
+      responses: {
+        "200": OpenLoopAnswerResponse;
         "401": void;
         "422": HTTPValidationError;
       };
@@ -18329,7 +18376,7 @@ export async function get_payment_method_status_v1_payment_methods_status_get(he
   return _res.status === 204 ? (undefined as any) : await _res.json();
 }
 
-export async function get_available_plans_endpoint_v1_payments_available_plans_get(header: { X_App_Platform?: string, X_App_Version?: string, authorization?: string, X_Device_Id_Hash?: string }, init?: OmiApiClientInit): Promise<AvailablePlansResponse> {
+export async function get_available_plans_endpoint_v1_payments_available_plans_get(header: { X_App_Platform?: string, X_App_Version?: string, X_Omi_Billing_Currency?: string | null, authorization?: string, X_Device_Id_Hash?: string }, init?: OmiApiClientInit): Promise<AvailablePlansResponse> {
   const _base = init?.baseURL ?? "";
   const _path = `/v1/payments/available-plans`;
   const _search = "";
@@ -18340,6 +18387,7 @@ export async function get_available_plans_endpoint_v1_payments_available_plans_g
       ...init?.headers,
       ...(header.X_App_Platform !== undefined ? { "X-App-Platform": String(header.X_App_Platform) } : {}),
       ...(header.X_App_Version !== undefined ? { "X-App-Version": String(header.X_App_Version) } : {}),
+      ...(header.X_Omi_Billing_Currency !== undefined ? { "X-Omi-Billing-Currency": String(header.X_Omi_Billing_Currency) } : {}),
       ...(header.authorization !== undefined ? { "authorization": String(header.authorization) } : {}),
       ...(header.X_Device_Id_Hash !== undefined ? { "X-Device-Id-Hash": String(header.X_Device_Id_Hash) } : {}),
     },
@@ -18806,6 +18854,49 @@ export async function get_review_items_v1_review_items_get(header: { authorizati
 export async function answer_review_item_v1_review_items__item_id__answer_post(path: { item_id: string }, header: { authorization?: string, X_App_Platform?: string, X_Device_Id_Hash?: string, X_App_Version?: string }, body: ReviewAnswer, init?: OmiApiClientInit): Promise<ReviewAnswerReceipt> {
   const _base = init?.baseURL ?? "";
   const _path = `/v1/review/items/${path.item_id}/answer`;
+  const _search = "";
+  const _res = await fetch(`${_base}${_path}${_search}`, {
+    method: "POST",
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.token ? { Authorization: `Bearer ${init.token}` } : {}),
+      ...init?.headers,
+      ...(header.authorization !== undefined ? { "authorization": String(header.authorization) } : {}),
+      ...(header.X_App_Platform !== undefined ? { "X-App-Platform": String(header.X_App_Platform) } : {}),
+      ...(header.X_Device_Id_Hash !== undefined ? { "X-Device-Id-Hash": String(header.X_Device_Id_Hash) } : {}),
+      ...(header.X_App_Version !== undefined ? { "X-App-Version": String(header.X_App_Version) } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!_res.ok) throw new OmiApiError(_res.status, _res);
+  return _res.status === 204 ? (undefined as any) : await _res.json();
+}
+
+export async function get_review_open_loops_v1_review_open_loops_get(query: { time_zone?: string | null }, header: { authorization?: string, X_App_Platform?: string, X_Device_Id_Hash?: string, X_App_Version?: string }, init?: OmiApiClientInit): Promise<OpenLoopCardsResponse> {
+  const _base = init?.baseURL ?? "";
+  const _path = `/v1/review/open-loops`;
+  const _params = query ? Object.entries(query)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&') : '';
+  const _search = _params ? `?${_params}` : "";
+  const _res = await fetch(`${_base}${_path}${_search}`, {
+    method: "GET",
+    headers: {
+      ...(init?.token ? { Authorization: `Bearer ${init.token}` } : {}),
+      ...init?.headers,
+      ...(header.authorization !== undefined ? { "authorization": String(header.authorization) } : {}),
+      ...(header.X_App_Platform !== undefined ? { "X-App-Platform": String(header.X_App_Platform) } : {}),
+      ...(header.X_Device_Id_Hash !== undefined ? { "X-Device-Id-Hash": String(header.X_Device_Id_Hash) } : {}),
+      ...(header.X_App_Version !== undefined ? { "X-App-Version": String(header.X_App_Version) } : {}),
+    },
+  });
+  if (!_res.ok) throw new OmiApiError(_res.status, _res);
+  return _res.status === 204 ? (undefined as any) : await _res.json();
+}
+
+export async function answer_review_open_loop_v1_review_open_loops__date___card_id__answer_post(path: { date: string, card_id: string }, header: { authorization?: string, X_App_Platform?: string, X_Device_Id_Hash?: string, X_App_Version?: string }, body: OpenLoopAnswerRequest, init?: OmiApiClientInit): Promise<OpenLoopAnswerResponse> {
+  const _base = init?.baseURL ?? "";
+  const _path = `/v1/review/open-loops/${path.date}/${path.card_id}/answer`;
   const _search = "";
   const _res = await fetch(`${_base}${_path}${_search}`, {
     method: "POST",
@@ -22951,4 +23042,4 @@ export async function get_speech_profile_v4_speech_profile_get(header: { authori
   return _res.status === 204 ? (undefined as any) : await _res.json();
 }
 
-// Total: 528 client methods generated.
+// Total: 530 client methods generated.

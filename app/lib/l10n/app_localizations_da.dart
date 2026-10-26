@@ -8588,6 +8588,9 @@ class AppLocalizationsDa extends AppLocalizations {
       'Transskription er ikke tilgængelig — optagelsen fortsætter, og din lyd gemmes.';
 
   @override
+  String get captureNoAudioFromPendant => 'Ingen lyd fra vedhænget';
+
+  @override
   String get capturing => 'Optager';
 
   @override
@@ -11077,6 +11080,12 @@ class AppLocalizationsDa extends AppLocalizations {
       'Bluetooth-forbindelsen til din Omi er gået i stå, så lyden når ikke frem til appen. Omi optager videre på enheden og synkroniseres, når forbindelsen er tilbage. Prøv igen opretter forbindelsen igen; hvis det fortsat fejler, tjek din enhed under Indstillinger > Enhed.';
 
   @override
+  String get captureConnecting => 'Forbinder…';
+
+  @override
+  String get captureNoAudioDetail => 'Pendanten er forbundet, men der når ingen lyd din telefon';
+
+  @override
   String get captureIngressNeedsReconnect => 'Lyden når ikke appen — tilslut din Omi igen';
 
   @override
@@ -12233,12 +12242,6 @@ class AppLocalizationsDa extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Tjek forbindelsen';
-
-  @override
-  String get forYou => 'Til dig';
-
-  @override
-  String get stopThese => 'Stop disse';
 
   @override
   String get dismiss => 'Afvis';
@@ -14562,4 +14565,31 @@ class AppLocalizationsDa extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Andre';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Færdig';
+
+  @override
+  String get openLoopAnswerRemind => 'Mind mig senere';
+
+  @override
+  String get openLoopAnswerDrop => 'Drop det';
 }

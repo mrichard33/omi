@@ -8610,6 +8610,9 @@ class AppLocalizationsTr extends AppLocalizations {
       'Transkripsiyon kullanılamıyor — kayıt devam ediyor ve sesiniz kaydediliyor.';
 
   @override
+  String get captureNoAudioFromPendant => 'Kolyeden ses gelmiyor';
+
+  @override
   String get capturing => 'Kaydediliyor';
 
   @override
@@ -11100,6 +11103,12 @@ class AppLocalizationsTr extends AppLocalizations {
       'Omi cihazınızdaki Bluetooth bağlantısı kesildi, bu nedenle ses uygulamaya ulaşmıyor. Omi cihazda kaydetmeye devam ediyor ve bağlantı geri geldiğinde senkronize olacak. Yeniden denemek bağlantıyı yeniden kurar; başarısız olmaya devam ederse Ayarlar > Cihaz bölümünden cihazınızı kontrol edin.';
 
   @override
+  String get captureConnecting => 'Bağlanıyor…';
+
+  @override
+  String get captureNoAudioDetail => 'Kolye bağlı, ancak telefonunuza hiçbir ses ulaşmıyor';
+
+  @override
   String get captureIngressNeedsReconnect => 'Ses uygulamaya ulaşmıyor — Omi\'nizi yeniden bağlayın';
 
   @override
@@ -12256,12 +12265,6 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Bağlantıyı Kontrol Edin';
-
-  @override
-  String get forYou => 'Sizin İçin';
-
-  @override
-  String get stopThese => 'Bunları Durdur';
 
   @override
   String get dismiss => 'Gizle';
@@ -14584,4 +14587,31 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Diğerleri';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Tamamlandı';
+
+  @override
+  String get openLoopAnswerRemind => 'Daha sonra hatırlat';
+
+  @override
+  String get openLoopAnswerDrop => 'Yoksay';
 }

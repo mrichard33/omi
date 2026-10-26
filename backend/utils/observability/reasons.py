@@ -44,6 +44,8 @@ class ReasonFamily(StrEnum):
     STAGING_FENCE = 'staging_fence'
     HELD_CONTENT = 'held_content'
     SPEAKER_EVIDENCE = 'speaker_evidence'
+    NOTES_AGENT_FORCE = 'notes_agent_force'
+    NOTES_AGENT_TRANSPORT = 'notes_agent_transport'
 
 
 REASON_UNKNOWN_TOTAL = Counter(
@@ -253,6 +255,22 @@ class LiveSttReason(StrEnum):
     NO_TEXT = 'no_text'
 
 
+class LocalPreviewOutcome(StrEnum):
+    """Mobile local-preview lane admission at listen session start (routers/listen/local_preview.py)."""
+
+    UNKNOWN = 'unknown'
+    ADMITTED = 'admitted'
+    NOT_REQUESTED = 'not_requested'
+    KILL_SWITCH = 'kill_switch'
+    CUSTOM_STT = 'custom_stt'
+    MULTI_CHANNEL = 'multi_channel'
+    ONBOARDING = 'onboarding'
+    PHONE_CALL = 'phone_call'
+    PRIVATE_SYNC_OFF = 'private_sync_off'
+    NOT_BATCH_LANE = 'not_batch_lane'
+    POLICY_ERROR = 'policy_error'
+
+
 class ServiceWindowOutcome(StrEnum):
     """Disposition of one admitted service-VIP window POST (`utils/stt/window_replicas.py`)."""
 
@@ -394,6 +412,28 @@ class FallbackReason(StrEnum):
     ACQUIRE_UNSETTLED = 'acquire_unsettled'
     MARKER_TIMEOUT = 'marker_timeout'
     PREAMBLE_TIMEOUT = 'preamble_timeout'
+
+
+class NotesAgentForceReason(StrEnum):
+    """Why an agentic notes run was given a system-directed submit turn (first reason only)."""
+
+    UNKNOWN = 'unknown'
+    LOOKUP_CAP = 'lookup_cap'
+    SUBMISSION_REJECTED = 'submission_rejected'
+    TEXT_ONLY_RESPONSE = 'text_only_response'
+    PRIOR_REJECTION = 'prior_rejection'
+    TURN_LIMIT = 'turn_limit'
+    COST_LIMIT = 'cost_limit'
+    DEADLINE = 'deadline'
+
+
+class NotesAgentTransportReason(StrEnum):
+    """Why a notes run could not use the managed tool transport."""
+
+    UNKNOWN = 'unknown'
+    MISSING_OWNER = 'missing_owner'
+    BYOK = 'byok'
+    UNSUPPORTED_MODEL = 'unsupported_model'
 
 
 def reason_values(enum: type[StrEnum]) -> frozenset[str]:

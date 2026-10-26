@@ -8636,6 +8636,9 @@ class AppLocalizationsHu extends AppLocalizations {
       'Az átírás nem érhető el — a felvétel folytatódik, és a hanganyag mentésre kerül.';
 
   @override
+  String get captureNoAudioFromPendant => 'Nincs hang a medálból';
+
+  @override
   String get capturing => 'Rögzítés';
 
   @override
@@ -11135,6 +11138,12 @@ class AppLocalizationsHu extends AppLocalizations {
       'Az Omi eszközzel létesített Bluetooth-kapcsolat megakadt, így a hang nem jut el az alkalmazásba. Az Omi tovább rögzít az eszközön, és a kapcsolat helyreállása után szinkronizál. Az újrapróbálás újra létrehozza a kapcsolatot; ha továbbra is sikertelen, ellenőrizze az eszközt a Beállítások > Eszköz alatt.';
 
   @override
+  String get captureConnecting => 'Csatlakozás…';
+
+  @override
+  String get captureNoAudioDetail => 'A medál csatlakoztatva, de egyetlen hang sem ér el a telefonjára';
+
+  @override
   String get captureIngressNeedsReconnect => 'A hang nem ér el az appba — csatlakoztasd újra az Omit';
 
   @override
@@ -12293,12 +12302,6 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Ellenőrizze a kapcsolatot';
-
-  @override
-  String get forYou => 'Önnek';
-
-  @override
-  String get stopThese => 'Ezek leállítása';
 
   @override
   String get dismiss => 'Elrejtés';
@@ -14629,4 +14632,31 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Mások';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Kész';
+
+  @override
+  String get openLoopAnswerRemind => 'Emlékeztessen később';
+
+  @override
+  String get openLoopAnswerDrop => 'Eldobás';
 }

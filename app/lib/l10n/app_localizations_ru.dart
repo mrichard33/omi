@@ -8628,6 +8628,9 @@ class AppLocalizationsRu extends AppLocalizations {
       'Расшифровка недоступна — запись продолжается, аудио сохраняется.';
 
   @override
+  String get captureNoAudioFromPendant => 'Нет звука с кулона';
+
+  @override
   String get capturing => 'Запись';
 
   @override
@@ -11130,6 +11133,12 @@ class AppLocalizationsRu extends AppLocalizations {
       'Связь Bluetooth с вашим Omi прервалась, поэтому звук не попадает в приложение. Omi продолжает записывать на устройстве и синхронизируется, когда связь восстановится. Повторная попытка переподключает связь; если она продолжает сбиваться, проверьте устройство в разделе Настройки > Устройство.';
 
   @override
+  String get captureConnecting => 'Подключение…';
+
+  @override
+  String get captureNoAudioDetail => 'Кулон подключён, но звук не поступает на ваш телефон';
+
+  @override
   String get captureIngressNeedsReconnect => 'Звук не доходит до приложения — переподключите Omi';
 
   @override
@@ -12289,12 +12298,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Проверьте соединение';
-
-  @override
-  String get forYou => 'Для вас';
-
-  @override
-  String get stopThese => 'Отключить такие';
 
   @override
   String get dismiss => 'Скрыть';
@@ -14620,4 +14623,31 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Другие';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Готово';
+
+  @override
+  String get openLoopAnswerRemind => 'Напомнить позже';
+
+  @override
+  String get openLoopAnswerDrop => 'Отклонить';
 }

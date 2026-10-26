@@ -8538,6 +8538,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get transcriptionUnavailableRecordingSaved => 'النسخ غير متاح — يستمر التسجيل ويتم حفظ الصوت.';
 
   @override
+  String get captureNoAudioFromPendant => 'لا يوجد صوت من القلادة';
+
+  @override
   String get capturing => 'جارٍ الالتقاط';
 
   @override
@@ -11022,6 +11025,12 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعطّل اتصال البلوتوث بجهاز Omi، لذا لا يصل الصوت إلى التطبيق. يواصل Omi التسجيل على الجهاز وسيتمت المزامنة بمجرد استعادة الاتصال. إعادة المحاولة تعيد إنشاء الاتصال؛ إذا استمر الفشل، تحقق من جهازك من الإعدادات > الجهاز.';
 
   @override
+  String get captureConnecting => 'جارٍ الاتصال…';
+
+  @override
+  String get captureNoAudioDetail => 'القلادة متصلة، لكن لا صوت يصل إلى هاتفك';
+
+  @override
   String get captureIngressNeedsReconnect => 'الصوت لا يصل إلى التطبيق — أعد توصيل Omi';
 
   @override
@@ -12175,12 +12184,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'تحقق من الاتصال';
-
-  @override
-  String get forYou => 'من أجلك';
-
-  @override
-  String get stopThese => 'إيقاف هذه';
 
   @override
   String get dismiss => 'تجاهل';
@@ -14490,4 +14493,31 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'آخرون';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'تم';
+
+  @override
+  String get openLoopAnswerRemind => 'ذكّرني لاحقًا';
+
+  @override
+  String get openLoopAnswerDrop => 'استبعدها';
 }

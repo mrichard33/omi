@@ -8674,6 +8674,9 @@ class AppLocalizationsTl extends AppLocalizations {
       'Hindi available ang transcription — tuloy ang pagre-record at naka-save ang iyong audio.';
 
   @override
+  String get captureNoAudioFromPendant => 'Walang audio mula sa pendant';
+
+  @override
   String get capturing => 'Kumukuha';
 
   @override
@@ -11184,6 +11187,12 @@ class AppLocalizationsTl extends AppLocalizations {
       'Nag-stall ang Bluetooth link sa iyong Omi, kaya hindi umaabot sa app ang audio. Patuloy na nagre-record ang Omi sa device at mag-si-sync kapag nakabawi ang link. Ang pag-subok muli ay muling nagkokonekta ng link; kung patuloy itong nabibigo, tingnan ang iyong device sa Mga Setting > Device.';
 
   @override
+  String get captureConnecting => 'Kumokonekta…';
+
+  @override
+  String get captureNoAudioDetail => 'Nakakonekta ang pendant, ngunit walang audio na umaabot sa iyong telepono';
+
+  @override
   String get captureIngressNeedsReconnect => 'Hindi naabot ng audio ang app — i-reconnect ang iyong Omi';
 
   @override
@@ -12346,12 +12355,6 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Suriin ang Koneksyon';
-
-  @override
-  String get forYou => 'Para Sa Iyo';
-
-  @override
-  String get stopThese => 'Itigil Ang Mga Ito';
 
   @override
   String get dismiss => 'Isara';
@@ -14686,4 +14689,31 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Iba pa';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Tapos';
+
+  @override
+  String get openLoopAnswerRemind => 'Ipaalala sa akin mamaya';
+
+  @override
+  String get openLoopAnswerDrop => 'Iwanan';
 }

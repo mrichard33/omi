@@ -8642,6 +8642,9 @@ class AppLocalizationsMk extends AppLocalizations {
       'Транскрипцијата не е достапна — снимањето продолжува и вашето аудио се зачувува.';
 
   @override
+  String get captureNoAudioFromPendant => 'Нема звук од приврзокот';
+
+  @override
   String get capturing => 'Снимање';
 
   @override
@@ -11146,6 +11149,12 @@ class AppLocalizationsMk extends AppLocalizations {
       'Bluetooth-врската со вашиот Omi застана, така што звукот не стига до апликацијата. Omi продолжува да снима на уредот и ќе се синхронизира кога ќе се врати врската. Обидот повторно ја воспоставува врската; ако продолжува да не успева, проверете го уредот во Поставки > Уред.';
 
   @override
+  String get captureConnecting => 'Се поврзува…';
+
+  @override
+  String get captureNoAudioDetail => 'Привесоката е поврзана, но никој звук не стигнува до вашиот телефон';
+
+  @override
   String get captureIngressNeedsReconnect => 'Аудиото не стига до апликацијата — повторно поврзете го Omi';
 
   @override
@@ -12306,12 +12315,6 @@ class AppLocalizationsMk extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Проверете ја врската';
-
-  @override
-  String get forYou => 'За вас';
-
-  @override
-  String get stopThese => 'Запри ги овие';
 
   @override
   String get dismiss => 'Сокриј';
@@ -14636,4 +14639,31 @@ class AppLocalizationsMk extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Други';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Завршено';
+
+  @override
+  String get openLoopAnswerRemind => 'Потсети ме подоцна';
+
+  @override
+  String get openLoopAnswerDrop => 'Отфрли';
 }

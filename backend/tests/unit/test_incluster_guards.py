@@ -458,19 +458,23 @@ def test_state_gating(floor, latency):
     assert guard.workload_only(hpa['spec']) == (floor < 12 and not latency)
 
 
-def test_arm_full_window_and_reset_on_spec_image_generation_changes():
+def test_arm_full_window_resets_on_config_but_not_scheduled_floor_changes():
     hpa, dep = objects()
     verdict, state, _ = guard.decide(hpa, dep, [], values(), {}, 1000)
     assert verdict == 'WARMUP'
     assert guard.decide(hpa, dep, [], values(), state, 1899)[0] == 'WARMUP'
     assert guard.decide(hpa, dep, [], values(), state, 1900)[0] == 'CLEAN'
+    # Scheduled floor patches rewrite spec.minReplicas hourly and bump the HPA
+    # generation; neither may reset the arming window or the guard would sit in
+    # perpetual WARMUP and never be able to raise the floor.
     changed_hpa, changed_dep = deepcopy(hpa), deepcopy(dep)
     changed_hpa['spec']['minReplicas'] = 8
-    assert guard.decide(changed_hpa, dep, [], values(), state, 1900)[0] == 'WARMUP'
+    changed_hpa['metadata']['generation'] += 1
+    assert guard.decide(changed_hpa, dep, [], values(), state, 1900)[0] == 'CLEAN'
     changed_dep['spec']['template']['spec']['containers'][0]['image'] = 'another:sha'
     assert guard.decide(hpa, changed_dep, [], values(), state, 1900)[0] == 'WARMUP'
     changed_hpa = deepcopy(hpa)
-    changed_hpa['metadata']['generation'] += 1
+    changed_hpa['spec']['behavior']['scaleDown']['stabilizationWindowSeconds'] = 600
     assert guard.decide(changed_hpa, dep, [], values(), state, 1900)[0] == 'WARMUP'
 
 
@@ -564,6 +568,206 @@ def test_run_writes_only_reference_rollback_or_dry_run(dry_run, caplog):
     assert all(path == 'state' for path, _ in client.patches)
 
 
+def test_floor_schedule_table_shape_is_validated():
+    # The real file is absent in tests and in any release that has not opted in.
+    assert guard.load_floor_schedule() is None
+
+
+def test_floor_schedule_applies_after_clean_reading_and_idles_at_target(monkeypatch, caplog):
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 24)
+    client = FakeClient()  # objects() floor 5; epoch hour 0 -> target 8
+    assert guard.run(client, False, 0) == 0
+    hpa_writes = [patch for path, patch in client.patches if path == 'hpa']
+    assert hpa_writes == [
+        [
+            {'op': 'test', 'path': '/spec', 'value': client.hpa['spec']},
+            {'op': 'replace', 'path': '/spec/minReplicas', 'value': 8},
+        ]
+    ]
+    assert '"result": "applied"' in caplog.text
+    client.hpa['spec']['minReplicas'] = 8
+    client.patches = []
+    assert guard.run(client, False, 300) == 0
+    assert all(path == 'state' for path, _ in client.patches)  # at target: no write, no log spam
+
+
+def test_floor_schedule_never_shadows_a_rollback(monkeypatch, caplog):
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 24)
+    client = FakeClient()
+    client.signals['first_p95'] = 30  # decisive regression -> TRIP once armed
+    assert guard.run(client, False, 0) == 0  # WARMUP seeds the arming window
+    client.patches = []
+    assert guard.run(client, False, 900) == 1
+    hpa_writes = [patch for path, patch in client.patches if path == 'hpa']
+    assert hpa_writes == [guard.build_rollback(client.hpa['spec'])]
+    # While the rollback is in force (latency metric present) the schedule defers.
+    client.hpa['spec']['minReplicas'] = 12
+    client.hpa['spec']['metrics'].append(guard.LATENCY)
+    client.signals = values()
+    client.patches = []
+    assert guard.run(client, False, 1200) == 0
+    assert all(path == 'state' for path, _ in client.patches)
+    assert 'deferred_guard_rollback' in caplog.text
+
+
+def test_floor_schedule_dry_run_and_cap_refusals(monkeypatch, caplog):
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 23 + [13])
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12
+    assert guard.run(client, False, 23 * 3600) == 0  # hour 23 -> target 13 > cap 12
+    assert 'refused_target_above_cap' in caplog.text
+    assert all(path == 'state' for path, _ in client.patches)
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 24)
+    assert guard.run(client, True, 24 * 3600) == 0  # lower 12 -> 8, kill switch first
+    assert '"result": "dry_run"' in caplog.text
+    assert all(path == 'state' for path, _ in client.patches)
+
+
+def test_scheduled_lower_waits_for_armed_guard_not_a_fresh_warmup(monkeypatch, caplog):
+    # Review r1 P1: after an operator clears a rollback while parked at 12, the
+    # schedule must not drop the floor onto a disarmed guard. NOOP readings
+    # advance the arming clock (floor is excluded from the identity), a lower
+    # before the window elapses defers, and the drop applies armed - after which
+    # a decisive regression trips without a fresh WARMUP.
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 24)
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12  # parked above the cap; decide reads NOOP
+    assert guard.run(client, False, 1000) == 0
+    client.patches = []
+    assert guard.run(client, False, 1500) == 0  # 500s < WINDOW since identity start
+    assert 'deferred_guard_not_armed' in caplog.text
+    assert all(path == 'state' for path, _ in client.patches)
+    assert guard.run(client, False, 2000) == 0  # 1000s >= WINDOW elapsed while parked: drop applies
+    hpa_writes = [patch for path, patch in client.patches if path == 'hpa']
+    assert hpa_writes[-1][1] == {'op': 'replace', 'path': '/spec/minReplicas', 'value': 8}
+    client.hpa['spec']['minReplicas'] = 8  # the scheduled state is live
+    client.signals['first_p95'] = 30
+    verdict, _, _ = guard.decide(client.hpa, client.dep, [], client.signals, client.state, 2050)
+    assert verdict == 'TRIP'  # armed across the scheduled drop; no fresh warmup
+
+
+def test_scheduled_lower_defers_while_the_reading_cannot_measure(monkeypatch, caplog):
+    # Review r2 P1: an armed guard with a blind or unmeasured reading must not
+    # hand back capacity it cannot defend; the higher floor holds until a
+    # usable reading arrives.
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [8] * 24)
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12
+    assert guard.run(client, False, 1000) == 0  # parked readings arm the clock
+    for bad in ({'first_p95': None}, {'first_p95': 60.0, 'first_count': 37.6}):
+        client.signals = dict(values(), **bad)
+        client.patches = []
+        assert guard.run(client, False, 2000) == 0  # window elapsed; reading unusable
+        assert 'deferred_guard_blind' in caplog.text
+        assert all(path == 'state' for path, _ in client.patches)
+    client.signals = values()
+    assert guard.run(client, False, 2000) == 0  # usable reading: the lower applies
+    assert any(
+        patch[1] == {'op': 'replace', 'path': '/spec/minReplicas', 'value': 8}
+        for path, patch in client.patches
+        if path == 'hpa'
+    )
+
+
+def test_rollback_expires_after_one_full_clean_lookback_window(caplog):
+    # 2026-10-25 21:06Z: the 13:50Z rollback kept the floor schedule deferred
+    # every hour with a healthy fleet and no in-band clear. A rolled-back HPA
+    # with one full window of consecutive clean readings clears itself; the
+    # floor stays at the cap and the arming/usable gates own any reduction.
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12
+    client.hpa['spec']['metrics'].append(guard.LATENCY)
+    assert guard.run(client, False, 1000) == 0  # seeds since/clean_since
+    client.patches = []
+    assert guard.run(client, False, 1899) == 0  # clean streak 899s: not yet
+    assert all(path == 'state' for path, _ in client.patches)
+    assert guard.run(client, False, 1900) == 0  # full window clean: expire
+    hpa_writes = [patch for path, patch in client.patches if path == 'hpa']
+    assert hpa_writes == [guard.build_rollback_clear(client.hpa['spec'])]
+    assert 'parakeet_rollback_expired' in caplog.text
+    assert hpa_writes[0][1]['value'] == [
+        m for m in client.hpa['spec']['metrics'] if m is not guard.LATENCY
+    ]  # workload-only metrics restored; minReplicas untouched at 12
+
+
+def test_rollback_expiry_restarts_on_any_unusable_reading(caplog):
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12
+    client.hpa['spec']['metrics'].append(guard.LATENCY)
+    assert guard.run(client, False, 1000) == 0  # clean seed
+    client.signals = dict(values(), first_p95=None)  # blind reading mid-window
+    assert guard.run(client, False, 1500) == 0
+    assert not any(path == 'hpa' for path, _ in client.patches)
+    client.signals = values()
+    assert guard.run(client, False, 2400) == 0  # streak restarted at 2400
+    assert not any(
+        path == 'hpa' and any(p.get('op') == 'replace' and p['path'] == '/spec/metrics' for p in patch)
+        for path, patch in client.patches
+    )
+    assert guard.run(client, False, 3300) == 0  # 900s since the restart: expire
+    assert 'parakeet_rollback_expired' in caplog.text
+
+
+def test_rollback_expiry_survives_parked_decide_passes_and_restarts(monkeypatch, caplog):
+    # Review r3 P1: with the schedule installed (production shape), a
+    # rolled-back HPA takes decide()'s parked path, whose advance() rebuilds
+    # the state dict - the clean streak must survive those rebuilds across Job
+    # restarts, or the rollback never expires. A spec change restarts it.
+    monkeypatch.setattr(guard, 'load_floor_schedule', lambda: [12] * 24)
+    client = FakeClient()
+    client.hpa['spec']['minReplicas'] = 12
+    client.hpa['spec']['metrics'].append(guard.LATENCY)
+    for now in (1000, 1300, 1600):  # three separate Jobs, same parked spec
+        assert guard.run(client, False, now) == 0
+    assert not any(path == 'hpa' for path, _ in client.patches)
+    assert guard.run(client, False, 1900) == 0  # 900s of clean parked readings
+    assert 'parakeet_rollback_expired' in caplog.text
+    assert any(
+        path == 'hpa' and any(p.get('op') == 'replace' and p['path'] == '/spec/metrics' for p in patch)
+        for path, patch in client.patches
+    )
+
+
+def test_batch_safety_trips_are_isolated_evidence_not_job_failures(caplog):
+    # 2026-10-25 21:06Z ruling: a batch trip or unknown inputs must not fail
+    # the whole Job or block the Parakeet schedule. The batch section still
+    # logs its TRIP verdict; the exit code belongs to the Parakeet section.
+    client = FakeClient()
+
+    def sample(expr):
+        if 'first_p95' in expr:
+            return client.signals
+        return {'oldest_age': 94643.0, 'retry_age': 0.0, 'freshness': 0.0, 'scrape_age': 0.0}
+
+    client.sample = sample
+    assert guard.run(client, False, 0) == 0  # parakeet WARMUP/clean; batch TRIP isolated
+    assert '"verdict": "TRIP"' in caplog.text  # batch_safety still reports TRIP
+    assert 'uncommitted_job_age_over_30m' in caplog.text
+
+
+def test_floor_schedule_renders_into_script_configmap_only_when_enabled():
+    prod = next(
+        obj
+        for obj in render_docs('prod')
+        if obj['kind'] == 'ConfigMap' and obj['metadata']['name'] == 'prod-omi-incluster-guards-script'
+    )
+    assert json.loads(prod['data']['floors.json']) == guard_yaml_hours()
+    default = next(
+        obj
+        for obj in render_docs('prod', overlay=False)
+        if obj['kind'] == 'ConfigMap' and obj['metadata']['name'] == 'prod-omi-incluster-guards-script'
+    )
+    assert 'floors.json' not in default['data']
+    with pytest.raises(subprocess.CalledProcessError):
+        render_docs('prod', '--set', 'floorSchedule.hours={1,2}')
+    kinds = {(doc['kind'], doc['metadata']['name']) for doc in render_docs('prod')}
+    assert not any(name.endswith('-floor') for _, name in kinds)
+
+
+def guard_yaml_hours():
+    return yaml.safe_load((CHART / 'values.yaml').read_text())['floorSchedule']['hours']
+
+
 def render(environment='prod', *extra):
     output = subprocess.check_output(
         [
@@ -603,6 +807,69 @@ def render_docs(environment='prod', *extra, overlay=True):
     if overlay:
         command += ['-f', str(CHART / f'{environment}_omi_incluster_guards_values.yaml')]
     return [obj for obj in yaml.safe_load_all(subprocess.check_output([*command, *extra], text=True)) if obj]
+
+
+@pytest.mark.parametrize('environment,batch_enabled', [('dev', False), ('prod', False), ('prod', True)])
+@pytest.mark.parametrize('enabled', [False, True])
+def test_helm_state_configmaps_keep_job_owned_fields_out_of_apply(environment, batch_enabled, enabled):
+    docs = render_docs(
+        environment,
+        '--set',
+        f'batch.enabled={str(batch_enabled).lower()}',
+        '--set',
+        f'enabled={str(enabled).lower()}',
+    )
+    state_names = {f'{environment}-omi-incluster-guards-state'}
+    if batch_enabled:
+        state_names.add(f'{environment}-omi-incluster-guards-batch-state')
+    states = {
+        obj['metadata']['name']: obj
+        for obj in docs
+        if obj['kind'] == 'ConfigMap' and obj['metadata']['name'] in state_names
+    }
+    assert set(states) == state_names
+    if not enabled:
+        # First migration directly from an old release to the kill switch must
+        # still update both existing shells, rather than pruning unannotated state.
+        assert len(docs) == len(states)
+    for obj in states.values():
+        # No data (including empty/null maps), immutable, hook or lookup payload:
+        # SSA must leave the live rollback marker, streak and pending intent alone.
+        assert set(obj) == {'apiVersion', 'kind', 'metadata'}
+        assert obj['metadata'] == {
+            'name': obj['metadata']['name'],
+            'namespace': f'{environment}-omi-backend',
+            'annotations': {'helm.sh/resource-policy': 'keep'},
+        }
+
+
+@pytest.mark.parametrize('has_annotations', [False, True])
+def test_first_parakeet_state_write_preserves_helm_annotations(monkeypatch, has_annotations):
+    client = FakeClient()
+    original_kube = client.kube
+    annotations = {
+        'helm.sh/resource-policy': 'keep',
+        'meta.helm.sh/release-name': 'prod-omi-incluster-guards',
+        'meta.helm.sh/release-namespace': 'prod-omi-backend',
+    }
+
+    def kube(path, patch=None):
+        if path == 'state' and patch is None:
+            metadata = {'resourceVersion': '7'}
+            if has_annotations:
+                metadata['annotations'] = deepcopy(annotations)
+            return {'metadata': metadata}
+        return original_kube(path, patch)
+
+    monkeypatch.setattr(client, 'kube', kube)
+    assert guard.run(client, False, 0) == 0
+    state_patch = next(patch for path, patch in client.patches if path == 'state')
+    persisted = state_patch[2]['value']
+    if has_annotations:
+        assert all(persisted[key] == value for key, value in annotations.items())
+    assert persisted['helm.sh/resource-policy'] == 'keep'
+    assert persisted['omi.me/parakeet-guard-verdict'] == 'WARMUP'
+    assert client.state['since'] == 0
 
 
 @pytest.mark.parametrize('environment', ['dev', 'prod'])
@@ -659,7 +926,9 @@ def test_helm_rbac_and_cpu_placement(environment):
         adapter['prometheus']['url'].replace('{{ .Release.Namespace }}', f'{environment}-omi-monitoring') + ':9090'
     )
     assert env['PROMETHEUS_URL'] == expected_url
-    assert not render(environment, '--set', 'enabled=false')
+    disabled = render(environment, '--set', 'enabled=false')
+    assert set(disabled) == {'ConfigMap'}
+    assert disabled['ConfigMap']['metadata']['name'] == f'{environment}-omi-incluster-guards-state'
 
 
 def test_cloud_run_gate_refuses_unapproved_identity_or_namespace():
@@ -932,6 +1201,16 @@ class Kube:
     @property
     def state(self):
         return json.loads(self.cm['data']['state'])
+
+
+def test_first_batch_state_write_initializes_an_empty_configmap(tmp_path):
+    kube, cloud = Kube(), Cloud()
+    kube.cm.pop('data')
+    kube.cm['metadata']['annotations'] = {'helm.sh/resource-policy': 'keep'}
+    assert batch.run(kube, cloud, tmp_path / 'missing-snapshot.json', now=100) == 1
+    assert kube.state['since'] == 100
+    assert kube.cm['metadata']['annotations'] == {'helm.sh/resource-policy': 'keep'}
+    assert not cloud.writes
 
 
 def sample(identity='id', since=0, now=1800):

@@ -8606,6 +8606,9 @@ class AppLocalizationsLt extends AppLocalizations {
       'Transkripcija nepasiekiama — įrašymas tęsiamas, o jūsų garsas išsaugomas.';
 
   @override
+  String get captureNoAudioFromPendant => 'Iš pakabuko negaunama garso';
+
+  @override
   String get capturing => 'Įrašoma';
 
   @override
@@ -11110,6 +11113,12 @@ class AppLocalizationsLt extends AppLocalizations {
       'Bluetooth ryšys su jūsų Omi nutrūko, todėl garsas nepasieka programos. Omi toliau įrašinėja įrenginyje ir sinchronizuos, kai ryšys atsistatys. Bandymas iš naujo vėl užmezga ryšį; jei tai ir toliau nepavyksta, patikrinkite įrenginį skiltyje Nustatymai > Įrenginys.';
 
   @override
+  String get captureConnecting => 'Jungiamasi…';
+
+  @override
+  String get captureNoAudioDetail => 'Pakabukas prijungtas, tačiau joks garsas nepasiekia jūsų telefono';
+
+  @override
   String get captureIngressNeedsReconnect => 'Garsas nepasiekia programos — iš naujo prijunkite Omi';
 
   @override
@@ -12267,12 +12276,6 @@ class AppLocalizationsLt extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Patikrinkite ryšį';
-
-  @override
-  String get forYou => 'Jums';
-
-  @override
-  String get stopThese => 'Sustabdyti šiuos';
 
   @override
   String get dismiss => 'Slėpti';
@@ -14595,4 +14598,31 @@ class AppLocalizationsLt extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Kiti';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Atlikta';
+
+  @override
+  String get openLoopAnswerRemind => 'Priminti vėliau';
+
+  @override
+  String get openLoopAnswerDrop => 'Atmesti';
 }
