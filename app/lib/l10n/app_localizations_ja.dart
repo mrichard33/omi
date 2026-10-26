@@ -8473,6 +8473,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get transcriptionUnavailableRecordingSaved => '文字起こしは利用できません — 録音は継続し、音声は保存されます。';
 
   @override
+  String get captureNoAudioFromPendant => 'ペンダントの音声がありません';
+
+  @override
   String get capturing => 'キャプチャ中';
 
   @override
@@ -10921,6 +10924,12 @@ class AppLocalizationsJa extends AppLocalizations {
       'OmiとのBluetoothリンクが停止したため、音声がアプリに届いていません。Omiはデバイスで録音を続けており、リンクが回復すると同期されます。再試行するとリンクが再接続されます。引き続き失敗する場合は、設定 > デバイスでデバイスを確認してください。';
 
   @override
+  String get captureConnecting => '接続中…';
+
+  @override
+  String get captureNoAudioDetail => 'ペンダントは接続されていますが、音声がスマートフォンに届いていません';
+
+  @override
   String get captureIngressNeedsReconnect => 'オーディオがアプリに届いていません — Omiを再接続してください';
 
   @override
@@ -12066,12 +12075,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => '接続を確認してください';
-
-  @override
-  String get forYou => 'あなたへのおすすめ';
-
-  @override
-  String get stopThese => 'この種類を停止';
 
   @override
   String get dismiss => '非表示';
@@ -14366,4 +14369,31 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'その他';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => '完了';
+
+  @override
+  String get openLoopAnswerRemind => '後でリマインド';
+
+  @override
+  String get openLoopAnswerDrop => '破棄';
 }

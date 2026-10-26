@@ -26,11 +26,72 @@ laptop owner. A fresh install/identity starts a full 15-minute arming period.
 CronJob value changes apply to new Jobs; an already running Job retains its
 startup settings for at most its 240s deadline. Verify active Job termination
 when an immediate stop is required.
-`enabled=false` removes the guard resources. Both use the same dispatch path.
-Revert the PR or uninstall this independent release to remove it. Neither kill
+`enabled=false` removes the guards but retains their state ConfigMaps. Both use
+the same dispatch path. Uninstalling this independent release also retains
+state. Neither kill
 switch undoes an already applied rollback; that requires a separately approved
-HPA change. A Helm upgrade can retain the state data under Helm's three-way
-merge; any spec/image/generation identity change still resets arming.
+HPA change. Helm manages only the state ConfigMap shells; each Job owns its
+mutable data. A serving identity change still resets arming.
+The state shells render even when `enabled=false`, so a first 0.3.2 upgrade
+using the global kill switch applies retention rather than pruning old state
+before that annotation exists. Optional batch state still requires
+`batch.enabled=true` and `batch.cloudRunRollbackEnabled=true`; disabling the
+global guard does not change those settings or create new batch object names.
+When migrating a release that previously installed the batch writer, retain
+both batch settings for the first 0.3.2 upgrade (the global kill switch can be
+false). After that succeeds, either batch setting can be disabled safely.
+
+## State ownership and recovery from a failed Helm upgrade
+
+Chart 0.3.2 renders the existing `-state` and optional `-batch-state` ConfigMaps
+with `helm.sh/resource-policy: keep` and **no data field** (not even `{}` or
+`null`). Helm creates each shell on first install; the Job initializes data on
+its first resourceVersion-guarded write. Names and get/patch-only Job RBAC stay
+unchanged. The Parakeet Job preserves existing annotations when adding verdicts,
+including the retention policy and Helm release identity.
+It also restores the keep policy if an older in-flight Job erased it during
+the upgrade; it never restores or changes the state data on Helm's behalf.
+
+The 0.3.1 deployment failed because server-side apply tried to set `data.state`
+back to `'{}'`, after `Python-urllib` had taken ownership through the Job's
+JSON Patch. Omitting that field lets Helm relinquish ownership while the
+Job-owned live value remains unchanged, per the
+[Kubernetes SSA conflict contract](https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts).
+Helm must never render the Job's state, verdicts, observation clocks or annotations
+from a live `lookup`: those fields belong exclusively to the Job. Retention
+protects both state objects when disabling/removing the guards, including batch
+pending rollback intent. Re-enabling reuses the same objects and their state;
+Helm's [keep policy](https://helm.sh/docs/howto/charts_tips_and_tricks/#tell-helm-not-to-uninstall-a-resource)
+can leave them orphaned after release removal, so preserve their release metadata.
+
+For the failed 2026-10-26 upgrade (run `40252836085`), the lead/op1 should:
+
+1. Verify the release status is `failed` with `helm status prod-omi-incluster-guards
+   -n prod-omi-backend`. A `pending-*` status indicates a different concurrency
+   problem; stop and escalate rather than editing Helm storage.
+2. Dispatch the existing workflow above from `main`, with `source_sha` set to
+   the full merged 0.3.2 fix SHA and the same `environment=prod`, `enabled=true`,
+   `dry_run=false` inputs. This runs the usual `helm upgrade --install ...
+   --atomic --wait --timeout 180s`. A failed release is upgradeable:
+   [Helm's upgrade preparation](https://github.com/helm/helm/blob/v4.2.4/pkg/action/upgrade.go#L218-L256)
+   accepts it, using the deployed revision when available or the failed revision
+   when none is deployed. No uninstall, pre-rollback, ConfigMap hand edit,
+   release-secret edit, force replacement or `--force-conflicts` is required.
+3. Verify Helm reports `deployed` at chart 0.3.2, the script ConfigMap matches
+   the merged source, and the existing state ConfigMap UID is unchanged. Check
+   that the prior rollback marker/streak survived installation and that the next
+   scheduled Job retains the keep annotation while updating its normal state.
+   The Job may legitimately advance state; compare at the upgrade boundary rather
+   than requiring identical data after another reading.
+
+The first recovery upgrade still has old successful revisions in its history:
+an unrelated failure could trigger an atomic rollback to a pre-0.3.2 manifest
+that templates state, reproducing the old conflict. If that occurs, diagnose the
+other failure and retry a corrected **forward** upgrade. Do not roll back to a
+pre-0.3.2 chart or restore its state template; keep the 0.3.2 ownership fix when
+reverting other guard behavior. A successful recovery and subsequent scheduled
+reading require operator verification; local template/unit checks do not prove
+production recovery.
 
 ## Parakeet contract
 
@@ -40,10 +101,40 @@ Any workload-only floor below the 12-replica rollback cap without
 `parakeet_request_latency_p99` is armed; the floor is read from the HPA itself,
 so operator floor changes cannot silently disarm the guard (the former 5/8
 enumeration read NOOP at floor 10 on 2026-10-24/25). The state identity
-includes the entire HPA spec, HPA generation and deployment images. Ordinary
+includes the entire HPA spec except `minReplicas`, and deployment images. Ordinary
 autoscaling replica changes do not restart the clock. Configuration/image changes
-reset the 15-minute clock. Readiness shortfall uses HPA desiredReplicas, not the
+reset the 15-minute clock; scheduled floor writes do not (they also bump the HPA
+generation, which is likewise excluded), or the guard could never arm under a
+time-of-day floor. Readiness shortfall uses HPA desiredReplicas, not the
 floor. ScalingActive must be true, as in the original P77 guard.
+
+## Time-of-day floor schedule
+
+`floorSchedule.enabled` renders a reviewed 24-entry UTC-hour floor table into
+the guard's script ConfigMap as `floors.json`; the table's presence is the
+schedule's only switch (development and non-opted releases never write the
+floor from a schedule). On the first reading after each hour rollover the
+guard patches `spec.minReplicas` to the hour's entry with the same atomic
+test-the-whole-spec JSON patch as the rollback, under the same dry-run kill
+switch and the same existing RBAC: **no new objects**, so the prod deployer's
+name-scoped RBAC (which refuses new object names) accepts the upgrade. The
+schedule defers, logging `deferred_guard_rollback`, whenever a guard rollback
+is in force (the `parakeet_request_latency_p99` metric is present), and never
+runs in the same reading as a rollback; the safety guard can still raise any
+hour to 12. A scheduled **lower** additionally requires the guard to be armed
+under the current spec identity: readings taken while the HPA is parked above
+the cap still advance the arming clock (the floor is excluded from the
+identity), so a drop lands on an armed guard - if the clock has not elapsed
+(for example right after an operator clears a rollback), the lower defers
+(`deferred_guard_not_armed`) until it has, and the higher floor holds in the
+meantime. The 2026-10-25 table was derived from the 10-23..10-25 guard
+trace with decisive samples only: floor 10 degraded across Sunday
+12:05-13:50Z (measured p95 34.5-55.5s on >= 100-text windows) so 12-13Z
+carries 12; Saturday 22:30Z ran 8 replicas at 701 first texts/h with p95
+12.4s (8), and Saturday 14-15Z held 10 replicas at 521-692/h with p95 14-20s
+(10-11). At the measured $0.583448/pod-hour the table projects ~$4.2k/mo
+against ~$5.1k/mo for a flat 12, realized only when the parakeet-pool nodes
+actually deschedule (p77 PLAN caveat).
 
 P77r refusal threshold: `max(.02, baseline * 1.25 + .005)`, inclusive. The
 baseline is the admission-weighted refusal fraction over the same rolling UTC
@@ -130,8 +221,13 @@ age and scrape age must be <=120s. Missing/stale/nonfinite samples are BLIND.
 A fresh `omi_batch_pipeline_oldest_age_seconds > 1800` emits **TRIP**,
 `uncommitted_job_age_over_30m`. This is a conservative stuck-job **proxy**:
 `database/batch_pipeline_store.py:oldest()` queries `merge_pending=true` and
-measures from enqueue. It includes historical obligations and legitimate deep
-queues; it cannot identify new jobs or prove a projection wedge. Retry age is
+measures from enqueue, skipping durable allowance policy holds
+(`compute_decision` outcome=held reason=allowance_exhausted; 131 such holds
+kept this proxy tripped permanently on 2026-10-25) within a bounded 500-row
+FIFO prefix; a prefix filled entirely by holds fails toward tripping on the
+oldest hold's age rather than a fresh zero. It still includes legitimate deep
+queues; it cannot identify new
+jobs or prove a projection wedge. Retry age is
 logged, not another rollback condition. Usable readings without that trip are
 **PARTIAL**, never a claim of complete batch safety.
 
@@ -144,11 +240,28 @@ running** until those gaps have a verified aggregate producer. The separate
 trusted P90 aggregates without customer metadata access.
 
 Every reading emits JSON `batch_safety` / `parakeet_guard` records without IDs,
-workload env, event messages, or HTTP bodies. A batch TRIP/BLIND or Parakeet
-TRIP/BLIND exits nonzero; backoffLimit=0 prevents retries from accelerating the
+workload env, event messages, or HTTP bodies. The batch section is **isolated
+evidence** (2026-10-25 21:06Z ruling): its trips and unknowns are logged and
+recorded in the state ConfigMap but never fail the Job or block the Parakeet
+schedule - only a Parakeet TRIP/BLIND exits nonzero.
+backoffLimit=0 prevents retries from accelerating the
 blind counter. The state ConfigMap records `omi.me/batch-safety-verdict` and
 `omi.me/parakeet-guard-verdict`. Kube-state-metrics exposes failed Jobs without
 an exporter or new Job network listener.
+
+## Rollback expiry and the explicit clear
+
+An applied rollback does not wait for a human forever: while rolled back, the
+Job keeps evaluating readings, and after **one full 15-minute lookback window
+of consecutive clean readings** (no trips, no blind, no unmeasured, not
+low-sample) it clears itself - restoring workload-only metrics with the floor
+still at 12, after which the arming/usable gates own any scheduled reduction.
+Any unusable reading restarts the clean streak; a real regression keeps
+re-tripping readings, so its rollback never expires. A rollback/expiry loop is
+bounded and visible: each cycle holds the cap for at least the clean window
+plus a fresh arming window before any lower applies. The explicit operator
+clear remains: patch the HPA to remove the `parakeet_request_latency_p99`
+metric (an approved HPA change); the guard reconciles on the next reading.
 
 **Alert routing needs lead verification:** the checked-in monitoring values say
 Grafana owns notification routing and disable Alertmanager. This chart does not
@@ -200,8 +313,8 @@ runtime-SA actAs if required, and exact-KSA WIF binding are described in
 [BATCH.md](BATCH.md). David approved that resource-scoped role on 2026-10-24.
 No project-wide operations role is needed: the guard polls service readbacks.
 The lead applies IAM and deploys; developing this chart applies neither.
-Disabling removes the batch resources including its state ConfigMap, leaving the
-Parakeet guard. Save state before removal; use dry run to stop writes while
+Disabling removes the batch resources while retaining its state ConfigMap, leaving
+the Parakeet guard. Use dry run to stop writes while
 retaining pending rollback intent. Retain P90 until the
 trusted aggregate producer and real alert delivery have been verified.
 

@@ -1656,24 +1656,6 @@ routes:
         state: active
   - route_type: http
     method: POST
-    path: /v1/commitment-followup-jobs/run
-    policy:
-      review_status: reviewed
-      auth: {mechanisms: [service_oidc], placement: dependency, scopes: []}
-      byok: not_applicable
-      rate_limit:
-        policy_name: none
-        key_subject: none
-        enforcement: none
-        placement: none
-      timeout_class: default_method
-      surface: internal_task
-      visibility: internal
-      data_domain: action_items
-      deprecation:
-        state: active
-  - route_type: http
-    method: POST
     path: /v1/conversation-finalization-jobs/run
     policy:
       review_status: reviewed
@@ -4041,7 +4023,7 @@ routes:
       visibility: first_party
       data_domain: user_profile
       deprecation:
-        state: active
+        state: deprecated
       owner: backend
   - route_type: http
     method: POST
@@ -4063,7 +4045,7 @@ routes:
       visibility: first_party
       data_domain: user_profile
       deprecation:
-        state: active
+        state: deprecated
       owner: backend
   - route_type: http
     method: GET
@@ -4136,6 +4118,54 @@ routes:
   - route_type: http
     method: POST
     path: /v1/review/items/{item_id}/answer
+    policy:
+      review_status: reviewed
+      auth:
+        mechanisms:
+        - firebase_id_token
+        - admin_key_uid_prefix
+        placement: dependency
+        scopes: []
+      byok: not_applicable
+      rate_limit:
+        policy_name: review:write
+        key_subject: uid
+        enforcement: fail_open
+        placement: dependency
+      timeout_class: default_method
+      surface: first_party_app
+      visibility: first_party
+      data_domain: conversations
+      deprecation:
+        state: active
+      owner: backend
+  - route_type: http
+    method: GET
+    path: /v1/review/open-loops
+    policy:
+      review_status: reviewed
+      auth:
+        mechanisms:
+        - firebase_id_token
+        - admin_key_uid_prefix
+        placement: dependency
+        scopes: []
+      byok: not_applicable
+      rate_limit:
+        policy_name: review:read
+        key_subject: uid
+        enforcement: fail_open
+        placement: dependency
+      timeout_class: default_method
+      surface: first_party_app
+      visibility: first_party
+      data_domain: conversations
+      deprecation:
+        state: active
+      owner: backend
+  - route_type: http
+    method: POST
+    path: /v1/review/open-loops/{date}/{card_id}/answer
     policy:
       review_status: reviewed
       auth:

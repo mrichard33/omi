@@ -8597,6 +8597,9 @@ class AppLocalizationsFa extends AppLocalizations {
       'پیاده‌سازی متن در دسترس نیست — ضبط ادامه دارد و صدای شما ذخیره می‌شود.';
 
   @override
+  String get captureNoAudioFromPendant => 'صدایی از آویز نمی‌رسد';
+
+  @override
   String get capturing => 'در حال ضبط';
 
   @override
@@ -11083,6 +11086,12 @@ class AppLocalizationsFa extends AppLocalizations {
       'اتصال بلوتوث با Omi شما قطع شده است، بنابراین صدا به برنامه نمی‌رسد. Omi همچنان روی دستگاه ضبط می‌کند و پس از بازگشت اتصال همگام‌سازی می‌شود. تلاش دوباره اتصال را دوباره برقرار می‌کند؛ اگر همچنان ناموفق بود، دستگاه خود را در تنظیمات > دستگاه بررسی کنید.';
 
   @override
+  String get captureConnecting => 'در حال اتصال…';
+
+  @override
+  String get captureNoAudioDetail => 'آویز متصل است، اما هیچ صدایی به تلفن شما نمی‌رسد';
+
+  @override
   String get captureIngressNeedsReconnect => 'صدا به برنامه نمی‌رسد — Omi را دوباره وصل کنید';
 
   @override
@@ -12241,12 +12250,6 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'اتصال را بررسی کنید';
-
-  @override
-  String get forYou => 'برای شما';
-
-  @override
-  String get stopThese => 'توقف این موارد';
 
   @override
   String get dismiss => 'رد کردن';
@@ -14566,4 +14569,31 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'دیگران';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'انجام شد';
+
+  @override
+  String get openLoopAnswerRemind => 'بعدً یادآوری کن';
+
+  @override
+  String get openLoopAnswerDrop => 'رهاش کن';
 }

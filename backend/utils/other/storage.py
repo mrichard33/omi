@@ -42,6 +42,7 @@ from database.redis_db import (
 )
 from database.legal_holds import external_write_fence, destructive_operation_gate
 from utils.other import audio_packs
+from database.account_deletion_operational_holds import delete_owner_bucket_prefix
 from utils.request_validation import parse_sync_filename_timestamp
 from utils import encryption
 from utils.sync.staged_prefetch import MAX_FILE_BYTES, StagedBytes, staged_prefetch
@@ -62,6 +63,17 @@ from database import users as users_db, conversation_tombstones
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class AudioChunkContentConflict(ValueError):
+    """A v2 upload found different bytes at its content-addressed name.
+
+    Deterministic: retrying the same payload replays the same collision, so
+    the durable projection treats it as terminal instead of transient. Other
+    upload failures (including wrapped probe/read errors raised as plain
+    ``ValueError``) stay retryable.
+    """
+
 
 # Per-request fan-out limits for storage_executor (#7387)
 _STORAGE_CHUNK_SEM = threading.BoundedSemaphore(32)
@@ -180,19 +192,10 @@ def _owner_uid_from_sync_path(file_path: str) -> Optional[str]:
     return None
 
 
-def _delete_owner_bucket_prefix(bucket: Any, prefix: str) -> int:
-    """Delete and verify one owner prefix, failing closed on a torn purge."""
-
-    listing_kwargs = {'versions': True} if _uses_real_gcs_bucket(bucket) else {}
-    blobs = list(bucket.list_blobs(prefix=prefix, **listing_kwargs))
-    deleted = 0
-    for blob in blobs:
-        blob.delete()
-        deleted += 1
-    remaining = list(bucket.list_blobs(prefix=prefix, **listing_kwargs))
-    if remaining:
-        raise RuntimeError(f'owner storage purge left {len(remaining)} objects under {prefix}')
-    return deleted
+def _delete_owner_bucket_prefix(bucket: Any, prefix: str, *, account_deletion_uid: str | None = None) -> int:
+    return delete_owner_bucket_prefix(
+        bucket, prefix, real_gcs=_uses_real_gcs_bucket(bucket), account_deletion_uid=account_deletion_uid
+    )
 
 
 def delete_all_user_storage_objects(uid: str) -> int:
@@ -269,7 +272,7 @@ def delete_all_user_storage_objects(uid: str) -> int:
                         if lookup.exists():
                             lookup.delete()
                             deleted += 1
-            deleted += _delete_owner_bucket_prefix(bucket, prefix)
+            deleted += _delete_owner_bucket_prefix(bucket, prefix, account_deletion_uid=uid)
     return deleted
 
 
@@ -757,31 +760,86 @@ def upload_audio_chunk(
 
     with owner_storage_write_gate(uid, bucket):
         if protection_level == 'enhanced':
-            encrypted_chunk = encryption.encrypt_audio_chunk(upload_data, uid)
+            payload = encryption.encrypt_audio_chunk(upload_data, uid)
             path = f'chunks/{uid}/{conversation_id}/{formatted_timestamp}.opus.enc'
-            blob = bucket.blob(path)
-            if audio_archive.admitted(uid, 'SYNC'):
-                blob.metadata = {
-                    **span_blob_metadata({'start': timestamp, 'samples': len(chunk_data) // 2, 'sample_rate': 16000}),
-                    'canonical': 'false',
-                    'codec': 'opus',
-                    'rendition': 'sync-pcm-reencode',
-                }
-            blob.upload_from_string(encrypted_chunk, content_type='application/octet-stream')
         else:
+            payload = upload_data
             path = f'chunks/{uid}/{conversation_id}/{formatted_timestamp}.opus'
-            blob = bucket.blob(path)
-            if audio_archive.admitted(uid, 'SYNC'):
-                blob.metadata = {
-                    **span_blob_metadata({'start': timestamp, 'samples': len(chunk_data) // 2, 'sample_rate': 16000}),
-                    'canonical': 'false',
-                    'codec': 'opus',
-                    'rendition': 'sync-pcm-reencode',
-                }
-            blob.upload_from_string(upload_data, content_type='application/octet-stream')
+        blob = bucket.blob(path)
+        # The playback writer always knows the exact input sample extent.
+        # Speaker evidence needs that clock even when archive routing is off.
+        wanted_metadata = {
+            **span_blob_metadata({'start': timestamp, 'samples': len(chunk_data) // 2, 'sample_rate': 16000}),
+            'canonical': 'false',
+            'codec': 'opus',
+            'rendition': 'sync-pcm-reencode',
+        }
+        blob.metadata = wanted_metadata
+        try:
+            # Create-only: a retried upload of the same rendition must not
+            # overwrite the committed object and mint a superseded generation
+            # (the batch writer holds the same precondition).
+            blob.upload_from_string(payload, content_type='application/octet-stream', if_generation_match=0)
+        except PreconditionFailed:
+            verified_generation = _stored_chunk_generation(blob, uid, protection_level, upload_data)
+            if verified_generation is not None:
+                # The committed generation already holds these exact bytes; an
+                # object written before SYNC admission may still lack the span
+                # metadata this session wanted, so repair it in place instead
+                # of leaving a legacy-marked rendition behind a no-op.
+                _backfill_chunk_metadata(blob, verified_generation, wanted_metadata)
+                del upload_data
+                return path
+            # Genuinely different bytes: keep the historical update-in-place
+            # semantics for this writer rather than fail the sync path.
+            blob.upload_from_string(payload, content_type='application/octet-stream')
 
     del upload_data
     return path
+
+
+def _backfill_chunk_metadata(blob, generation: int, wanted: Optional[dict]) -> None:
+    """Patch this writer's metadata onto the verified generation of a chunk.
+
+    The patch is pinned to the generation whose bytes were proven identical:
+    a concurrent divergent overwrite fails the precondition instead of
+    receiving metadata describing bytes it does not hold. Best-effort by
+    design — a failed patch leaves the object exactly as this change's
+    baseline would have.
+    """
+    if not wanted:
+        return
+    try:
+        blob.reload(timeout=10, retry=None)
+        current = blob.metadata or {}
+        missing = {key: value for key, value in wanted.items() if current.get(key) != value}
+        if missing:
+            blob.metadata = {**current, **missing}
+            blob.patch(if_generation_match=generation, retry=None, timeout=10)
+    except Exception:
+        return
+
+
+def _stored_chunk_generation(blob, uid: str, protection_level: str, plain_payload: bytes) -> Optional[int]:
+    """The generation whose bytes are exactly this plaintext rendition, else None.
+
+    Enhanced-protection objects are ciphertext with a random nonce, so identity
+    is decided on the decrypted plaintext digest. Any read failure is None:
+    uncertainty falls back to the writer's overwrite semantics, never to a
+    silent skip. The generation is pinned by reloading before the pinned read,
+    so the returned generation is the one the digest was verified against.
+    """
+    try:
+        blob.reload(timeout=10, retry=None)
+        generation = int(blob.generation)
+        stored = blob.download_as_bytes(if_generation_match=generation)
+        if protection_level == 'enhanced':
+            stored = encryption.decrypt_audio_chunk(stored, uid)[0]
+        if hashlib.sha256(stored).digest() != hashlib.sha256(plain_payload).digest():
+            return None
+        return generation
+    except Exception:
+        return None
 
 
 def reconcile_audio_chunk_prefix(
@@ -968,7 +1026,7 @@ def upload_audio_chunks_batch(
                             # Identical retry: never overwrite or double-write.
                             # Exit the playback gate before the optional archive.
                             break
-                        raise ValueError(f'v2 audio blob content conflict at {path}')
+                        raise AudioChunkContentConflict(f'v2 audio blob content conflict at {path}')
                     blob.metadata = {
                         **(blob.metadata or {}),
                         **span_blob_metadata(span),

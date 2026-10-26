@@ -8602,6 +8602,9 @@ class AppLocalizationsId extends AppLocalizations {
       'Transkripsi tidak tersedia — perekaman berlanjut dan audio Anda tersimpan.';
 
   @override
+  String get captureNoAudioFromPendant => 'Tidak ada audio dari liontin';
+
+  @override
   String get capturing => 'Merekam';
 
   @override
@@ -11094,6 +11097,12 @@ class AppLocalizationsId extends AppLocalizations {
       'Sambungan Bluetooth ke Omi Anda terhenti, sehingga audio tidak sampai ke aplikasi. Omi terus merekam di perangkat dan akan disinkronkan setelah sambungan pulih. Mencoba lagi menyambungkan ulang tautan; jika terus gagal, periksa perangkat Anda di Setelan > Perangkat.';
 
   @override
+  String get captureConnecting => 'Menyambungkan…';
+
+  @override
+  String get captureNoAudioDetail => 'Pendant terhubung, tetapi tidak ada audio yang mencapai ponsel Anda';
+
+  @override
   String get captureIngressNeedsReconnect => 'Audio tidak mencapai aplikasi — sambungkan ulang Omi Anda';
 
   @override
@@ -12251,12 +12260,6 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Periksa Koneksi';
-
-  @override
-  String get forYou => 'Untuk Anda';
-
-  @override
-  String get stopThese => 'Hentikan Ini';
 
   @override
   String get dismiss => 'Tutup';
@@ -14585,4 +14588,31 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Lainnya';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Selesai';
+
+  @override
+  String get openLoopAnswerRemind => 'Ingatkan saya nanti';
+
+  @override
+  String get openLoopAnswerDrop => 'Abaikan';
 }

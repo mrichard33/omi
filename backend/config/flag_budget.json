@@ -19,7 +19,7 @@
     "config/policy": "policy snapshot (E1) owner"
   },
   "seed_review_by": "2026-11-15",
-  "budget": 170,
+  "budget": 169,
   "count": 170,
   "names": {
     "BATCH_PIPELINE_API_URL": {"seeded": "2026-10-25"},
@@ -31,6 +31,7 @@
     "BATCH_PIPELINE_DIARIZE_SPEECH_ONLY_ENABLED": {"seeded": "2026-10-25"},
     "BATCH_PIPELINE_EMPTY_ASR_DISPOSITION_ENABLED": {"seeded": "2026-10-25"},
     "BATCH_PIPELINE_EMPTY_ASR_RECOVERY_ENABLED": {"seeded": "2026-10-25"},
+    "BATCH_PIPELINE_EMPTY_ASR_SAFETY_NET_ENABLED": {"owner": "dazheng (batch record lane / rollout lead)", "review_by": "2026-11-15"},
     "BATCH_PIPELINE_FLIGHT_BATCHING_ENABLED": {"seeded": "2026-10-25"},
     "BATCH_PIPELINE_FLIGHT_BATCH_SECONDS": {"seeded": "2026-10-25"},
     "BATCH_PIPELINE_FRESH_GPU_PRIORITY_ENABLED": {"seeded": "2026-10-25"},
@@ -94,7 +95,6 @@
     "LISTEN_LIVE_TAIL_CATCHUP_RATE": {"seeded": "2026-10-25"},
     "LISTEN_NONWINDOW_REPLAY_SETTLE_ENABLED": {"seeded": "2026-10-25"},
     "LISTEN_REPLAY_PREFIX_MARGIN_SECONDS": {"seeded": "2026-10-25"},
-    "MENTOR_PIPELINE": {"seeded": "2026-10-25"},
     "MIN_EMBEDDING_AUDIO_DURATION": {"seeded": "2026-10-25"},
     "MOBILE_STANDARD_BATCH_ENABLED": {"seeded": "2026-10-25"},
     "MOBILE_STANDARD_BATCH_PERCENT": {"seeded": "2026-10-25"},
@@ -193,5 +193,10 @@
     "VAD_GATE_AUDIO_CAPTURE_DIR": {"seeded": "2026-10-25"},
     "VAD_GATE_MODE": {"seeded": "2026-10-25"}
   },
-  "retired": {}
+  "retired": {
+    "MENTOR_PIPELINE": {
+      "on": "2026-10-26",
+      "replaced_by": null
+    }
+  }
 }

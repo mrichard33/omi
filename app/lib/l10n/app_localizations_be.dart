@@ -8621,6 +8621,9 @@ class AppLocalizationsBe extends AppLocalizations {
       'Транскрыпцыя недаступная — запіс працягваецца, і ваша аўдыя захоўваецца.';
 
   @override
+  String get captureNoAudioFromPendant => 'Няма гуку з кулона';
+
+  @override
   String get capturing => 'Запіс';
 
   @override
@@ -11118,6 +11121,12 @@ class AppLocalizationsBe extends AppLocalizations {
       'Спынілася Bluetooth-злучэнне з вашым Omi, таму гук не трапляе ў праграму. Omi працягвае запіс на прыладзе і сінхранізуецца, калі злучэнне адновіцца. Паўтор спрабыў зноў падлучыць злучэнне; калі гэта працягвае не працаваць, праверце прыладу ў Налады > Прылада.';
 
   @override
+  String get captureConnecting => 'Злучэнне…';
+
+  @override
+  String get captureNoAudioDetail => 'Кулон падлучаны, але гук не паступае на ваш тэлефон';
+
+  @override
   String get captureIngressNeedsReconnect => 'Аўдыё не даходзіць да праграмы — перападлучыце Omi';
 
   @override
@@ -12277,12 +12286,6 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Праверце злучэнне';
-
-  @override
-  String get forYou => 'Для вас';
-
-  @override
-  String get stopThese => 'Спыніць гэта';
 
   @override
   String get dismiss => 'Схаваць';
@@ -14606,4 +14609,31 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Іншыя';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Гатова';
+
+  @override
+  String get openLoopAnswerRemind => 'Нагадаць пазней';
+
+  @override
+  String get openLoopAnswerDrop => 'Адкінуць';
 }

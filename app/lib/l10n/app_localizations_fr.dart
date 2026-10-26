@@ -8676,6 +8676,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Transcription indisponible — l\'enregistrement continue et votre audio est sauvegardé.';
 
   @override
+  String get captureNoAudioFromPendant => 'Aucun son du pendentif';
+
+  @override
   String get capturing => 'Capture en cours';
 
   @override
@@ -11182,6 +11185,12 @@ class AppLocalizationsFr extends AppLocalizations {
       'La liaison Bluetooth avec votre Omi s\'est interrompue, l\'audio n\'atteint donc pas l\'application. Omi continue d\'enregistrer sur l\'appareil et se synchronisera dès que la liaison sera rétablie. Réessayer rétablit la liaison ; si cela échoue toujours, vérifiez votre appareil dans Réglages > Appareil.';
 
   @override
+  String get captureConnecting => 'Connexion…';
+
+  @override
+  String get captureNoAudioDetail => 'Le pendentif est connecté, mais aucun son n’atteint votre téléphone';
+
+  @override
   String get captureIngressNeedsReconnect => 'L\'audio n\'atteint pas l\'application — rebranchez votre Omi';
 
   @override
@@ -12344,12 +12353,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'Vérifiez la connexion';
-
-  @override
-  String get forYou => 'Pour vous';
-
-  @override
-  String get stopThese => 'Ne plus recevoir ceci';
 
   @override
   String get dismiss => 'Masquer';
@@ -14687,4 +14690,31 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'Autres';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'Terminé';
+
+  @override
+  String get openLoopAnswerRemind => 'Me le rappeler plus tard';
+
+  @override
+  String get openLoopAnswerDrop => 'Abandonner';
 }

@@ -8475,6 +8475,9 @@ class AppLocalizationsKo extends AppLocalizations {
   String get transcriptionUnavailableRecordingSaved => '텍스트 변환을 사용할 수 없습니다 — 녹음은 계속되며 오디오는 저장됩니다.';
 
   @override
+  String get captureNoAudioFromPendant => '펜던트 오디오 없음';
+
+  @override
   String get capturing => '캡처 중';
 
   @override
@@ -10925,6 +10928,12 @@ class AppLocalizationsKo extends AppLocalizations {
       'Omi와의 블루투스 연결이 중단되어 오디오가 앱에 도달하지 못합니다. Omi는 기기에서 계속 녹음하며 연결이 복구되면 동기화됩니다. 다시 시도하면 연결이 다시 설정됩니다. 계속 실패하면 설정 > 기기에서 기기를 확인하세요.';
 
   @override
+  String get captureConnecting => '연결 중…';
+
+  @override
+  String get captureNoAudioDetail => '펜던트는 연결되어 있지만 오디오가 휴대전화에 도달하지 않습니다';
+
+  @override
   String get captureIngressNeedsReconnect => '오디오가 앱에 도달하지 못합니다 — Omi를 다시 연결하세요';
 
   @override
@@ -12070,12 +12079,6 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => '연결 확인';
-
-  @override
-  String get forYou => '나를 위한 추천';
-
-  @override
-  String get stopThese => '이 유형 중지';
 
   @override
   String get dismiss => '닫기';
@@ -14372,4 +14375,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => '기타';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => '완료';
+
+  @override
+  String get openLoopAnswerRemind => '나중에 알려 줘';
+
+  @override
+  String get openLoopAnswerDrop => '버리기';
 }

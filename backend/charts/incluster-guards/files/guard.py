@@ -373,24 +373,46 @@ def advance(state, identity, now, blind):
     }
 
 
-def decide(hpa, deployment, events, values, state, now):
-    reading = evaluate(values)
-    if not workload_only(hpa['spec']):
-        return 'NOOP', {}, reading
-    # HPA configuration/generation and image changes invalidate the lookback.
-    # Deployment generation also changes on ordinary HPA replica writes; using
-    # it here would keep a scaling or unschedulable workload in perpetual warmup.
-    identity = hashlib.sha256(
+def state_identity(hpa, deployment):
+    """Arming identity: the whole HPA spec except the floor, plus serving images.
+
+    HPA configuration and image changes invalidate the lookback, but scheduled
+    floor changes do not: the floor schedule rewrites spec.minReplicas hourly,
+    which also bumps the HPA generation, so both minReplicas and the generation
+    counter are excluded and arming survives every scheduled change. Deployment
+    generation also changes on ordinary HPA replica writes; using it here would
+    keep a scaling or unschedulable workload in perpetual warmup.
+    """
+    spec_identity = {k: v for k, v in hpa['spec'].items() if k != 'minReplicas'}
+    return hashlib.sha256(
         json.dumps(
             [
                 REFUSAL_GATE_VERSION,
-                hpa['spec'],
-                hpa['metadata'].get('generation'),
+                spec_identity,
                 [c['image'] for c in deployment['spec']['template']['spec']['containers']],
             ],
             sort_keys=True,
         ).encode()
     ).hexdigest()
+
+
+def decide(hpa, deployment, events, values, state, now):
+    reading = evaluate(values)
+    identity = state_identity(hpa, deployment)
+    if not workload_only(hpa['spec']):
+        # Keep advancing the arming clock while parked above the rollback cap
+        # (or rolled back): a scheduled drop onto this spec must land on an
+        # already-armed guard, never a fresh 15-minute warmup during which a
+        # demand spike could not roll the floor back (review r1 P1). The floor
+        # itself is excluded from the identity, so this elapsed time counts.
+        # advance() rebuilds its dict, so the rolled-back clean streak must be
+        # carried explicitly - same identity only; a spec change restarts it
+        # (review r3 P1: without the carry the streak reset on every run and
+        # the rollback could never expire).
+        advanced = advance(state, identity, now, False)
+        if state.get('identity') == identity and 'rollback' in state:
+            advanced['rollback'] = state['rollback']
+        return 'NOOP', advanced, reading
     reading['trips'] += scheduling_failures(events, hpa['metadata']['name'], now)
     if not any(
         c['type'] == 'ScalingActive' and c['status'] == 'True' for c in hpa.get('status', {}).get('conditions', [])
@@ -513,6 +535,121 @@ def log(event, **fields):
     )
 
 
+def rolled_back(spec):
+    return any(
+        m.get('external', {}).get('metric', {}).get('name') == 'parakeet_request_latency_p99'
+        for m in spec.get('metrics', [])
+    )
+
+
+def build_rollback_clear(spec):
+    """The inverse rollback: restore workload-only metrics, keep the current floor.
+
+    The floor stays at ROLLBACK_REPLICAS; the time-of-day schedule and the
+    arming/usable gates own any later reduction. Drift-refuses exactly like
+    build_rollback through the whole-spec test patch.
+    """
+    restored = [
+        m
+        for m in spec['metrics']
+        if m.get('external', {}).get('metric', {}).get('name') != 'parakeet_request_latency_p99'
+    ]
+    return [
+        {'op': 'test', 'path': '/spec', 'value': copy.deepcopy(spec)},
+        {'op': 'replace', 'path': '/spec/metrics', 'value': restored},
+    ]
+
+
+def advance_rollback_state(state, is_rolled_back, reading, now):
+    """Track the rolled-back clock; return True when the rollback may expire.
+
+    A rollback expires only after one full lookback window of consecutive
+    usable, clean readings while rolled back (2026-10-25 21:06Z: the 13:50Z
+    rollback kept the floor schedule deferred every hour with a healthy
+    fleet, and no in-band clear existed). Any trip, blind, unmeasured or
+    low-sample reading restarts the clean streak.
+    """
+    if not is_rolled_back:
+        state.pop('rollback', None)
+        return False
+    entry = state.get('rollback') or {}
+    since = entry.get('since', now)
+    clean = (
+        not reading.get('trips')
+        and not reading.get('blind')
+        and not reading.get('unmeasured')
+        and not reading.get('low_sample')
+    )
+    clean_since = now if clean and entry.get('clean_since') is None else (entry['clean_since'] if clean else None)
+    state['rollback'] = {'since': since, 'clean_since': clean_since}
+    return clean_since is not None and now - clean_since >= WINDOW and now - since >= WINDOW
+
+
+def load_floor_schedule():
+    """The reviewed 24-entry UTC-hour floor table, or None when not installed.
+
+    The chart renders /guard/floors.json only when floorSchedule.enabled; its
+    absence is the schedule's off switch, so development and any release that
+    does not opt in never write the floor from a schedule.
+    """
+    try:
+        rows = json.loads(open('/guard/floors.json').read())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(rows, list) or len(rows) != 24:
+        return None
+    if any(not isinstance(v, int) or not 1 <= v <= 12 for v in rows):
+        return None
+    return rows
+
+
+def apply_floor_schedule(client, hpa, deployment, state, reading, schedule, now, dry_run):
+    """One bounded scheduled-floor write per hourly change; never fights the guard.
+
+    Deferred whenever the guard has rolled back (the latency metric is present):
+    the reviewed schedule resumes only after an operator clears the rollback.
+    A LOWER requires the guard to be armed under the current spec identity AND
+    the current reading to be usable - not blind, and not carrying an
+    unmeasured regression-shaped first_p95. Dropping onto a fresh warmup would
+    leave a spike unable to roll back (review r1 P1); dropping while the guard
+    cannot even measure would leave capacity reduced until three post-drop
+    blind runs accumulate (review r2 P1). Raises apply immediately - more
+    capacity is the safe direction. The whole observed /spec is JSON-patch
+    tested, so a concurrent change fails this run loudly instead of
+    overwriting.
+    """
+    spec = hpa['spec']
+    hour = dt.datetime.fromtimestamp(now, dt.timezone.utc).hour
+    target = schedule[hour]
+    current = spec.get('minReplicas')
+    if rolled_back(spec):
+        log('floor_schedule', result='deferred_guard_rollback', hour=hour, target=target, floor=current)
+        return
+    if current == target:
+        return
+    if not isinstance(spec.get('maxReplicas'), int) or target > spec['maxReplicas']:
+        log('floor_schedule', result='refused_target_above_cap', hour=hour, target=target, floor=current)
+        return
+    if dry_run:
+        log('floor_schedule', result='dry_run', hour=hour, target=target, floor=current)
+        return
+    if target < current:
+        if state.get('identity') != state_identity(hpa, deployment) or now - state.get('since', now) < WINDOW:
+            log('floor_schedule', result='deferred_guard_not_armed', hour=hour, target=target, floor=current)
+            return
+        if reading.get('blind') or reading.get('unmeasured'):
+            log('floor_schedule', result='deferred_guard_blind', hour=hour, target=target, floor=current)
+            return
+    client.kube(
+        client.path('hpa'),
+        [
+            {'op': 'test', 'path': '/spec', 'value': copy.deepcopy(spec)},
+            {'op': 'replace', 'path': '/spec/minReplicas', 'value': target},
+        ],
+    )
+    log('floor_schedule', result='applied', hour=hour, target=target, floor=current)
+
+
 def run(client, dry_run, now=None):
     now = time.time() if now is None else now
     cm = client.kube(client.path('state'))
@@ -523,15 +660,23 @@ def run(client, dry_run, now=None):
     log('batch_safety', **batch, values=batch_values, cloud_run_rollback='disabled')
     hpa = None
     values = {}
+    schedule = None
     try:
         hpa = client.kube(client.path('hpa'))
         values = client.sample(queries(client.namespace))
-        if workload_only(hpa['spec']):
+        schedule = load_floor_schedule()
+        # With a schedule installed, even a parked (non-workload) HPA runs the
+        # full decide pass so the arming clock advances and the scheduled change
+        # is evaluated against an armed guard; without one, the historical
+        # minimal NOOP path (no deployment/events reads) is preserved.
+        if workload_only(hpa['spec']) or schedule is not None:
             deployment = client.kube(client.path('deployment'))
             events = client.kube(client.path('events'))['items']
             verdict, state, reading = decide(hpa, deployment, events, values, state, now)
         else:
-            verdict, state, reading = 'NOOP', {}, evaluate(values)
+            # Preserve the loaded state: the rolled-back clock must survive
+            # parked readings, not reset on every one of them.
+            verdict, reading = 'NOOP', evaluate(values)
     except Exception as exc:
         # No exact observed spec => no rollback; failed Job still alerts.
         log('parakeet_read_error', error=type(exc).__name__)
@@ -545,6 +690,19 @@ def run(client, dry_run, now=None):
         blind_runs=state.get('blind', 0),
         dry_run=dry_run,
     )
+    # Rollback expiry bookkeeping rides the same persisted state: a rolled-back
+    # HPA that has been clean for one full lookback window clears itself, so a
+    # rolled-back fleet cannot keep the floor schedule deferred forever with no
+    # in-band clear path (2026-10-25 21:06Z). Any unusable reading restarts it.
+    rollback_expires = False
+    if hpa is not None and verdict != 'BLIND':
+        rollback_expires = advance_rollback_state(state, rolled_back(hpa['spec']), reading, now)
+    elif hpa is not None and state.get('rollback'):
+        # An unreadable section never counts as clean: keep the clock, restart
+        # the clean streak.
+        state['rollback']['clean_since'] = None
+    # With no HPA read at all, leave any bookkeeping; the next readable run
+    # reconciles it.
     # Record evidence before attempting rollback; optimistic concurrency protects the persisted counter.
     data = {
         'state': json.dumps(state, sort_keys=True),
@@ -562,6 +720,8 @@ def run(client, dry_run, now=None):
                 'op': 'add',
                 'path': '/metadata/annotations',
                 'value': {
+                    **cm.get('metadata', {}).get('annotations', {}),
+                    'helm.sh/resource-policy': 'keep',
                     'omi.me/batch-safety-verdict': batch['verdict'],
                     'omi.me/parakeet-guard-verdict': verdict,
                 },
@@ -573,7 +733,25 @@ def run(client, dry_run, now=None):
         if not dry_run:
             client.kube(client.path('hpa'), patch)
         log('parakeet_rollback', result='dry_run' if dry_run else 'applied')
-    return 1 if verdict in {'TRIP', 'BLIND'} or batch['verdict'] in {'TRIP', 'BLIND'} else 0
+    elif rollback_expires and hpa is not None:
+        clear = build_rollback_clear(hpa['spec'])
+        if not dry_run:
+            client.kube(client.path('hpa'), clear)
+        log('parakeet_rollback_expired', result='dry_run' if dry_run else 'applied')
+    elif hpa is not None and verdict != 'BLIND' and schedule is not None:
+        # Scheduled floor changes are ordinary operation, not a safety action:
+        # they run after the reading (never in the same run as a rollback) and
+        # apply_floor_schedule defers while a guard rollback is in force or the
+        # guard is not yet armed for a lower.
+        try:
+            apply_floor_schedule(client, hpa, deployment, state, reading, schedule, now, dry_run)
+        except Exception as exc:
+            log('floor_schedule_error', error=type(exc).__name__)
+            return 2
+    # The batch observer is isolated evidence: its trips/unknowns never fail
+    # the Job or block the Parakeet schedule (2026-10-25 21:06Z ruling); only
+    # the Parakeet section owns the exit code.
+    return 1 if verdict in {'TRIP', 'BLIND'} else 0
 
 
 def main():

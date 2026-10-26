@@ -8606,6 +8606,9 @@ class AppLocalizationsBn extends AppLocalizations {
       'ট্রান্সক্রিপশন উপলব্ধ নেই — রেকর্ডিং চলছে এবং আপনার অডিও সংরক্ষিত হচ্ছে।';
 
   @override
+  String get captureNoAudioFromPendant => 'পেনড্যান্ট থেকে কোনো অডিও নেই';
+
+  @override
   String get capturing => 'ক্যাপচার হচ্ছে';
 
   @override
@@ -11089,6 +11092,12 @@ class AppLocalizationsBn extends AppLocalizations {
       'আপনার Omi-এর সঙ্গে Bluetooth সংযোগ বিচ্ছিন্ন হয়ে গেছে, তাই অডিও অ্যাপে পৌঁছাচ্ছে না। Omi ডিভাইসে রেকর্ড করা চালিয়ে যাচ্ছে এবং সংযোগ ফিরলে সিঙ্ক হবে। আবার চেষ্টা করলে সংযোগ পুনরায় স্থাপিত হয়; বারবার ব্যর্থ হলে সেটিংস > ডিভাইস থেকে আপনার ডিভাইস পরীক্ষা করুন।';
 
   @override
+  String get captureConnecting => 'সংযোগ করা হচ্ছে…';
+
+  @override
+  String get captureNoAudioDetail => 'পেনড্যান্ট সংযুক্ত আছে, কিন্তু কোনো অডিও আপনার ফোনে পৌঁছাচ্ছে না';
+
+  @override
   String get captureIngressNeedsReconnect => 'অডিও অ্যাপে পৌঁছাচ্ছে না — Omi পুনরায় সংযুক্ত করুন';
 
   @override
@@ -12243,12 +12252,6 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get playbackAudioNetworkFailed => 'সংযোগ পরীক্ষা করুন';
-
-  @override
-  String get forYou => 'আপনার জন্য';
-
-  @override
-  String get stopThese => 'এগুলো বন্ধ করুন';
 
   @override
   String get dismiss => 'সরিয়ে দিন';
@@ -14567,4 +14570,31 @@ class AppLocalizationsBn extends AppLocalizations {
 
   @override
   String get othersSpeakerLabel => 'অন্যরা';
+
+  @override
+  String get livePreviewLabel => 'Live preview';
+
+  @override
+  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
+
+  @override
+  String get livePreviewListening => 'Listening… words appear here as you speak.';
+
+  @override
+  String get livePreviewStarting => 'Starting live preview…';
+
+  @override
+  String get livePreviewTranscribingTitle => 'Transcribing…';
+
+  @override
+  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
+
+  @override
+  String get openLoopAnswerDone => 'সম্পন্ন';
+
+  @override
+  String get openLoopAnswerRemind => 'পরে মনে করিয়ে দিন';
+
+  @override
+  String get openLoopAnswerDrop => 'বাদ দিন';
 }
