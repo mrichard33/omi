@@ -6,6 +6,7 @@ import os
 import time
 from google.cloud import firestore
 import config.speaker_match_scores as match_scores
+from utils.open_loops.extraction import OPEN_LOOP_EXTRACTIONS_COMPRESSED_FIELD, OPEN_LOOP_EXTRACTIONS_FIELD
 
 
 class SyncAssignmentDiscovery:
@@ -65,6 +66,31 @@ def encode_sync_assignment_plan(uid: str, client: Any, transaction: Any, payload
         payload.get('data_protection_level') or 'enhanced',
         preserve_transcript_identity=bool(current and current.get('has_transcript_corrections')),
     )
+    if current is not None and OPEN_LOOP_EXTRACTIONS_FIELD in current:
+        # The decoded plan never carries retained extractions (the encoded blob
+        # must not reach the logical encoder), and the stored row is their only
+        # authoritative source on an existing row. An unchanged protection level
+        # carries the stored blob and its marker verbatim — no decrypt/decompress
+        # on the transaction replay path. A level change strictly decodes and
+        # re-protects; an unreadable blob then aborts before any write, never
+        # becomes empty content.
+        level = payload.get('data_protection_level') or 'enhanced'
+        if (current.get('data_protection_level') or 'standard') == level:
+            encoded[OPEN_LOOP_EXTRACTIONS_FIELD] = current[OPEN_LOOP_EXTRACTIONS_FIELD]
+            encoded[OPEN_LOOP_EXTRACTIONS_COMPRESSED_FIELD] = current.get(OPEN_LOOP_EXTRACTIONS_COMPRESSED_FIELD)
+        else:
+            retained = conversations.decode_open_loop_extractions(
+                uid,
+                current[OPEN_LOOP_EXTRACTIONS_FIELD],
+                bool(current.get(OPEN_LOOP_EXTRACTIONS_COMPRESSED_FIELD)),
+            )
+            encoded.update(
+                conversations._prepare_conversation_for_write(  # type: ignore[reportPrivateUsage]
+                    {OPEN_LOOP_EXTRACTIONS_FIELD: retained},
+                    uid,
+                    level,
+                )
+            )
     conversations.guard_match_score_size(encoded, current)
     if (
         current
@@ -87,7 +113,12 @@ def run_sync_assignment(client: Any, assign: Any, full_ids: frozenset[str], *, r
         return run_transactional(client, assign, full_ids=full_ids)
     return run_with_transaction_contention_retry(
         client.transaction,
-        lambda transaction: run_transactional(client, assign, full_ids=full_ids, initial_transaction=transaction),
+        # attempts=1: the outer budget owns every attempt, so an expired chain
+        # costs one bounded outer retry instead of up to three inner restarts
+        # (which multiplied the worst case to 15 chains).
+        lambda transaction: run_transactional(
+            client, assign, full_ids=full_ids, initial_transaction=transaction, attempts=1
+        ),
         operation_name='sync_assignment',
     )
 

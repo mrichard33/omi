@@ -2,6 +2,7 @@ from utils.generated_compute import require_generated_compute, generated_compute
 import asyncio
 import hashlib
 import os
+from contextlib import nullcontext
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, BackgroundTasks
 from typing import Annotated, Any, Dict, List, Literal, Optional
@@ -15,6 +16,8 @@ import database.redis_db as redis_db
 import database.users as users_db
 from utils.agent_capabilities.errors import TRANSCRIPT_EDIT_HTTP_ERRORS
 from database import conversation_tombstones
+from database.legal_holds import destructive_operation_gate
+from utils.other.account_gate_http import account_gate_busy_http_exception
 from database.firestore_read_metrics import FirestoreReadSite
 from utils.list_version_check import ListVersionCheck
 from database.vector_db import (
@@ -1372,7 +1375,35 @@ def delete_conversation(
     http_request: Request = None,  # type: ignore[assignment]
     uid: str = Depends(auth.get_current_user_uid),
 ):
-    logger.info(f'delete_conversation {conversation_id} {uid} cascade={cascade}')
+    db_client = getattr(db_client_module, 'db', None) if cascade else None
+    memory_service = MemoryService(db_client=db_client) if cascade else None
+    # Acquire before recording delete intent. A busy account returns a retryable
+    # 409 without leaving a tombstone on a still-live conversation. Nested
+    # memory retraction reuses this exact gate and token.
+    gate = (
+        destructive_operation_gate(uid, kind='explicit_memory_deletion', firestore_client=db_client)
+        if cascade
+        else nullcontext()
+    )
+    try:
+        with gate:
+            return _delete_conversation_under_gate(
+                conversation_id, background_tasks, cascade, http_request, uid, memory_service, db_client
+            )
+    except RuntimeError as error:
+        if type(error).__name__ not in {
+            'DestructiveGateTakeover',
+            'DestructiveOperationInProgress',
+            'LegalHoldAuthorityUnavailable',
+        }:
+            raise
+        raise account_gate_busy_http_exception() from error
+
+
+def _delete_conversation_under_gate(
+    conversation_id, background_tasks, cascade, http_request, uid, memory_service, db_client
+):
+    logger.info('event=conversation_delete cascade=%s', cascade)
 
     # Commit intent before retraction or cleanup; failures must never undo this guard.
     conversation_tombstones.record_deletion(uid, conversation_id)
@@ -1381,15 +1412,15 @@ def delete_conversation(
 
     if cascade:
         # Delete associated memories and action items first so partial failure cannot orphan derived data.
-        db_client = getattr(db_client_module, 'db', None)
-        memory_service = MemoryService(db_client=db_client)
         # Retraction is fenced with canonical intake; skip only when there is provably nothing to retract.
         # Any real memory still raises instead of being orphaned by conversation deletion.
+        # Preserve the post-intent retraction check: an earlier emptiness hint
+        # could miss a canonical commit that won immediately before the gate.
         if not retraction_can_be_skipped(uid, conversation_id, memory_service=memory_service, db_client=db_client):
             try:
                 memory_service.retract_conversation_memories(uid, conversation_id)
             except ConversationReplacementConflictError as error:
-                logger.exception('cascade retraction conflicted uid=%s conversation_id=%s', uid, conversation_id)
+                logger.exception('event=conversation_delete outcome=retraction_conflict')
                 # Concurrent same-account memory writes kept winning the
                 # account-global control CAS. Primary content has not been deleted yet, so
                 # fail closed with a retryable answer instead of an opaque 500;
@@ -1406,8 +1437,6 @@ def delete_conversation(
                     "LegalHoldAuthorityUnavailable",
                 }:
                     raise
-                from utils.other.account_gate_http import account_gate_busy_http_exception
-
                 raise account_gate_busy_http_exception() from error
 
         from utils.notifications import sync_action_item_reminder
@@ -1426,7 +1455,9 @@ def delete_conversation(
             try:
                 delete_action_item_vectors_batch(uid, [item['id'] for item in armed])
             except Exception as e:
-                logger.error(f"Error deleting task vectors for {conversation_id}: {e}")
+                logger.error(
+                    'event=conversation_delete action=task_vectors outcome=error exception_type=%s', type(e).__name__
+                )
         # Snapshot retained bridge donors before shared metadata cleanup removes them.
         source_ids = (
             (conversations_db.get_conversation(uid, conversation_id) or {}).get('sync_merged_from', [])
@@ -2380,10 +2411,10 @@ def merge_conversations(
     uid: str = Depends(auth.with_rate_limit(auth.get_current_user_uid, "conversations:merge")),
 ):
     """Admit completed sources, merge into a new ID asynchronously, then notify the client."""
-    from utils.conversations.merge_conversations import validate_merge_compatibility, perform_merge_async
+    from utils.conversations.merge_conversations import validate_merge_compatibility
 
-    if len(request.conversation_ids) < 2:
-        raise HTTPException(status_code=400, detail="At least 2 conversations required to merge")
+    if not 2 <= len(request.conversation_ids) <= 100:
+        raise HTTPException(status_code=400, detail="Merge requires 2 to 100 conversations")
     if len(request.conversation_ids) != len(set(request.conversation_ids)):
         raise HTTPException(status_code=400, detail="Cannot merge duplicate conversations.")
 
@@ -2398,39 +2429,17 @@ def merge_conversations(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_message)
 
-    from config.refactor_modes import serving_for
-
-    if serving_for('LIFECYCLE_V2_MODE', uid):
-        job = lifecycle_service.merge_jobs.admit(uid, request.conversation_ids, request.reprocess)
-        if job is None:
-            raise HTTPException(status_code=409, detail='Conversation changed during merge admission')
-        background_tasks.add_task(lifecycle_service.merge_jobs.run, job['job_id'], job['dispatch_generation'])
-        return MergeConversationsResponse(
-            status='merging',
-            message='Merge started',
-            warning=warning_message,
-            conversation_ids=request.conversation_ids,
-        )
-
-    # refactor: superseded by lifecycle.merge_jobs when LIFECYCLE_V2_MODE=serve
-    admitted = []
-    for conv_id in request.conversation_ids:
-        if not lifecycle_service.begin_merge(uid, conv_id):
-            for prior_id in admitted:
-                lifecycle_service.complete(uid, prior_id)
-            raise HTTPException(status_code=409, detail='Conversation changed during merge admission')
-        admitted.append(conv_id)
-
-    background_tasks.add_task(
-        perform_merge_async,
-        uid=uid,
-        conversation_ids=request.conversation_ids,
-        reprocess=request.reprocess,
-    )
-
+    # Every manual merge needs durable admission/recovery. The broader lifecycle
+    # canary still controls capture/finalization; it cannot disable this safety
+    # contract or send a subset of users through non-recoverable source cleanup.
+    job = lifecycle_service.merge_jobs.admit(uid, request.conversation_ids, request.reprocess)
+    if job is None:
+        raise HTTPException(status_code=409, detail='Conversation changed during merge admission')
+    background_tasks.add_task(lifecycle_service.merge_jobs.run, job['job_id'], job['dispatch_generation'])
     return MergeConversationsResponse(
-        status="merging",
-        message="Merge started",
+        status='merging',
+        message='Merge started',
         warning=warning_message,
         conversation_ids=request.conversation_ids,
+        merged_conversation_id=job['merge_target_id'],
     )

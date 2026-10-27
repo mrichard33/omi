@@ -278,9 +278,9 @@ class SyncProvider extends ChangeNotifier implements IWalServiceListener, IWalSy
       );
 
   /// Spent retry budgets and request refusals can be explicitly retried.
-  /// Missing files and permanent audio/lookback verdicts remain excluded.
-  List<Wal> get retryableAttentionWals =>
-      _allWals.where((w) => !w.onDeviceOnly && isRetryableSyncState(w.syncDisplayState)).toList();
+  /// Missing files, permanent audio/lookback verdicts and the deterministic
+  /// too-large refusal remain excluded.
+  List<Wal> get retryableAttentionWals => _allWals.where(walRetryCanHelp).toList();
 
   /// Retry every recording in [retryableAttentionWals]. The automatic drain
   /// skips a recording once its budget is spent, so a plain [syncWals] from
@@ -590,9 +590,16 @@ class SyncProvider extends ChangeNotifier implements IWalServiceListener, IWalSy
   /// conversations. Surfaces them without disturbing an active sync.
   Future<void> _onReconciledConversations(SyncLocalFilesResponse result, int generation) async {
     if (!_isCurrent(generation)) return;
+    final refreshedIds = <String>{};
     final conversations = await ConversationSyncUtils.processConversationIds(
       newConversationIds: result.newConversationIds,
-      updatedConversationIds: result.updatedConversationIds,
+      updatedConversationIds: {
+        ...result.updatedConversationIds,
+        ..._syncState.syncedConversations.map((p) => p.conversation.id),
+      }.toList(),
+      onConversation: (id, _) {
+        if (_isCurrent(generation)) refreshedIds.add(id);
+      },
     );
     if (!_isCurrent(generation)) return;
     // Refresh WALs *before* updating the "synced" conversation UI so we don't
@@ -600,9 +607,12 @@ class SyncProvider extends ChangeNotifier implements IWalServiceListener, IWalSy
     // WALs in an uploaded/pending state (issue #7240).
     await _refreshWals(generation);
     if (!_isCurrent(generation)) return;
-    if (conversations.isNotEmpty && !_syncState.isProcessing) {
+    if ((conversations.isNotEmpty || refreshedIds.isNotEmpty) && !_syncState.isProcessing) {
       // Append to whatever is already shown — jobs reconcile incrementally.
-      final merged = [..._syncState.syncedConversations, ...conversations];
+      final merged = [
+        ..._syncState.syncedConversations.where((p) => !refreshedIds.contains(p.conversation.id)),
+        ...conversations,
+      ];
       final filtered = filterFullySyncedConversations(conversations: merged, wals: _allWals);
       _updateSyncState(_syncState.toCompleted(conversations: filtered), generation);
     }
@@ -1086,7 +1096,13 @@ class SyncProvider extends ChangeNotifier implements IWalServiceListener, IWalSy
   Future<void> retrySync() async {
     final generation = _sessionGeneration;
     final failedWal = _syncState.failedWal;
-    if (failedWal != null && (failedWal.status == WalStatus.miss || failedWal.status == WalStatus.uploadRejected)) {
+    // A deterministic too_large refusal is the one failed upload a retry can
+    // never fix — the same bytes are the same size — so the error card's
+    // Retry falls through to work that can still move (the row's own Delete
+    // owns the too-large recording).
+    if (failedWal != null &&
+        (failedWal.status == WalStatus.miss || failedWal.status == WalStatus.uploadRejected) &&
+        failedWal.uploadRejectionReason != WalUploadRejection.tooLarge) {
       await syncWal(failedWal);
       return;
     }
@@ -1149,12 +1165,14 @@ class SyncProvider extends ChangeNotifier implements IWalServiceListener, IWalSy
     }
 
     bool isFullySynced(SyncedConversationPointer pointer) {
+      if (pointer.conversation.isHiddenFromDefaultList) return false;
       final walsForConversation = byConversationId[pointer.conversation.id] ?? const <Wal>[];
       if (walsForConversation.isEmpty) return true; // No local WALs → nothing pending.
       return walsForConversation.every((w) => w.status == WalStatus.synced);
     }
 
-    return conversations.where(isFullySynced).toList();
+    final latestById = {for (final pointer in conversations) pointer.conversation.id: pointer};
+    return latestById.values.where(isFullySynced).toList();
   }
 
   // Audio playback delegate methods

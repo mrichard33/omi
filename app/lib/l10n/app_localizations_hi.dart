@@ -709,7 +709,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get remembering => 'याद रख रहा है';
 
   @override
-  String get unlimitedPlan => 'असीमित योजना';
+  String get unlimitedPlan => 'Omi Pro';
 
   @override
   String get managePlan => 'योजना प्रबंधित करें';
@@ -731,7 +731,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get upgrade => 'अपग्रेड करें';
 
   @override
-  String get upgradeToUnlimited => 'असीमित में अपग्रेड करें';
+  String get upgradeToUnlimited => 'Omi Pro में अपग्रेड करें';
 
   @override
   String basicPlanDesc(int limit) {
@@ -3130,7 +3130,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get pro => 'प्रो';
 
   @override
-  String get upgradeToPro => 'Pro में अपग्रेड करें';
+  String get upgradeToPro => 'Omi Pro में अपग्रेड करें';
 
   @override
   String get getOmiDevice => 'Omi डिवाइस प्राप्त करें';
@@ -4252,7 +4252,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get getOmiUnlimitedFree =>
-      'AI मॉडल को प्रशिक्षित करने के लिए अपना डेटा योगदान करके मुफ्त में Omi अनलिमिटेड प्राप्त करें।';
+      'AI मॉडल को प्रशिक्षित करने के लिए अपना डेटा योगदान करके मुफ्त में Omi Pro प्राप्त करें।';
 
   @override
   String get trainingDataBullets =>
@@ -9642,7 +9642,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get downgradeToFreemiumAction => 'मुफ़्त संस्करण पर जाएँ';
 
   @override
-  String get getFreeUnlimitedAccess => 'मुफ़्त असीमित एक्सेस पाएँ';
+  String get getFreeUnlimitedAccess => 'Omi Pro मुफ़्त पाएँ';
 
   @override
   String get shareDataForTraining => 'प्रशिक्षण के लिए डेटा साझा करें';
@@ -12837,7 +12837,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get chatAppsVoiceNotesSubtitle => 'वॉइस नोट भेजें और Omi उसका जवाब देगा।';
 
   @override
-  String get chatAppsPartOfPro => 'चैट ऐप्स Pro का हिस्सा हैं';
+  String get chatAppsPartOfPro => 'चैट ऐप्स Omi Pro का हिस्सा हैं';
 
   @override
   String get chatAppsMessagesApp => 'संदेश';
@@ -13470,7 +13470,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get syncDetailsCopy => 'सपोर्ट के लिए विवरण कॉपी करें';
 
   @override
-  String get chatAppsChannelPlanRequired => 'Operator और Architect पर उपलब्ध';
+  String get chatAppsChannelPlanRequired => 'Omi Pro पर उपलब्ध';
 
   @override
   String chatAppsAtCapacity(String app) {
@@ -13981,7 +13981,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get onDeviceOptionChargingBody => 'फ़ोन चार्ज होते समय चलता है।';
 
   @override
-  String get onDeviceUpgradeBody => 'वक्ताओं को अलग पहचानने और अधिक सटीकता के लिए Pro में अपग्रेड करें';
+  String get onDeviceUpgradeBody => 'वक्ताओं को अलग पहचानने और अधिक सटीकता के लिए Omi Pro में अपग्रेड करें';
 
   @override
   String get onDeviceAtCapFooter =>
@@ -14167,7 +14167,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get onDeviceRedoWithCloud => 'Omi Cloud से दोबारा करें';
 
   @override
-  String get onDeviceRedoHint => 'वक्ताओं को अलग पहचानने और अधिक सटीकता के लिए Pro में अपग्रेड करें';
+  String get onDeviceRedoHint => 'वक्ताओं को अलग पहचानने और अधिक सटीकता के लिए Omi Pro में अपग्रेड करें';
 
   @override
   String get onDeviceKeepEverything => 'सब कुछ इसी फ़ोन पर रखें';
@@ -14416,13 +14416,7 @@ class AppLocalizationsHi extends AppLocalizations {
   }
 
   @override
-  String get episodeOpenPrevious => 'पिछला एपिसोड खोलें';
-
-  @override
   String get episodeNotesSoon => 'बातचीत के पहले कुछ मिनटों के बाद नोट्स दिखेंगे।';
-
-  @override
-  String get episodeOpenAll => 'सब खोलें';
 
   @override
   String get episodeWrapUpNow => 'अभी समाप्त करें';
@@ -14560,22 +14554,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get othersSpeakerLabel => 'अन्य';
 
   @override
-  String get livePreviewLabel => 'Live preview';
-
-  @override
-  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
-
-  @override
   String get livePreviewListening => 'Listening… words appear here as you speak.';
 
   @override
   String get livePreviewStarting => 'Starting live preview…';
-
-  @override
-  String get livePreviewTranscribingTitle => 'Transcribing…';
-
-  @override
-  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
 
   @override
   String get openLoopAnswerDone => 'पूर्ण';
@@ -14585,4 +14567,70 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get openLoopAnswerDrop => 'इसे छोड़ दें';
+
+  @override
+  String get syncRejectionInvalidDate => 'अमान्य रिकॉर्डिंग तिथि';
+
+  @override
+  String get syncDeleteKeptUploading => 'कुछ हिस्से अभी भी अपलोड हो रहे हैं और रख लिए गए हैं';
+
+  @override
+  String get syncRejectionServer => 'सर्वर ने अस्वीकार किया';
+
+  @override
+  String get syncRejectionTooLarge => 'बहुत बड़ा';
+
+  @override
+  String deviceOnPhoneQueue(Object duration) {
+    return 'फ़ोन पर $duration';
+  }
+
+  @override
+  String get syncCardUploadsPaused => 'अपलोड एक पल के लिए रुके हैं — ये अपने आप फिर शुरू होंगे';
+
+  @override
+  String episodeContinues(Object title) {
+    return '“$title” जारी है';
+  }
+
+  @override
+  String episodeLiveSince(Object time) {
+    return '· $time से';
+  }
+
+  @override
+  String get episodeNotesStartWithTranscript => 'अंतिम ट्रांस्क्रिप्ट आने पर नोट्स शुरू होंगे।';
+
+  @override
+  String get episodeOnDeviceNotesFootnote =>
+      'आप बोलते समय ये आपके फ़ोन पर तैयार होती हैं। पूरे नोट्स अंतिम ट्रांस्क्रिप्ट के साथ आएँगे।';
+
+  @override
+  String get episodeOnThisPhone => 'इस फ़ोन पर';
+
+  @override
+  String get episodeOpenTranscript => 'ट्रांस्क्रिप्ट खोलें';
+
+  @override
+  String get liveCardTitle => 'लाइव';
+
+  @override
+  String livePreviewBehind(Object duration) {
+    return 'अंतिम ट्रांस्क्रिप्ट लगभग $duration पीछे है';
+  }
+
+  @override
+  String get livePreviewCatchingUp => 'अंतिम ट्रांस्क्रिप्ट पहुँच रहा है';
+
+  @override
+  String get livePreviewNoEngineBody => 'आपके शब्द बोलने के एक या दो मिनट बाद यहाँ दिखते हैं।';
+
+  @override
+  String get livePreviewNoEngineTitle => 'सुरक्षित रिकॉर्ड हो रहा है';
+
+  @override
+  String get livePreviewOnPhoneDivider => 'इस फ़ोन पर लाइव';
+
+  @override
+  String get livePreviewTurnOnLiveText => 'लाइव टेक्स्ट चालू करें';
 }

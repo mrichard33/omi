@@ -712,7 +712,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get remembering => 'Recordando';
 
   @override
-  String get unlimitedPlan => 'Plan Ilimitado';
+  String get unlimitedPlan => 'Omi Pro';
 
   @override
   String get managePlan => 'Gestionar plan';
@@ -734,7 +734,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get upgrade => 'Mejorar';
 
   @override
-  String get upgradeToUnlimited => 'Actualizar a ilimitado';
+  String get upgradeToUnlimited => 'Actualizar a Omi Pro';
 
   @override
   String basicPlanDesc(int limit) {
@@ -3147,7 +3147,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get pro => 'Pro';
 
   @override
-  String get upgradeToPro => 'Actualizar a Pro';
+  String get upgradeToPro => 'Actualizar a Omi Pro';
 
   @override
   String get getOmiDevice => 'Obtener dispositivo Omi';
@@ -4276,7 +4276,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get trainingDataProgram => 'Programa de datos de entrenamiento';
 
   @override
-  String get getOmiUnlimitedFree => 'Obtén Omi Ilimitado gratis contribuyendo tus datos para entrenar modelos de IA.';
+  String get getOmiUnlimitedFree => 'Obtén Omi Pro gratis contribuyendo tus datos para entrenar modelos de IA.';
 
   @override
   String get trainingDataBullets =>
@@ -9688,7 +9688,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get downgradeToFreemiumAction => 'Cambiar a la versión gratuita';
 
   @override
-  String get getFreeUnlimitedAccess => 'Consigue acceso ilimitado gratis';
+  String get getFreeUnlimitedAccess => 'Consigue Omi Pro gratis';
 
   @override
   String get shareDataForTraining => 'Compartir datos para el entrenamiento';
@@ -12894,7 +12894,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatAppsVoiceNotesSubtitle => 'Envía una nota de voz y Omi la responderá.';
 
   @override
-  String get chatAppsPartOfPro => 'Las apps de chat forman parte de Pro';
+  String get chatAppsPartOfPro => 'Las apps de chat forman parte de Omi Pro';
 
   @override
   String get chatAppsMessagesApp => 'Mensajes';
@@ -13528,7 +13528,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get syncDetailsCopy => 'Copiar detalles para soporte';
 
   @override
-  String get chatAppsChannelPlanRequired => 'Disponible en Operator y Architect';
+  String get chatAppsChannelPlanRequired => 'Disponible en Omi Pro';
 
   @override
   String chatAppsAtCapacity(String app) {
@@ -14041,7 +14041,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get onDeviceOptionChargingBody => 'Funciona mientras el teléfono se carga.';
 
   @override
-  String get onDeviceUpgradeBody => 'Mejora a Pro para separar a los hablantes y obtener mayor precisión';
+  String get onDeviceUpgradeBody => 'Mejora a Omi Pro para separar a los hablantes y obtener mayor precisión';
 
   @override
   String get onDeviceAtCapFooter =>
@@ -14227,7 +14227,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get onDeviceRedoWithCloud => 'Rehacer con Omi Cloud';
 
   @override
-  String get onDeviceRedoHint => 'Mejora a Pro para separar a los hablantes y obtener mayor precisión';
+  String get onDeviceRedoHint => 'Mejora a Omi Pro para separar a los hablantes y obtener mayor precisión';
 
   @override
   String get onDeviceKeepEverything => 'Guardar todo en este teléfono';
@@ -14477,13 +14477,7 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get episodeOpenPrevious => 'Abrir episodio anterior';
-
-  @override
   String get episodeNotesSoon => 'Las notas aparecen tras los primeros minutos de conversación.';
-
-  @override
-  String get episodeOpenAll => 'Abrir todo';
 
   @override
   String get episodeWrapUpNow => 'Terminar ahora';
@@ -14621,22 +14615,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get othersSpeakerLabel => 'Otros';
 
   @override
-  String get livePreviewLabel => 'Live preview';
-
-  @override
-  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
-
-  @override
   String get livePreviewListening => 'Listening… words appear here as you speak.';
 
   @override
   String get livePreviewStarting => 'Starting live preview…';
-
-  @override
-  String get livePreviewTranscribingTitle => 'Transcribing…';
-
-  @override
-  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
 
   @override
   String get openLoopAnswerDone => 'Hecho';
@@ -14646,4 +14628,70 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get openLoopAnswerDrop => 'Descartar';
+
+  @override
+  String get syncRejectionInvalidDate => 'Fecha de grabación no válida';
+
+  @override
+  String get syncDeleteKeptUploading => 'Algunas partes aún se están subiendo y se han conservado';
+
+  @override
+  String get syncRejectionServer => 'Rechazada por el servidor';
+
+  @override
+  String get syncRejectionTooLarge => 'Demasiado grande';
+
+  @override
+  String deviceOnPhoneQueue(Object duration) {
+    return '$duration en el teléfono';
+  }
+
+  @override
+  String get syncCardUploadsPaused => 'Subidas en pausa un momento — se reanudarán automáticamente';
+
+  @override
+  String episodeContinues(Object title) {
+    return 'Continuación de «$title»';
+  }
+
+  @override
+  String episodeLiveSince(Object time) {
+    return '· desde $time';
+  }
+
+  @override
+  String get episodeNotesStartWithTranscript => 'Las notas comienzan cuando llega la transcripción final.';
+
+  @override
+  String get episodeOnDeviceNotesFootnote =>
+      'Se redactan en tu teléfono mientras hablas. Las notas completas llegan con la transcripción final.';
+
+  @override
+  String get episodeOnThisPhone => 'En este teléfono';
+
+  @override
+  String get episodeOpenTranscript => 'Abrir transcripción';
+
+  @override
+  String get liveCardTitle => 'En vivo';
+
+  @override
+  String livePreviewBehind(Object duration) {
+    return 'Transcripción final con unos $duration de retraso';
+  }
+
+  @override
+  String get livePreviewCatchingUp => 'La transcripción final se está poniendo al día';
+
+  @override
+  String get livePreviewNoEngineBody => 'Tus palabras aparecen aquí uno o dos minutos después de decirlas.';
+
+  @override
+  String get livePreviewNoEngineTitle => 'Grabando de forma segura';
+
+  @override
+  String get livePreviewOnPhoneDivider => 'En vivo en este teléfono';
+
+  @override
+  String get livePreviewTurnOnLiveText => 'Activar texto en vivo';
 }
