@@ -18,6 +18,13 @@ SHORT_FALSE_PERMISSIONS = json.loads(Path(__file__).with_name('fixtures').joinpa
 ]
 
 
+@pytest.fixture(autouse=True)
+def legacy_admission_for_audio_lid_tests(monkeypatch):
+    # Keep testing per-unit LID for rollback and already admitted work. New
+    # custody exclusions are exercised in test_batch_admission_language.
+    monkeypatch.setenv('BATCH_ADMISSION_LANGUAGE_EXCLUSION_ENABLED', 'false')
+
+
 def wav(seconds=6):
     output = BytesIO()
     with wave.open(output, 'wb') as writer:
@@ -149,7 +156,7 @@ def test_worker_long_lid_and_declared_supported_permission_remain_available():
 
 @pytest.mark.parametrize(
     'seconds,confidence,safe',
-    [(5.99, 0.984, False), (5.99, 0.985, True), (6.0, 0.949, False), (6.0, 0.95, True), (65.0, 0.95, True)],
+    [(5.99, 0.984, False), (5.99, 0.985, True), (6.0, 0.949, False), (6.0, 0.985, True), (65.0, 0.985, True)],
 )
 def test_worker_self_lid_reapplies_shared_floor_and_probe_bound(seconds, confidence, safe):
     from diarizer.batch_pipeline_models import stt_language
@@ -432,13 +439,14 @@ def test_language_gate_and_vendor_guard_metrics_survive_the_sync_export_allowlis
     [('en', 0.99, 'en'), ('vi', 0.99, 'vi'), ('en', 0.5, 'und')]
     + [(case['detected_language'], case['confidence'], 'und') for case in SHORT_FALSE_PERMISSIONS],
 )
-async def test_cpu_intake_freezes_detection_proof_instead_of_primary_setting(monkeypatch, code, confidence, frozen):
+async def test_cpu_intake_freezes_detection_proof_with_inheritance_disabled(monkeypatch, code, confidence, frozen):
     from types import SimpleNamespace
     from utils.batch_pipeline import intake
     from utils.batch_pipeline.audio import audio_unit, read_context
     from utils.batch_pipeline.artifacts import ProtectionContext
     from tests.unit.test_batch_pipeline_scheduler import MemoryStore
 
+    monkeypatch.setenv('BATCH_PIPELINE_LANGUAGE_INHERITANCE_ENABLED', 'false')
     detector(monkeypatch, code, confidence)
     captured = []
 
@@ -504,7 +512,7 @@ async def test_self_lid_intake_context_roundtrips_through_real_batch_worker(monk
     staged = []
 
     def authorize(store, seed, snapshots):
-        snapshots['user'] = {'language': 'en', 'transcription_preferences': {'single_language_mode': False}}
+        snapshots['user'] = {'language': 'multi', 'transcription_preferences': {'single_language_mode': False}}
         return ProtectionContext('standard', 0)
 
     def stage(work, body):
@@ -626,7 +634,7 @@ async def test_legacy_off_keeps_language_probe_and_never_parakeet_for_unsupporte
 def test_worker_accepts_self_lid_evidence_with_its_own_floors():
     from diarizer.batch_pipeline_models import stt_language
 
-    context = self_lid_context(confidence=0.95, probe_seconds=8.0)
+    context = self_lid_context(confidence=0.99, probe_seconds=8.0)
     identity = dict(expected_owner_id='synthetic-owner', expected_segment_id='synthetic-segment')
     assert stt_language(context, duration_seconds=8, **identity) == 'en'
     # Below one second the self gate never proves support on its own.
@@ -638,8 +646,15 @@ def test_worker_accepts_self_lid_evidence_with_its_own_floors():
         )
         is None
     )
-    # A short probe needs the higher floor, not the >=6 s one.
-    assert stt_language({**context, 'stt_language_probe_seconds': 3.0}, duration_seconds=3, **identity) is None
+    # Short and long probes both reject the former permissive long-clip range.
+    assert (
+        stt_language(
+            {**context, 'stt_language_probe_seconds': 3.0, 'stt_language_confidence': 0.98},
+            duration_seconds=3,
+            **identity
+        )
+        is None
+    )
     assert (
         stt_language(
             {**context, 'stt_language_probe_seconds': 3.0, 'stt_language_confidence': 0.985},
@@ -652,7 +667,7 @@ def test_worker_accepts_self_lid_evidence_with_its_own_floors():
 
 @pytest.mark.parametrize(
     'seconds,confidence,expected',
-    [(6.000375, 0.95, 'en'), (5.999625, 0.95, None), (0.999625, 0.999, None), (1.000375, 0.999, 'en')],
+    [(6.000375, 0.985, 'en'), (5.999625, 0.984, None), (0.999625, 0.999, None), (1.000375, 0.999, 'en')],
 )
 def test_worker_accepts_legacy_rounded_probe_but_uses_measured_floor(seconds, confidence, expected):
     from diarizer.batch_pipeline_models import stt_language

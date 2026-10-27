@@ -713,7 +713,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get remembering => 'Запоминание';
 
   @override
-  String get unlimitedPlan => 'Безлимитный тариф';
+  String get unlimitedPlan => 'Omi Pro';
 
   @override
   String get managePlan => 'Управление тарифом';
@@ -735,7 +735,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get upgrade => 'Повысить тариф';
 
   @override
-  String get upgradeToUnlimited => 'Обновить до безлимитного';
+  String get upgradeToUnlimited => 'Обновить до Omi Pro';
 
   @override
   String basicPlanDesc(int limit) {
@@ -3162,7 +3162,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get pro => 'Pro';
 
   @override
-  String get upgradeToPro => 'Обновить до Pro';
+  String get upgradeToPro => 'Обновить до Omi Pro';
 
   @override
   String get getOmiDevice => 'Получить устройство Omi';
@@ -4287,8 +4287,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get trainingDataProgram => 'Программа данных для обучения';
 
   @override
-  String get getOmiUnlimitedFree =>
-      'Получите Omi Unlimited бесплатно, предоставив свои данные для обучения моделей ИИ.';
+  String get getOmiUnlimitedFree => 'Получите Omi Pro бесплатно, предоставив свои данные для обучения моделей ИИ.';
 
   @override
   String get trainingDataBullets =>
@@ -9700,7 +9699,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downgradeToFreemiumAction => 'Перейти на бесплатную версию';
 
   @override
-  String get getFreeUnlimitedAccess => 'Получите безлимитный доступ бесплатно';
+  String get getFreeUnlimitedAccess => 'Получите Omi Pro бесплатно';
 
   @override
   String get shareDataForTraining => 'Поделиться данными для обучения';
@@ -12901,7 +12900,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatAppsVoiceNotesSubtitle => 'Отправьте голосовое сообщение, и Omi ответит на него.';
 
   @override
-  String get chatAppsPartOfPro => 'Чат-приложения входят в Pro';
+  String get chatAppsPartOfPro => 'Чат-приложения входят в Omi Pro';
 
   @override
   String get chatAppsMessagesApp => 'Сообщения';
@@ -13535,7 +13534,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get syncDetailsCopy => 'Скопировать данные для поддержки';
 
   @override
-  String get chatAppsChannelPlanRequired => 'Доступно в Operator и Architect';
+  String get chatAppsChannelPlanRequired => 'Доступно в Omi Pro';
 
   @override
   String chatAppsAtCapacity(String app) {
@@ -14047,7 +14046,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get onDeviceOptionChargingBody => 'Работает, пока телефон заряжается.';
 
   @override
-  String get onDeviceUpgradeBody => 'Перейдите на Pro для разделения говорящих и большей точности';
+  String get onDeviceUpgradeBody => 'Перейдите на Omi Pro для разделения говорящих и большей точности';
 
   @override
   String get onDeviceAtCapFooter =>
@@ -14232,7 +14231,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get onDeviceRedoWithCloud => 'Переделать в Omi Cloud';
 
   @override
-  String get onDeviceRedoHint => 'Перейдите на Pro для разделения говорящих и большей точности';
+  String get onDeviceRedoHint => 'Перейдите на Omi Pro для разделения говорящих и большей точности';
 
   @override
   String get onDeviceKeepEverything => 'Хранить всё на этом телефоне';
@@ -14481,13 +14480,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get episodeOpenPrevious => 'Открыть предыдущий эпизод';
-
-  @override
   String get episodeNotesSoon => 'Заметки появятся после первых минут разговора.';
-
-  @override
-  String get episodeOpenAll => 'Открыть всё';
 
   @override
   String get episodeWrapUpNow => 'Завершить сейчас';
@@ -14625,22 +14618,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get othersSpeakerLabel => 'Другие';
 
   @override
-  String get livePreviewLabel => 'Live preview';
-
-  @override
-  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
-
-  @override
   String get livePreviewListening => 'Listening… words appear here as you speak.';
 
   @override
   String get livePreviewStarting => 'Starting live preview…';
-
-  @override
-  String get livePreviewTranscribingTitle => 'Transcribing…';
-
-  @override
-  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
 
   @override
   String get openLoopAnswerDone => 'Готово';
@@ -14650,4 +14631,70 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get openLoopAnswerDrop => 'Отклонить';
+
+  @override
+  String get syncRejectionInvalidDate => 'Недопустимая дата записи';
+
+  @override
+  String get syncDeleteKeptUploading => 'Некоторые части всё ещё выгружаются и были сохранены';
+
+  @override
+  String get syncRejectionServer => 'Отклонено сервером';
+
+  @override
+  String get syncRejectionTooLarge => 'Слишком большой';
+
+  @override
+  String deviceOnPhoneQueue(Object duration) {
+    return '$duration на телефоне';
+  }
+
+  @override
+  String get syncCardUploadsPaused => 'Загрузка ненадолго приостановлена — она возобновится автоматически';
+
+  @override
+  String episodeContinues(Object title) {
+    return 'Продолжение «$title»';
+  }
+
+  @override
+  String episodeLiveSince(Object time) {
+    return '· с $time';
+  }
+
+  @override
+  String get episodeNotesStartWithTranscript => 'Заметки появятся, когда прибудет финальная расшифровка.';
+
+  @override
+  String get episodeOnDeviceNotesFootnote =>
+      'Создаются на вашем телефоне, пока вы говорите. Полные заметки появятся вместе с финальной расшифровкой.';
+
+  @override
+  String get episodeOnThisPhone => 'На этом телефоне';
+
+  @override
+  String get episodeOpenTranscript => 'Открыть расшифровку';
+
+  @override
+  String get liveCardTitle => 'Прямой эфир';
+
+  @override
+  String livePreviewBehind(Object duration) {
+    return 'Финальная расшифровка отстает примерно на $duration';
+  }
+
+  @override
+  String get livePreviewCatchingUp => 'Финальная расшифровка догоняет';
+
+  @override
+  String get livePreviewNoEngineBody => 'Ваши слова появятся здесь через минуту-две после того, как вы их произнесли.';
+
+  @override
+  String get livePreviewNoEngineTitle => 'Безопасная запись';
+
+  @override
+  String get livePreviewOnPhoneDivider => 'Прямой эфир на этом телефоне';
+
+  @override
+  String get livePreviewTurnOnLiveText => 'Включить текст прямой трансляции';
 }

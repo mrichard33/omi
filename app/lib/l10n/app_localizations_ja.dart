@@ -702,7 +702,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get remembering => '記憶';
 
   @override
-  String get unlimitedPlan => '無制限プラン';
+  String get unlimitedPlan => 'Omi Pro';
 
   @override
   String get managePlan => 'プランの管理';
@@ -724,7 +724,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get upgrade => 'アップグレード';
 
   @override
-  String get upgradeToUnlimited => '無制限にアップグレード';
+  String get upgradeToUnlimited => 'Omi Proにアップグレード';
 
   @override
   String basicPlanDesc(int limit) {
@@ -3106,7 +3106,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get pro => 'Pro';
 
   @override
-  String get upgradeToPro => 'Proにアップグレード';
+  String get upgradeToPro => 'Omi Proにアップグレード';
 
   @override
   String get getOmiDevice => 'Omiデバイスを入手';
@@ -4210,7 +4210,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get trainingDataProgram => 'トレーニングデータプログラム';
 
   @override
-  String get getOmiUnlimitedFree => 'AIモデルのトレーニングにデータを提供することで、Omi Unlimitedを無料で入手できます。';
+  String get getOmiUnlimitedFree => 'AIモデルのトレーニングにデータを提供することで、Omi Proを無料で入手できます。';
 
   @override
   String get trainingDataBullets => '• あなたのデータはAIモデルの改善に役立ちます\n• 機密性のないデータのみが共有されます';
@@ -9513,7 +9513,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get downgradeToFreemiumAction => '無料版に変更';
 
   @override
-  String get getFreeUnlimitedAccess => '無制限アクセスを無料で入手';
+  String get getFreeUnlimitedAccess => 'Omi Proを無料で入手';
 
   @override
   String get shareDataForTraining => 'トレーニング用にデータを共有';
@@ -12670,7 +12670,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get chatAppsVoiceNotesSubtitle => 'ボイスメモを送ると、Omiが返信します。';
 
   @override
-  String get chatAppsPartOfPro => 'チャットアプリはProの機能です';
+  String get chatAppsPartOfPro => 'チャットアプリはOmi Proの機能です';
 
   @override
   String get chatAppsMessagesApp => 'メッセージ';
@@ -13300,7 +13300,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get syncDetailsCopy => 'サポート用に詳細をコピー';
 
   @override
-  String get chatAppsChannelPlanRequired => 'OperatorとArchitectで利用できます';
+  String get chatAppsChannelPlanRequired => 'Omi Proで利用できます';
 
   @override
   String chatAppsAtCapacity(String app) {
@@ -13805,7 +13805,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get onDeviceOptionChargingBody => '充電中に動作します。';
 
   @override
-  String get onDeviceUpgradeBody => '話者の分離と精度向上のためにProにアップグレード';
+  String get onDeviceUpgradeBody => '話者の分離と精度向上のためにOmi Proにアップグレード';
 
   @override
   String get onDeviceAtCapFooter => 'どちらを選んでもデータは失われません。設定 › 文字起こしでいつでも変更できます。';
@@ -13983,7 +13983,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get onDeviceRedoWithCloud => 'Omi Cloudでやり直す';
 
   @override
-  String get onDeviceRedoHint => '話者の分離と精度向上のためにProにアップグレード';
+  String get onDeviceRedoHint => '話者の分離と精度向上のためにOmi Proにアップグレード';
 
   @override
   String get onDeviceKeepEverything => 'すべてをこのスマホに保存';
@@ -14227,13 +14227,7 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get episodeOpenPrevious => '前のエピソードを開く';
-
-  @override
   String get episodeNotesSoon => '会話が数分続くとメモが表示されます。';
-
-  @override
-  String get episodeOpenAll => 'すべて開く';
 
   @override
   String get episodeWrapUpNow => '今すぐまとめる';
@@ -14371,22 +14365,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get othersSpeakerLabel => 'その他';
 
   @override
-  String get livePreviewLabel => 'Live preview';
-
-  @override
-  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
-
-  @override
   String get livePreviewListening => 'Listening… words appear here as you speak.';
 
   @override
   String get livePreviewStarting => 'Starting live preview…';
-
-  @override
-  String get livePreviewTranscribingTitle => 'Transcribing…';
-
-  @override
-  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
 
   @override
   String get openLoopAnswerDone => '完了';
@@ -14396,4 +14378,69 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get openLoopAnswerDrop => '破棄';
+
+  @override
+  String get syncRejectionInvalidDate => '無効な録音日';
+
+  @override
+  String get syncDeleteKeptUploading => '一部のパーツはまだアップロード中のため、保持されました';
+
+  @override
+  String get syncRejectionServer => 'サーバーに拒否されました';
+
+  @override
+  String get syncRejectionTooLarge => '大きすぎます';
+
+  @override
+  String deviceOnPhoneQueue(Object duration) {
+    return 'スマホに$duration';
+  }
+
+  @override
+  String get syncCardUploadsPaused => 'アップロードは一時停止中です — 自動的に再開されます';
+
+  @override
+  String episodeContinues(Object title) {
+    return '「$title」の続き';
+  }
+
+  @override
+  String episodeLiveSince(Object time) {
+    return '· $timeから';
+  }
+
+  @override
+  String get episodeNotesStartWithTranscript => '最終書き起こしが届くとノートが始まります。';
+
+  @override
+  String get episodeOnDeviceNotesFootnote => '話している間にこのスマホで下書きされます。完全なノートは最終書き起こしと一緒に届きます。';
+
+  @override
+  String get episodeOnThisPhone => 'この端末上で';
+
+  @override
+  String get episodeOpenTranscript => '文字起こしを開く';
+
+  @override
+  String get liveCardTitle => 'ライブ';
+
+  @override
+  String livePreviewBehind(Object duration) {
+    return '最終書き起こしは約$duration遅れています';
+  }
+
+  @override
+  String get livePreviewCatchingUp => '最終書き起こしを準備中です';
+
+  @override
+  String get livePreviewNoEngineBody => '発言は話してから1〜2分後にここに表示されます。';
+
+  @override
+  String get livePreviewNoEngineTitle => '安全に録音しています';
+
+  @override
+  String get livePreviewOnPhoneDivider => 'この端末でライブ';
+
+  @override
+  String get livePreviewTurnOnLiveText => 'ライブテキストをオンにする';
 }

@@ -716,7 +716,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get remembering => 'Απομνημόνευση';
 
   @override
-  String get unlimitedPlan => 'Απεριόριστο Πρόγραμμα';
+  String get unlimitedPlan => 'Omi Pro';
 
   @override
   String get managePlan => 'Διαχείριση Προγράμματος';
@@ -738,7 +738,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get upgrade => 'Αναβάθμιση';
 
   @override
-  String get upgradeToUnlimited => 'Αναβάθμιση σε απεριόριστο';
+  String get upgradeToUnlimited => 'Αναβάθμιση σε Omi Pro';
 
   @override
   String basicPlanDesc(int limit) {
@@ -3177,7 +3177,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get pro => 'Pro';
 
   @override
-  String get upgradeToPro => 'Αναβάθμιση σε Pro';
+  String get upgradeToPro => 'Αναβάθμιση σε Omi Pro';
 
   @override
   String get getOmiDevice => 'Αποκτήστε συσκευή Omi';
@@ -4309,7 +4309,7 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get getOmiUnlimitedFree =>
-      'Αποκτήστε το Omi Unlimited δωρεάν συνεισφέροντας τα δεδομένα σας για την εκπαίδευση μοντέλων AI.';
+      'Αποκτήστε το Omi Pro δωρεάν συνεισφέροντας τα δεδομένα σας για την εκπαίδευση μοντέλων AI.';
 
   @override
   String get trainingDataBullets =>
@@ -9729,7 +9729,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get downgradeToFreemiumAction => 'Υποβάθμιση σε δωρεάν έκδοση';
 
   @override
-  String get getFreeUnlimitedAccess => 'Απόκτησε δωρεάν απεριόριστη πρόσβαση';
+  String get getFreeUnlimitedAccess => 'Απόκτησε το Omi Pro δωρεάν';
 
   @override
   String get shareDataForTraining => 'Κοινή χρήση δεδομένων για εκπαίδευση';
@@ -12938,7 +12938,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get chatAppsVoiceNotesSubtitle => 'Στείλε ένα φωνητικό μήνυμα και το Omi θα απαντήσει.';
 
   @override
-  String get chatAppsPartOfPro => 'Οι εφαρμογές συνομιλίας είναι μέρος του Pro';
+  String get chatAppsPartOfPro => 'Οι εφαρμογές συνομιλίας είναι μέρος του Omi Pro';
 
   @override
   String get chatAppsMessagesApp => 'Μηνύματα';
@@ -13572,7 +13572,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get syncDetailsCopy => 'Αντιγραφή λεπτομερειών για υποστήριξη';
 
   @override
-  String get chatAppsChannelPlanRequired => 'Διαθέσιμο στα Operator και Architect';
+  String get chatAppsChannelPlanRequired => 'Διαθέσιμο στο Omi Pro';
 
   @override
   String chatAppsAtCapacity(String app) {
@@ -14090,7 +14090,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get onDeviceOptionChargingBody => 'Λειτουργεί όσο το τηλέφωνο φορτίζει.';
 
   @override
-  String get onDeviceUpgradeBody => 'Αναβαθμίστε σε Pro για διαχωρισμό ομιλητών και μεγαλύτερη ακρίβεια';
+  String get onDeviceUpgradeBody => 'Αναβαθμίστε σε Omi Pro για διαχωρισμό ομιλητών και μεγαλύτερη ακρίβεια';
 
   @override
   String get onDeviceAtCapFooter =>
@@ -14277,7 +14277,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get onDeviceRedoWithCloud => 'Επανάληψη με το Omi Cloud';
 
   @override
-  String get onDeviceRedoHint => 'Αναβαθμίστε σε Pro για διαχωρισμό ομιλητών και μεγαλύτερη ακρίβεια';
+  String get onDeviceRedoHint => 'Αναβαθμίστε σε Omi Pro για διαχωρισμό ομιλητών και μεγαλύτερη ακρίβεια';
 
   @override
   String get onDeviceKeepEverything => 'Διατήρηση όλων σε αυτό το τηλέφωνο';
@@ -14527,13 +14527,7 @@ class AppLocalizationsEl extends AppLocalizations {
   }
 
   @override
-  String get episodeOpenPrevious => 'Άνοιγμα προηγούμενου επεισοδίου';
-
-  @override
   String get episodeNotesSoon => 'Οι σημειώσεις εμφανίζονται μετά τα πρώτα λεπτά συζήτησης.';
-
-  @override
-  String get episodeOpenAll => 'Άνοιγμα όλων';
 
   @override
   String get episodeWrapUpNow => 'Ολοκλήρωση τώρα';
@@ -14672,22 +14666,10 @@ class AppLocalizationsEl extends AppLocalizations {
   String get othersSpeakerLabel => 'Άλλοι';
 
   @override
-  String get livePreviewLabel => 'Live preview';
-
-  @override
-  String get livePreviewExplanation => 'On-device preview. The final transcript replaces it shortly.';
-
-  @override
   String get livePreviewListening => 'Listening… words appear here as you speak.';
 
   @override
   String get livePreviewStarting => 'Starting live preview…';
-
-  @override
-  String get livePreviewTranscribingTitle => 'Transcribing…';
-
-  @override
-  String get livePreviewTranscribingMessage => 'Your transcript appears in Conversations when processing finishes.';
 
   @override
   String get openLoopAnswerDone => 'Ολοκληρώθηκε';
@@ -14697,4 +14679,70 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get openLoopAnswerDrop => 'Απόρριψη';
+
+  @override
+  String get syncRejectionInvalidDate => 'Μη έγκυρη ημερομηνία εγγραφής';
+
+  @override
+  String get syncDeleteKeptUploading => 'Ορισμένα μέρη φορτώνονται ακόμα και διατηρήθηκαν';
+
+  @override
+  String get syncRejectionServer => 'Απορρίφθηκε από τον διακομιστή';
+
+  @override
+  String get syncRejectionTooLarge => 'Πολύ μεγάλο';
+
+  @override
+  String deviceOnPhoneQueue(Object duration) {
+    return '$duration στο τηλέφωνο';
+  }
+
+  @override
+  String get syncCardUploadsPaused => 'Οι μεταφορτώσεις τέθηκαν προσωρινά σε παύση — θα συνεχιστούν αυτόματα';
+
+  @override
+  String episodeContinues(Object title) {
+    return 'Συνέχεια «$title»';
+  }
+
+  @override
+  String episodeLiveSince(Object time) {
+    return '· από $time';
+  }
+
+  @override
+  String get episodeNotesStartWithTranscript => 'Οι σημειώσεις ξεκινούν όταν φτάσει η τελική απομαγνητοφώνηση.';
+
+  @override
+  String get episodeOnDeviceNotesFootnote =>
+      'Συντάσσονται στο τηλέφωνό σας καθώς μιλάτε. Οι πλήρεις σημειώσεις έρχονται με την τελική απομαγνητοφώνηση.';
+
+  @override
+  String get episodeOnThisPhone => 'Σε αυτό το τηλέφωνο';
+
+  @override
+  String get episodeOpenTranscript => 'Άνοιγμα απομαγνητοφώνησης';
+
+  @override
+  String get liveCardTitle => 'Ζωντανά';
+
+  @override
+  String livePreviewBehind(Object duration) {
+    return 'Η τελική απομαγνητοφώνηση υστερεί περίπου $duration';
+  }
+
+  @override
+  String get livePreviewCatchingUp => 'Η τελική απομαγνητοφώνηση ενημερώνεται';
+
+  @override
+  String get livePreviewNoEngineBody => 'Τα λόγια σας εμφανίζονται εδώ ένα έως δύο λεπτά μετά τα πείτε.';
+
+  @override
+  String get livePreviewNoEngineTitle => 'Ασφαλή εγγραφή';
+
+  @override
+  String get livePreviewOnPhoneDivider => 'Ζωντανά σε αυτό το τηλέφωνο';
+
+  @override
+  String get livePreviewTurnOnLiveText => 'Ενεργοποίηση ζωντανού κειμένου';
 }
