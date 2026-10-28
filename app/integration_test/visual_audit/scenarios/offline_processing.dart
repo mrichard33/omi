@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:omi/backend/http/api_result.dart';
-import 'package:omi/backend/schema/bt_device/bt_device.dart' show BleAudioCodec;
+import 'package:omi/backend/schema/bt_device/bt_device.dart' show BtDevice, BleAudioCodec;
 import 'package:omi/backend/schema/conversation.dart';
 import 'package:omi/backend/schema/daily_summary.dart';
 import 'package:omi/backend/schema/review.dart';
@@ -176,7 +176,12 @@ class _CatchUpCapture extends AuditCaptureProvider {
   void removeMetricsListener() {}
 }
 
-Future<void> _runDevice(AuditRun a, SyncProvider sync, {List<PendingWorkItem> pending = const []}) async {
+Future<void> _runDevice(
+  AuditRun a,
+  SyncProvider sync, {
+  List<PendingWorkItem> pending = const [],
+  DeviceProvider? deviceProvider,
+}) async {
   final store = PendingWorkStore(
     loadPending: () async => ApiSuccess(PendingWorkSnapshot(enabled: true, attentionUnseenCount: 0, items: pending)),
     loadAttention: () async => const ApiSuccess(AttentionItemsPage.disabled),
@@ -185,7 +190,7 @@ Future<void> _runDevice(AuditRun a, SyncProvider sync, {List<PendingWorkItem> pe
   addTearDown(store.dispose);
   addTearDown(conversations.dispose);
   await a.pump(DeviceSettings(pendingWork: store), scaffold: false, providers: [
-    ChangeNotifierProvider<DeviceProvider>.value(value: AuditDeviceProvider()),
+    ChangeNotifierProvider<DeviceProvider>.value(value: deviceProvider ?? AuditDeviceProvider()),
     ChangeNotifierProvider<CaptureProvider>.value(value: _CatchUpCapture()),
     ChangeNotifierProvider<ConversationProvider>.value(value: conversations),
     ChangeNotifierProvider<SyncProvider>.value(value: sync),
@@ -289,11 +294,11 @@ final offlineProcessingScenarios = <AuditScenario>[
             _wal(_at(0, 15, 0), 70, WalStatus.miss, storage: WalStorage.sdcard),
             _wal(_at(0, 11, 0), 110, WalStatus.miss, storage: WalStorage.sdcard),
           ]));
-      expect(find.text('Catching up'), findsOneWidget);
-      expect(find.byKey(const Key('device_catching_up_status')), findsOneWidget);
+      final tile = find.byKey(const Key('device_stat_catching_up'));
+      expect(tile, findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsNothing);
-      expect(find.byKey(const Key('device_catching_up_span')), findsOneWidget);
-      await a.shot('Large backlog lives on Device with its status and audio span');
+      expect(find.descendant(of: tile, matching: find.text('3h')), findsOneWidget);
+      await a.shot('Large backlog is the Catching up tile: a duration, no stage or span');
     },
   ),
   for (final multiple in [false, true])
@@ -312,14 +317,13 @@ final offlineProcessingScenarios = <AuditScenario>[
               startedAt: _at(0, 11, 0),
               durationSeconds: 720),
         ]);
-        expect(find.text('Catching up'), findsOneWidget);
-        expect(find.text('Processing'), findsOneWidget);
-        expect(find.byKey(const Key('device_catching_up_on_the_way')), findsOneWidget);
-        await a.shot('Server work stays visible on Device until it finishes');
-        await a.tester.tap(find.byKey(const Key('device_catching_up_on_the_way')));
+        expect(find.descendant(of: find.byKey(const Key('device_stat_catching_up')), matching: find.text('12m')),
+            findsOneWidget);
+        await a.shot('Server work stays on the Catching up tile until it finishes');
+        await a.tester.tap(find.byKey(const Key('device_stat_catching_up')));
         await a.settle();
         expect(find.byType(OnTheWayPage), findsOneWidget);
-        await a.shot('The card opens On the Way', step: 'on-the-way');
+        await a.shot('The tile opens On the Way', step: 'on-the-way');
       },
     ),
   AuditScenario(
@@ -346,8 +350,8 @@ final offlineProcessingScenarios = <AuditScenario>[
         providers: [ChangeNotifierProvider<SyncProvider>.value(value: sync)],
       );
       expect(find.text('On the Way'), findsOneWidget);
-      expect(find.text('Sync details'), findsOneWidget);
-      await a.shot('Open On the Way from the device catch-up card');
+      expect(find.text('Details for support'), findsOneWidget);
+      await a.shot('Open On the Way from the device Catching up tile');
     },
   ),
   AuditScenario(
@@ -438,6 +442,27 @@ final offlineProcessingScenarios = <AuditScenario>[
       expect(find.text('Activity'), findsOneWidget);
       expect(find.byKey(const Key('activity_new_dot')), findsOneWidget);
       await a.shot('Open the bell');
+    },
+  ),
+  AuditScenario(
+    id: 'device-sync-stall-alerts',
+    title: 'Device Settings: sync stall alert toggle while stalled',
+    page: 'lib/pages/settings/device_settings.dart (DeviceSettings)',
+    state: 'Nothing connected right now and the sync watchdog declared a stall: the Sync Health '
+        'Alerts row says how long the pipeline has been silent',
+    run: (a) async {
+      // A remembered-but-absent pendant keeps the hermetic harness off the live
+      // feature load (empty id early-returns it) while the toggle still renders.
+      await _runDevice(
+        a,
+        _SyncAuditProvider(),
+        deviceProvider: AuditDeviceProvider(device: BtDevice.empty(), syncStalled: true),
+      );
+      final toggle = find.byKey(const Key('sync_health_alerts_toggle'));
+      expect(toggle, findsOneWidget);
+      expect(find.text('Sync Health Alerts'), findsOneWidget);
+      expect(find.textContaining('No recordings synced for over'), findsOneWidget);
+      await a.shot('The stall alert toggle, on by default, names the silence under Device');
     },
   ),
 ];
