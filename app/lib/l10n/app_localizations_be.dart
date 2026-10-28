@@ -427,6 +427,12 @@ class AppLocalizationsBe extends AppLocalizations {
   String get autoSync => 'Аўтасінхранізацыя';
 
   @override
+  String get syncHealthAlerts => 'Апавяшчэнні пра стан сінхранізацыі';
+
+  @override
+  String get syncHealthAlertsDescription => 'Апавяшчаць, калі запісы Omi не сінхранізуюцца больш за суткі';
+
+  @override
   String get autoSyncDescription => 'Аўтаматычна сінхранізаваць офлайн-запісы пры падключэнні прылады';
 
   @override
@@ -8867,12 +8873,12 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Чат: \$$used / \$$limit выкарыстана ў гэтым месяцы';
+    return 'Чат: $used / $limit выкарыстана ў гэтым месяцы';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Чат: \$$used выкарыстана ў гэтым месяцы';
+    return 'Чат: $used выкарыстана ў гэтым месяцы';
   }
 
   @override
@@ -9068,6 +9074,14 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Чаканне інтэрнэту';
+
+  @override
+  String get syncStallAlertTitle => 'Omi не сінхранізуецца';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Запісы з вашага Omi не сінхранізаваліся больш за $hours гадзін. Адкрыйце Omi, каб праверыць падключэнне прылады.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13334,6 +13348,30 @@ class AppLocalizationsBe extends AppLocalizations {
   String get paywallOutlineHeadline => 'Больш не прапусціце ніводнага слова.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/год',
+        'other': '/месяц',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/год',
+        'other': '/месяц',
+      },
+    );
+    return '$days дзён бясплатна, потым $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13662,32 +13700,6 @@ class AppLocalizationsBe extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals у дарозе';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'Запампоўваецца: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'Амаль гатова: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Патрабуюць увагі: $count',
-      one: '1 патрабуе ўвагі',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Пакуль няма актыўнасці';
 
   @override
@@ -13710,6 +13722,14 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Запісы прыпынены';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi не сінхранізуецца';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Запісы не сінхранізаваліся больш за $hours гадзін';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Загрузка спынілася';
@@ -14683,4 +14703,66 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Уключыць жывы тэкст';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'у дарозе';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'пры злучэнні з інтэрнэтам';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration яшчэ загружаецца';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Загрузка ідзе аўтаматычна. Размовы з\'яўляюцца па меры прыбыцця запісаў.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Загрузка ідзе аўтаматычна, калі вы зноў будзеце онлайн. Размовы з\'яўляюцца па меры прыбыцця запісаў.';
+
+  @override
+  String get onTheWayDayUploading => 'Загружаецца';
+
+  @override
+  String get onTheWayDayNext => 'Наступныя';
+
+  @override
+  String get onTheWayDayQueued => 'У чарзе';
+
+  @override
+  String get onTheWayNoDate => 'Без даты';
+
+  @override
+  String get onTheWayFootnote =>
+      'Запісы, якія не ўдалося загрузіць, працягнуць спробы ў фонавым рэжыме. Пра ўсё, што мы не зможам пераўтварыць у тэкст, нам паведамяць аўтаматычна.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Падрабязнасці для падтрымкі';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Схаваныя кароткія запісы: $count',
+      one: '1 кароткі запіс схаваны',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Паказаць';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Схаваць кароткія запісы: $count',
+      one: 'Схаваць 1 кароткі запіс',
+    );
+    return '$_temp0';
+  }
 }

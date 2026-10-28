@@ -433,6 +433,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get autoSync => 'Automatische Synchronisierung';
 
   @override
+  String get syncHealthAlerts => 'Warnungen zum Synchronisierungsstatus';
+
+  @override
+  String get syncHealthAlertsDescription => 'Warne, wenn Omi länger als einen Tag keine Aufnahmen synchronisiert hat';
+
+  @override
   String get autoSyncDescription => 'Offline-Aufnahmen automatisch synchronisieren, wenn dein Gerät verbunden wird';
 
   @override
@@ -8918,12 +8924,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Chat: \$$used / \$$limit diesen Monat verbraucht';
+    return 'Chat: $used / $limit diesen Monat verbraucht';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Chat: \$$used diesen Monat verbraucht';
+    return 'Chat: $used diesen Monat verbraucht';
   }
 
   @override
@@ -9117,6 +9123,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Warten auf Internet';
+
+  @override
+  String get syncStallAlertTitle => 'Omi synchronisiert nicht';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Seit über $hours Stunden wurden keine Aufnahmen von deinem Omi synchronisiert. Öffne Omi, um die Verbindung deines Geräts zu prüfen.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13401,6 +13415,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get paywallOutlineHeadline => 'Verpasse nie wieder ein Wort.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/Jahr',
+        'other': '/Monat',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/Jahr',
+        'other': '/Monat',
+      },
+    );
+    return '$days Tage kostenlos, danach $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13728,32 +13766,6 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals unterwegs';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return '$count im Upload';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return '$count fast fertig';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count benötigen Aufmerksamkeit',
-      one: '1 benötigt Aufmerksamkeit',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Noch keine Aktivität';
 
   @override
@@ -13776,6 +13788,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Aufnahmen pausiert';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi synchronisiert nicht';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Seit über $hours Stunden keine synchronisierten Aufnahmen';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Upload stockt';
@@ -14758,4 +14778,67 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Live-Text aktivieren';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'unterwegs';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'wenn wieder online';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return 'Noch $duration werden hochgeladen';
+  }
+
+  @override
+  String get onTheWayUploadsByItself =>
+      'Wird von selbst hochgeladen. Die Unterhaltungen entstehen, sobald die Aufnahmen ankommen.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Wird von selbst hochgeladen, wenn Sie wieder online sind. Die Unterhaltungen entstehen, sobald die Aufnahmen ankommen.';
+
+  @override
+  String get onTheWayDayUploading => 'Wird hochgeladen';
+
+  @override
+  String get onTheWayDayNext => 'Als Nächstes';
+
+  @override
+  String get onTheWayDayQueued => 'In der Warteschlange';
+
+  @override
+  String get onTheWayNoDate => 'Ohne Datum';
+
+  @override
+  String get onTheWayFootnote =>
+      'Bei fehlgeschlagenen Aufnahmen wird im Hintergrund immer wieder versucht, sie hochzuladen. Alles, was wir nicht transkribieren können, wird uns automatisch gemeldet.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Details für den Support';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kurze Clips ausgeblendet',
+      one: '1 kurzer Clip ausgeblendet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Anzeigen';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kurze Clips ausblenden',
+      one: '1 kurzen Clip ausblenden',
+    );
+    return '$_temp0';
+  }
 }

@@ -429,6 +429,12 @@ class AppLocalizationsCa extends AppLocalizations {
   String get autoSync => 'Sincronització automàtica';
 
   @override
+  String get syncHealthAlerts => 'Alertes d\'estat de sincronització';
+
+  @override
+  String get syncHealthAlertsDescription => 'Avisa si l\'Omi no ha sincronitzat enregistraments durant més d\'un dia';
+
+  @override
   String get autoSyncDescription =>
       'Sincronitza automàticament els enregistraments fora de línia quan el dispositiu es connecti';
 
@@ -8894,12 +8900,12 @@ class AppLocalizationsCa extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Xat: \$$used / \$$limit utilitzat aquest mes';
+    return 'Xat: $used / $limit utilitzat aquest mes';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Xat: \$$used utilitzat aquest mes';
+    return 'Xat: $used utilitzat aquest mes';
   }
 
   @override
@@ -9093,6 +9099,14 @@ class AppLocalizationsCa extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Esperant connexió';
+
+  @override
+  String get syncStallAlertTitle => 'Omi no se sincronitza';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Fa més de $hours hores que no se sincronitza cap enregistrament del teu Omi. Obre Omi per comprovar la connexió del dispositiu.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13369,6 +13383,30 @@ class AppLocalizationsCa extends AppLocalizations {
   String get paywallOutlineHeadline => 'No et perdis mai més ni una paraula.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/any',
+        'other': '/mes',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/any',
+        'other': '/mes',
+      },
+    );
+    return '$days dies gratis, després $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13697,32 +13735,6 @@ class AppLocalizationsCa extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals en camí';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return '$count pujant';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'Gairebé a punt: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count requereixen atenció',
-      one: '1 requereix atenció',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Encara no hi ha activitat';
 
   @override
@@ -13745,6 +13757,14 @@ class AppLocalizationsCa extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Enregistraments en pausa';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi no se sincronitza';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Cap enregistrament sincronitzat fa més de $hours hores';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'La pujada s\'ha aturat';
@@ -14723,4 +14743,67 @@ class AppLocalizationsCa extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Activa el text en directe';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'en camí';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'quan hi hagi connexió';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return 'Falten $duration per pujar';
+  }
+
+  @override
+  String get onTheWayUploadsByItself =>
+      'Es puja automàticament. Les converses es van creant a mesura que arriben les gravacions.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Es puja automàticament quan torneu a tenir connexió. Les converses es van creant a mesura que arriben les gravacions.';
+
+  @override
+  String get onTheWayDayUploading => 'S\'està pujant';
+
+  @override
+  String get onTheWayDayNext => 'Següents';
+
+  @override
+  String get onTheWayDayQueued => 'A la cua';
+
+  @override
+  String get onTheWayNoDate => 'Sense data';
+
+  @override
+  String get onTheWayFootnote =>
+      'Els enregistraments que fallin es tornen a provar en segon pla. Tot allò que no puguem transcriure se\'ns notifica automàticament.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Detalls per al suport';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clips curts amagats',
+      one: '1 clip curt amagat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Mostrar';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Amagar $count clips curts',
+      one: 'Amagar 1 clip curt',
+    );
+    return '$_temp0';
+  }
 }

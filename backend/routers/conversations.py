@@ -6,10 +6,12 @@ from contextlib import nullcontext
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, BackgroundTasks
 from typing import Annotated, Any, Dict, List, Literal, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import database.conversation_scan as conversation_scan_db
 import database.conversations as conversations_db
+import database.hidden_noise_counts as hidden_noise_counts_db
 import database._client as db_client_module
 import database.action_items as action_items_db
 import database.redis_db as redis_db
@@ -100,6 +102,7 @@ from utils.metrics import record_lazy_desktop_deferral
 from utils.memory.retraction_scope import retraction_can_be_skipped
 from utils.memory.canonical_memory_adapter import ConversationReplacementConflictError
 from utils import byok
+from utils.cloud_tasks import is_listen_finalization_dispatch_enabled
 from utils.conversations.search import (
     ConversationSearchUnavailableError,
     clamp_conversation_search_pagination,
@@ -467,6 +470,20 @@ class ConversationsCountResponse(BaseModel):
     sources: List[str] | None = None
 
 
+class HiddenNoiseDayCount(BaseModel):
+    date: str
+    count: int
+
+
+class HiddenNoiseCountsResponse(BaseModel):
+    tz: str
+    start_date: datetime
+    end_date: datetime
+    days: List[HiddenNoiseDayCount]
+    total: int
+    truncated: bool
+
+
 class ConversationRecordingResponse(BaseModel):
     has_recording: bool
 
@@ -488,6 +505,12 @@ def process_in_progress_conversation(
     conversation = retrieve_in_progress_conversation(uid)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation in progress not found")
+
+    if is_listen_finalization_dispatch_enabled() and not byok.has_byok_keys():
+        # Resolve Redis exactly once, then use the same transactional outbox as
+        # exact-ID finalization. A disconnected HTTP caller must not own the
+        # only processing attempt. BYOK retains its request-scoped credentials.
+        return finalize_conversation(conversation['id'], request=request, uid=uid)
 
     conversation = deserialize_conversation(conversation)
 
@@ -522,15 +545,8 @@ def process_in_progress_conversation(
             else:
                 logger.warning('Skipping malformed cached user geolocation for uid=%s', uid)
 
-    # Winner owns ingress. The accepted projection rides the admission CAS:
-    # status→processing and client_processing are one write. A later request
-    # (including a loser that late-binds) can only land after this commit, so
-    # a stalled second write cannot last-writer-wins an older projection over
-    # a newer one (section 1.7 (c)). A mutation failure is an admission
-    # failure — the row stays in_progress instead of stranding on processing
-    # with no durable job. Ingress-owned mutation only; the coordinator's
-    # existing-row persist still strips the field. Omit extra_updates when
-    # there is no projection so positional admit stubs keep working.
+    # Bind projection plus status in the admission CAS; failures retain in_progress.
+    # Losing requests only late-bind to the latest digest, never structured output.
     extra_updates = client_processing_mutation(client_projection) if client_projection is not None else None
     bind_report = _projection_bind_report()
     if extra_updates is None:
@@ -1027,6 +1043,34 @@ def get_conversations(
         response, truncated=budget.truncated, cacheable=not any(row.get('is_locked') for row in conversations)
     )
     return conversations
+
+
+@router.get('/v1/conversations/hidden-noise-counts', tags=['conversations'], response_model=HiddenNoiseCountsResponse)
+def get_hidden_noise_counts(
+    start_date: datetime = Query(..., description='Inclusive start instant; naive timestamps use UTC'),
+    end_date: datetime = Query(..., description='Inclusive end instant; maximum window is 31 days'),
+    tz: str = Query('UTC', description='IANA timezone for local created_at day buckets'),
+    uid: str = Depends(auth.get_current_user_uid),
+):
+    """Count hidden noise/media without gating on MEDIA_NOISE_MODE for this uid.
+
+    Zero-count days are omitted. A 1000-row scan cap sets truncated=true when
+    hit; days and total then represent lower bounds. Locked rows are eligible;
+    deletion/merge tombstones never count; Dream duplicates count because the
+    include_discarded reveal list shows them. No hidden rows
+    returns empty days and total=0, even when the media/noise mode is disabled.
+    """
+    start_date = _ensure_aware(start_date).astimezone(timezone.utc)
+    end_date = _ensure_aware(end_date).astimezone(timezone.utc)
+    if start_date > end_date or end_date - start_date > timedelta(days=31):
+        raise HTTPException(status_code=400, detail='start_date and end_date must define a window of at most 31 days')
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=400, detail='tz must be a valid IANA timezone')
+    # Sync routes run in FastAPI's threadpool, as does the adjacent Home list.
+    counts = hidden_noise_counts_db.count_hidden_noise_by_day(uid, start_date, end_date, zone)
+    return {'tz': tz, 'start_date': start_date, 'end_date': end_date, **counts}
 
 
 @router.get('/v1/conversations/count', tags=['conversations'], response_model=ConversationsCountResponse)
@@ -2052,6 +2096,7 @@ class ConversationTopicRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     transcript: str = Field(..., min_length=1, max_length=100_000)
+    conversation_language: Optional[str] = Field(default=None, max_length=32)
 
 
 class ConversationTopicResponse(BaseModel):
@@ -2082,7 +2127,9 @@ async def generate_conversation_topic_endpoint(
         raise HTTPException(status_code=402, detail='trial_expired')
     topic = await run_blocking(
         llm_executor,
-        lambda: conversation_topic_llm.generate_conversation_topic(uid, body.transcript),
+        lambda: conversation_topic_llm.generate_conversation_topic(
+            uid, body.transcript, conversation_language=body.conversation_language
+        ),
     )
     if topic is None:
         raise HTTPException(status_code=502, detail="conversation_topic_failed")

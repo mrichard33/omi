@@ -428,6 +428,12 @@ class AppLocalizationsMs extends AppLocalizations {
   String get autoSync => 'Penyegerakan automatik';
 
   @override
+  String get syncHealthAlerts => 'Amaran kesihatan segerak';
+
+  @override
+  String get syncHealthAlertsDescription => 'Maklumkan saya jika Omi tidak menyegerakkan rakaman selama lebih sehari';
+
+  @override
   String get autoSyncDescription => 'Segerakkan rakaman luar talian secara automatik apabila peranti anda disambungkan';
 
   @override
@@ -8863,12 +8869,12 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Sembang: \$$used / \$$limit digunakan bulan ini';
+    return 'Sembang: $used / $limit digunakan bulan ini';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Sembang: \$$used digunakan bulan ini';
+    return 'Sembang: $used digunakan bulan ini';
   }
 
   @override
@@ -9061,6 +9067,14 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Menunggu internet';
+
+  @override
+  String get syncStallAlertTitle => 'Omi tidak disegerakkan';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Tiada rakaman daripada Omi anda disegerakkan selama lebih $hours jam. Buka Omi untuk menyemak sambungan peranti anda.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13332,6 +13346,30 @@ class AppLocalizationsMs extends AppLocalizations {
   String get paywallOutlineHeadline => 'Jangan terlepas satu perkataan pun lagi.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/tahun',
+        'other': '/bulan',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/tahun',
+        'other': '/bulan',
+      },
+    );
+    return '$days hari percuma, kemudian $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13659,32 +13697,6 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals dalam perjalanan';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return '$count sedang dimuat naik';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return '$count hampir siap';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count memerlukan perhatian',
-      one: '1 memerlukan perhatian',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Belum ada aktiviti';
 
   @override
@@ -13707,6 +13719,14 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Rakaman dijedakan';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi tidak disegerakkan';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Tiada rakaman disegerakkan selama lebih $hours jam';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Muat naik terhenti';
@@ -14686,4 +14706,66 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Hidupkan teks langsung';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'dalam perjalanan';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'apabila dalam talian';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration sedang diproses';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Dimuat naik secara automatik. Perbualan akan terisi apabila rakaman tiba.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Dimuat naik secara automatik sebaik anda kembali dalam talian. Perbualan akan terisi apabila rakaman tiba.';
+
+  @override
+  String get onTheWayDayUploading => 'Sedang dimuat naik';
+
+  @override
+  String get onTheWayDayNext => 'Seterusnya';
+
+  @override
+  String get onTheWayDayQueued => 'Menunggu giliran';
+
+  @override
+  String get onTheWayNoDate => 'Tiada tarikh';
+
+  @override
+  String get onTheWayFootnote =>
+      'Rakaman yang gagal akan terus dicuba semula di latar belakang. Apa-apa yang tidak dapat kami transkripsi akan dilaporkan kepada kami secara automatik.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Butiran untuk sokongan';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count klip pendek disembunyikan',
+      one: '1 klip pendek disembunyikan',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Tunjukkan';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sembunyikan $count klip pendek',
+      one: 'Sembunyikan 1 klip pendek',
+    );
+    return '$_temp0';
+  }
 }

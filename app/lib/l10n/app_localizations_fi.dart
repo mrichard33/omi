@@ -426,6 +426,12 @@ class AppLocalizationsFi extends AppLocalizations {
   String get autoSync => 'Automaattinen synkronointi';
 
   @override
+  String get syncHealthAlerts => 'Synkronoinnin tila-ilmoitukset';
+
+  @override
+  String get syncHealthAlertsDescription => 'Ilmoita, jos Omi ei ole synkronoinut tallenteita yli vuorokauteen';
+
+  @override
   String get autoSyncDescription => 'Synkronoi offline-tallenteet automaattisesti, kun laitteesi yhdistetään';
 
   @override
@@ -8845,12 +8851,12 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Chat: \$$used / \$$limit käytetty tässä kuussa';
+    return 'Chat: $used / $limit käytetty tässä kuussa';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Chat: \$$used käytetty tässä kuussa';
+    return 'Chat: $used käytetty tässä kuussa';
   }
 
   @override
@@ -9044,6 +9050,14 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Odottaa verkkoyhteyttä';
+
+  @override
+  String get syncStallAlertTitle => 'Omi ei synkronoi';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Omistasi ei ole synkronoitu tallenteita yli $hours tuntiin. Avaa Omi ja tarkista laitteen yhteys.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13305,6 +13319,30 @@ class AppLocalizationsFi extends AppLocalizations {
   String get paywallOutlineHeadline => 'Älä enää koskaan missaa sanaakaan.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/vuosi',
+        'other': '/kuukausi',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/vuosi',
+        'other': '/kuukausi',
+      },
+    );
+    return '$days päivää ilmaiseksi, sitten $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13632,32 +13670,6 @@ class AppLocalizationsFi extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals tulossa';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'Lähetetään: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'Melkein valmiina: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count vaatii huomiota',
-      one: '1 vaatii huomiota',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Ei vielä toimintaa';
 
   @override
@@ -13680,6 +13692,14 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Tallenteet keskeytetty';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi ei synkronoi';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Tallenteita ei synkronoitu yli $hours tuntiin';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Lataus on pysähtynyt';
@@ -14654,4 +14674,66 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Ota live-teksti käyttöön';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'matkalla';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'verkon palattua';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration saadaan kiinni';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Latautuu itsestään. Keskustelut täydentyvät äänien saapuessa.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Latautuu itsestään, kun olet taas yhteydessä. Keskustelut täydentyvät äänien saapuessa.';
+
+  @override
+  String get onTheWayDayUploading => 'Ladataan';
+
+  @override
+  String get onTheWayDayNext => 'Seuraavaksi';
+
+  @override
+  String get onTheWayDayQueued => 'Jonossa';
+
+  @override
+  String get onTheWayNoDate => 'Ei päivämäärää';
+
+  @override
+  String get onTheWayFootnote =>
+      'Nauhoitukset, jotka epäonnistuvat, yritetään yhä uudelleen taustalla. Kaikki, mitä emme pysty transkriboimaan, ilmoitetaan meille automaattisesti.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Tiedot tukea varten';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lyhyttä leikettä piilotettu',
+      one: '1 lyhyt leike piilotettu',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Näytä';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Piilota $count lyhyttä leikettä',
+      one: 'Piilota 1 lyhyt leike',
+    );
+    return '$_temp0';
+  }
 }

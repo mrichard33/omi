@@ -429,6 +429,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get autoSync => 'Otomatik eşitleme';
 
   @override
+  String get syncHealthAlerts => 'Eşitleme durumu uyarıları';
+
+  @override
+  String get syncHealthAlertsDescription => 'Omi bir günden uzun süre kayıt eşitlemezse uyar';
+
+  @override
   String get autoSyncDescription => 'Cihazınız bağlandığında çevrimdışı kayıtları otomatik olarak eşitleyin';
 
   @override
@@ -8856,12 +8862,12 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Sohbet: \$$used / \$$limit bu ay kullanıldı';
+    return 'Sohbet: $used / $limit bu ay kullanıldı';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Sohbet: \$$used bu ay kullanıldı';
+    return 'Sohbet: $used bu ay kullanıldı';
   }
 
   @override
@@ -9054,6 +9060,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'İnternet bekleniyor';
+
+  @override
+  String get syncStallAlertTitle => 'Omi eşitlemiyor';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Omi cihazınızdan $hours saatten uzun süredir hiçbir kayıt eşitlenmedi. Cihaz bağlantınızı kontrol etmek için Omi\'yu açın.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13315,6 +13329,30 @@ class AppLocalizationsTr extends AppLocalizations {
   String get paywallOutlineHeadline => 'Bir daha tek kelimeyi bile kaçırma.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/yıl',
+        'other': '/ay',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/yıl',
+        'other': '/ay',
+      },
+    );
+    return '$days gün ücretsiz, ardından $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13642,32 +13680,6 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals yolda';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return '$count yükleniyor';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return '$count neredeyse hazır';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count ilgi bekliyor',
-      one: '1 ilgi bekliyor',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Henüz etkinlik yok';
 
   @override
@@ -13690,6 +13702,14 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Kayıtlar duraklatıldı';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi eşitlemiyor';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return '$hours saatten uzun süredir eşitlenmiş kayıt yok';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Yükleme durdu';
@@ -14662,4 +14682,66 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Canlı metni aç';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'yolda';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'çevrimiçi olunca';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration hâlâ işleniyor';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Kendiliğinden yüklenir. Ulaştıkça görüşmeler tamamlanır.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Tekrar çevrimiçi olduğunuzda kendiliğinden yüklenir. Ulaştıkça görüşmeler tamamlanır.';
+
+  @override
+  String get onTheWayDayUploading => 'Yükleniyor';
+
+  @override
+  String get onTheWayDayNext => 'Sırada';
+
+  @override
+  String get onTheWayDayQueued => 'Kuyrukta';
+
+  @override
+  String get onTheWayNoDate => 'Tarih yok';
+
+  @override
+  String get onTheWayFootnote =>
+      'Başarısız olan kayıtlar arka planda yeniden denenmeye devam eder. Transkriptini çıkaramadığımız her şey bize otomatik olarak bildirilir.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Destek için ayrıntılar';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kısa kayıt gizlendi',
+      one: '1 kısa kayıt gizlendi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Göster';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count kısa kaydı gizle',
+      one: '1 kısa kaydı gizle',
+    );
+    return '$_temp0';
+  }
 }

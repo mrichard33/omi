@@ -428,6 +428,13 @@ class AppLocalizationsMr extends AppLocalizations {
   String get autoSync => 'स्वयंचलित सिंक';
 
   @override
+  String get syncHealthAlerts => 'सिंक आरोग्य अलर्ट';
+
+  @override
+  String get syncHealthAlertsDescription =>
+      'Omi ने एका दिवसापेक्षा जास्त काळ रेकॉर्डिंग्ज सिंक केल्या नाहीत तेव्हा सूचित करा';
+
+  @override
   String get autoSyncDescription => 'तुमचे डिव्हाइस कनेक्ट झाल्यावर ऑफलाइन रेकॉर्डिंग आपोआप सिंक करा';
 
   @override
@@ -8855,12 +8862,12 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'चॅट: \$$used / \$$limit या महिन्यात वापरले';
+    return 'चॅट: $used / $limit या महिन्यात वापरले';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'चॅट: \$$used या महिन्यात वापरले';
+    return 'चॅट: $used या महिन्यात वापरले';
   }
 
   @override
@@ -9054,6 +9061,14 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'इंटरनेटची प्रतीक्षा';
+
+  @override
+  String get syncStallAlertTitle => 'Omi सिंक होत नाहीये';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'तुमच्या Omi मधून $hours तासांपेक्षा जास्त काळ कोणतीही रेकॉर्डिंग सिंक झाली नाही. तुमच्या डिव्हाइसचे कनेक्शन तपासण्यासाठी Omi उघडा.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13306,6 +13321,30 @@ class AppLocalizationsMr extends AppLocalizations {
   String get paywallOutlineHeadline => 'आता एकही शब्द चुकवू नका.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/वर्ष',
+        'other': '/महिना',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/वर्ष',
+        'other': '/महिना',
+      },
+    );
+    return '$days दिवस मोफत, नंतर $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13633,32 +13672,6 @@ class AppLocalizationsMr extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals मार्गावर';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'अपलोड होत आहे: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'जवळजवळ तयार: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count कडे लक्ष देणे आवश्यक',
-      one: '1 कडे लक्ष देणे आवश्यक',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'अद्याप कोणतीही क्रिया नाही';
 
   @override
@@ -13681,6 +13694,14 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'रेकॉर्डिंग थांबवल्या';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi सिंक होत नाहीये';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return '$hours तासांपेक्षा जास्त काळ कोणतीही रेकॉर्डिंग सिंक झाली नाही';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'अपलोड थांबले';
@@ -14659,4 +14680,65 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'लाइव्ह मजकूर सुरू करा';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'येत आहे';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'ऑनलाइन झाल्यावर';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration प्रक्रियेत आहे';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'आपोआप अपलोड होते. संभाषण आल्याबरोबर भरत जातात.';
+
+  @override
+  String get onTheWayUploadsWhenOnline => 'तुम्ही पुन्हा ऑनलाइन आल्यावर आपोआप अपलोड होते. संभाषण आल्याबरोबर भरत जातात.';
+
+  @override
+  String get onTheWayDayUploading => 'अपलोड होत आहे';
+
+  @override
+  String get onTheWayDayNext => 'पुढील';
+
+  @override
+  String get onTheWayDayQueued => 'रांगेत आहे';
+
+  @override
+  String get onTheWayNoDate => 'तारीख नाही';
+
+  @override
+  String get onTheWayFootnote =>
+      'अपयशी ठरलेली रेकॉर्डिंग पार्श्वभूमीमध्ये पुन्हा प्रयत्न करत राहतात. आम्ही लिप्यंतरित करू न शकणारे मजकूर आपोआप आम्हाला नोंदवला जातो.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'समर्थनासाठी तपशील';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count लहान क्लिप्स लपवली आहेत',
+      one: '1 लहान क्लिप लपवले आहे',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'दाखवा';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count लहान क्लिप्स लपवा',
+      one: '1 लहान क्लिप लपवा',
+    );
+    return '$_temp0';
+  }
 }

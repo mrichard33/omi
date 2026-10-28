@@ -427,6 +427,12 @@ class AppLocalizationsSr extends AppLocalizations {
   String get autoSync => 'Аутоматска синхронизација';
 
   @override
+  String get syncHealthAlerts => 'Обавештења о стању синхронизације';
+
+  @override
+  String get syncHealthAlertsDescription => 'Обавести ме ако Omi није синхронизовао снимке дуже од једног дана';
+
+  @override
   String get autoSyncDescription => 'Аутоматски синхронизуј офлајн снимке када се уређај повеже';
 
   @override
@@ -8850,12 +8856,12 @@ class AppLocalizationsSr extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Ћаскање: \$$used / \$$limit искоришћено овог месеца';
+    return 'Ћаскање: $used / $limit искоришћено овог месеца';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Ћаскање: \$$used искоришћено овог месеца';
+    return 'Ћаскање: $used искоришћено овог месеца';
   }
 
   @override
@@ -9049,6 +9055,14 @@ class AppLocalizationsSr extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Чекање интернета';
+
+  @override
+  String get syncStallAlertTitle => 'Omi се не синхронизује';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Снимци са вашег Omija нису синхронизовани дуже од $hours сати. Отворите Omi да проверите везу уређаја.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13310,6 +13324,30 @@ class AppLocalizationsSr extends AppLocalizations {
   String get paywallOutlineHeadline => 'Никада више не пропустите ни реч.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/година',
+        'other': '/месец',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/година',
+        'other': '/месец',
+      },
+    );
+    return '$days дана бесплатно, затим $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13637,32 +13675,6 @@ class AppLocalizationsSr extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals на путу';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'Отпрема се: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'Скоро спремно: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Захтева пажњу: $count',
-      one: '1 захтева пажњу',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Још нема активности';
 
   @override
@@ -13685,6 +13697,14 @@ class AppLocalizationsSr extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Снимке су паузиране';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi се не синхронизује';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Ниједан снимак није синхронизован дуже од $hours сати';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Отпремање је застало';
@@ -14656,4 +14676,66 @@ class AppLocalizationsSr extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Укључи текст уживо';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'на путу';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'када будете онлајн';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration на путу';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Отпрема се аутоматски. Разговори се попуњавају како снимци стижу.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Отпрема се аутоматски када поново будете онлајн. Разговори се попуњавају како снимци стижу.';
+
+  @override
+  String get onTheWayDayUploading => 'Отпрема се';
+
+  @override
+  String get onTheWayDayNext => 'Следећи';
+
+  @override
+  String get onTheWayDayQueued => 'У реду чекања';
+
+  @override
+  String get onTheWayNoDate => 'Без датума';
+
+  @override
+  String get onTheWayFootnote =>
+      'Снимци који не успеју наставиће покушаје у позадини. Све што не можемо да транскрибуемо биће нам аутоматски пријављено.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Детаљи за подршку';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count кратких снимака је скривено',
+      one: 'Скривен је 1 кратак снимак',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Прикажи';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Сакриј $count кратких снимака',
+      one: 'Сакриј 1 кратак снимак',
+    );
+    return '$_temp0';
+  }
 }

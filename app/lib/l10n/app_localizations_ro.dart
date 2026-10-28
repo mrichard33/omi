@@ -430,6 +430,12 @@ class AppLocalizationsRo extends AppLocalizations {
   String get autoSync => 'Sincronizare automată';
 
   @override
+  String get syncHealthAlerts => 'Alerte de stare a sincronizării';
+
+  @override
+  String get syncHealthAlertsDescription => 'Avertizează-mă dacă Omi nu a sincronizat înregistrări de peste o zi';
+
+  @override
   String get autoSyncDescription => 'Sincronizează automat înregistrările offline când dispozitivul tău se conectează';
 
   @override
@@ -8886,12 +8892,12 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'Chat: \$$used / \$$limit utilizat luna aceasta';
+    return 'Chat: $used / $limit utilizat luna aceasta';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'Chat: \$$used utilizat luna aceasta';
+    return 'Chat: $used utilizat luna aceasta';
   }
 
   @override
@@ -9086,6 +9092,14 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'Se așteaptă internetul';
+
+  @override
+  String get syncStallAlertTitle => 'Omi nu se sincronizează';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return 'Nicio înregistrare de pe Omi-ul tău nu a fost sincronizată de peste $hours ore. Deschide Omi pentru a verifica conexiunea dispozitivului.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13357,6 +13371,30 @@ class AppLocalizationsRo extends AppLocalizations {
   String get paywallOutlineHeadline => 'Nu mai rata niciun cuvânt.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/an',
+        'other': '/lună',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/an',
+        'other': '/lună',
+      },
+    );
+    return '$days zile gratuite, apoi $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13684,32 +13722,6 @@ class AppLocalizationsRo extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals pe drum';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'Se încarcă: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'Aproape gata: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Necesită atenție: $count',
-      one: '1 necesită atenție',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'Nicio activitate încă';
 
   @override
@@ -13732,6 +13744,14 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'Înregistrările sunt pauzate';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi nu se sincronizează';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return 'Nicio înregistrare sincronizată de peste $hours ore';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'Încărcarea s-a oprit';
@@ -14711,4 +14731,66 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'Activează textul live';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'se încarcă';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'când ești online';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration se încarcă';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'Se încarcă automat. Conversațiile apar pe măsură ce înregistrările ajung.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'Se încarcă automat când revii online. Conversațiile apar pe măsură ce înregistrările ajung.';
+
+  @override
+  String get onTheWayDayUploading => 'Se încarcă';
+
+  @override
+  String get onTheWayDayNext => 'Urmează';
+
+  @override
+  String get onTheWayDayQueued => 'În coadă';
+
+  @override
+  String get onTheWayNoDate => 'Fără dată';
+
+  @override
+  String get onTheWayFootnote =>
+      'Înregistrările care eșuează continuă să fie reîncercate în fundal. Orice nu putem transcrie ni se raportează automat.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'Detalii pentru suport';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clipuri scurte ascunse',
+      one: '1 clip scurt ascuns',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'Afișează';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Ascunde $count clipuri scurte',
+      one: 'Ascunde 1 clip scurt',
+    );
+    return '$_temp0';
+  }
 }

@@ -422,6 +422,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get autoSync => '自动同步';
 
   @override
+  String get syncHealthAlerts => '同步状态提醒';
+
+  @override
+  String get syncHealthAlertsDescription => '如果 Omi 超过一天未同步录音，则发出提醒';
+
+  @override
   String get autoSyncDescription => '设备连接时自动同步离线录音';
 
   @override
@@ -8709,12 +8715,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return '聊天：\$$used / \$$limit 本月已使用';
+    return '聊天：$used / $limit 本月已使用';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return '聊天：\$$used 本月已使用';
+    return '聊天：$used 本月已使用';
   }
 
   @override
@@ -8904,6 +8910,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => '等待网络连接';
+
+  @override
+  String get syncStallAlertTitle => 'Omi 未同步';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return '你的 Omi 已超过 $hours 小时未同步任何录音。打开 Omi 检查设备连接。';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13096,6 +13110,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get paywallOutlineHeadline => '再也不错过任何一句话。';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/年',
+        'other': '/月',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/年',
+        'other': '/月',
+      },
+    );
+    return '免费$days天，之后$price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13420,32 +13458,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '处理中：$totals';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return '$count 条正在上传';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return '$count 条即将完成';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count 条需要关注',
-      one: '1 条需要关注',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => '暂无活动';
 
   @override
@@ -13468,6 +13480,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => '录音已暂停';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi 未同步';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return '超过 $hours 小时未同步任何录音';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => '上传停滞';
@@ -14424,4 +14444,64 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => '打开实况文本';
+
+  @override
+  String get deviceCatchUpOnItsWay => '在路上';
+
+  @override
+  String get deviceCatchUpWhenOnline => '联网后';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '还有 $duration 的录音待处理';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => '自动上传。录音到达后，对话会自动补全。';
+
+  @override
+  String get onTheWayUploadsWhenOnline => '恢复网络后自动上传。录音到达后，对话会自动补全。';
+
+  @override
+  String get onTheWayDayUploading => '上传中';
+
+  @override
+  String get onTheWayDayNext => '下一个';
+
+  @override
+  String get onTheWayDayQueued => '排队中';
+
+  @override
+  String get onTheWayNoDate => '无日期';
+
+  @override
+  String get onTheWayFootnote => '失败的录音会在后台持续重试。我们无法转录的内容会自动报告给我们。';
+
+  @override
+  String get onTheWayDetailsForSupport => '支持详情';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已隐藏 $count 段短录音',
+      one: '已隐藏 1 段短录音',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => '显示';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '隐藏 $count 段短录音',
+      one: '隐藏 1 段短录音',
+    );
+    return '$_temp0';
+  }
 }

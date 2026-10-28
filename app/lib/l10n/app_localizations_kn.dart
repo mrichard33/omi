@@ -428,6 +428,13 @@ class AppLocalizationsKn extends AppLocalizations {
   String get autoSync => 'ಸ್ವಯಂಚಾಲಿತ ಸಿಂಕ್';
 
   @override
+  String get syncHealthAlerts => 'ಸಿಂಕ್ ಆರೋಗ್ಯ ಎಚ್ಚರಿಕೆಗಳು';
+
+  @override
+  String get syncHealthAlertsDescription =>
+      'Omi ಒಂದು ದಿನಕ್ಕಿಂತ ಹೆಚ್ಚು ಕಾಲ ರೆಕಾರ್ಡಿಂಗ್‌ಗಳನ್ನು ಸಿಂಕ್ ಮಾಡದಿದ್ದರೆ ಎಚ್ಚರಿಸಿ';
+
+  @override
   String get autoSyncDescription => 'ನಿಮ್ಮ ಸಾಧನ ಸಂಪರ್ಕಗೊಂಡಾಗ ಆಫ್‌ಲೈನ್ ರೆಕಾರ್ಡಿಂಗ್‌ಗಳನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಸಿಂಕ್ ಮಾಡಿ';
 
   @override
@@ -8876,12 +8883,12 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String chatUsageCost(String used, String limit) {
-    return 'ಚಾಟ್: \$$used / \$$limit ಈ ತಿಂಗಳು ಬಳಸಲಾಗಿದೆ';
+    return 'ಚಾಟ್: $used / $limit ಈ ತಿಂಗಳು ಬಳಸಲಾಗಿದೆ';
   }
 
   @override
   String chatUsageCostNoLimit(String used) {
-    return 'ಚಾಟ್: \$$used ಈ ತಿಂಗಳು ಬಳಸಲಾಗಿದೆ';
+    return 'ಚಾಟ್: $used ಈ ತಿಂಗಳು ಬಳಸಲಾಗಿದೆ';
   }
 
   @override
@@ -9075,6 +9082,14 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get syncCardWaitingInternet => 'ಇಂಟರ್ನೆಟ್‌ಗಾಗಿ ಕಾಯುತ್ತಿದೆ';
+
+  @override
+  String get syncStallAlertTitle => 'Omi ಸಿಂಕ್ ಆಗುತ್ತಿಲ್ಲ';
+
+  @override
+  String syncStallAlertBody(int hours) {
+    return '$hours ಗಂಟೆಗಳಿಗಿಂತ ಹೆಚ್ಚು ಕಾಲ ನಿಮ್ಮ Omi ಇಂದ ಯಾವುದೇ ರೆಕಾರ್ಡಿಂಗ್ ಸಿಂಕ್ ಆಗಿಲ್ಲ. ನಿಮ್ಮ ಸಾಧನದ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಲು Omi ತೆರೆಯಿರಿ.';
+  }
 
   @override
   String syncCardNeedsAttention(int count) {
@@ -13341,6 +13356,30 @@ class AppLocalizationsKn extends AppLocalizations {
   String get paywallOutlineHeadline => 'ಇನ್ನು ಮುಂದೆ ಒಂದು ಪದವನ್ನೂ ತಪ್ಪಿಸಿಕೊಳ್ಳಬೇಡಿ.';
 
   @override
+  String billingRecurringPrice(String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/ವರ್ಷ',
+        'other': '/ತಿಂಗಳು',
+      },
+    );
+    return '$price$_temp0';
+  }
+
+  @override
+  String billingTrialPrice(int days, String price, String interval) {
+    String _temp0 = intl.Intl.selectLogic(
+      interval,
+      {
+        'year': '/ವರ್ಷ',
+        'other': '/ತಿಂಗಳು',
+      },
+    );
+    return '$days ದಿನಗಳು ಉಚಿತ, ನಂತರ $price$_temp0';
+  }
+
+  @override
   String get paywallTrialBrand => 'Omi Pro';
 
   @override
@@ -13668,32 +13707,6 @@ class AppLocalizationsKn extends AppLocalizations {
   }
 
   @override
-  String onTheWaySummary(String totals) {
-    return '$totals ದಾರಿಯಲ್ಲಿದೆ';
-  }
-
-  @override
-  String onTheWayUploadingCount(int count) {
-    return 'ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ: $count';
-  }
-
-  @override
-  String onTheWayAlmostReadyCount(int count) {
-    return 'ಬಹುತೇಕ ಸಿದ್ಧ: $count';
-  }
-
-  @override
-  String onTheWayNeedsAttentionCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'ಗಮನ ಅಗತ್ಯ: $count',
-      one: 'ಗಮನ ಅಗತ್ಯ: 1',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get activityEmpty => 'ಇನ್ನೂ ಯಾವುದೇ ಚಟುವಟಿಕೆ ಇಲ್ಲ';
 
   @override
@@ -13716,6 +13729,14 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get activityAttentionStorageSubtitle => 'ರೆಕಾರ್ಡಿಂಗ್‌ಗಳು ವಿರಾಮದಲ್ಲಿವೆ';
+
+  @override
+  String get activityAttentionSyncStalledTitle => 'Omi ಸಿಂಕ್ ಆಗುತ್ತಿಲ್ಲ';
+
+  @override
+  String activityAttentionSyncStalledSubtitle(int hours) {
+    return '$hours ಗಂಟೆಗಳಿಗಿಂತ ಹೆಚ್ಚು ಕಾಲ ಯಾವುದೇ ರೆಕಾರ್ಡಿಂಗ್ ಸಿಂಕ್ ಆಗಿಲ್ಲ';
+  }
 
   @override
   String get activityAttentionUploadStalledTitle => 'ಅಪ್‌ಲೋಡ್ ನಿಂತಿದೆ';
@@ -14697,4 +14718,66 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get livePreviewTurnOnLiveText => 'ಲೈವ್ ಪಠ್ಯ ಆನ್ ಮಾಡಿ';
+
+  @override
+  String get deviceCatchUpOnItsWay => 'ದಾರಿಯಲ್ಲಿದೆ';
+
+  @override
+  String get deviceCatchUpWhenOnline => 'ಆನ್‌ಲೈನ್ ಆದಾಗ';
+
+  @override
+  String onTheWayCatchingUp(String duration) {
+    return '$duration ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ';
+  }
+
+  @override
+  String get onTheWayUploadsByItself => 'ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತದೆ. ಬಂದ ತಕ್ಷಣ ಸಂವಾದಗಳು ಸೇರುತ್ತವೆ.';
+
+  @override
+  String get onTheWayUploadsWhenOnline =>
+      'ನೀವು ಮತ್ತೆ ಆನ್‌ಲೈನ್ ಆದಾಗ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತದೆ. ಬಂದ ತಕ್ಷಣ ಸಂವಾದಗಳು ಸೇರುತ್ತವೆ.';
+
+  @override
+  String get onTheWayDayUploading => 'ಅಪ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ';
+
+  @override
+  String get onTheWayDayNext => 'ಮುಂದಿನದು';
+
+  @override
+  String get onTheWayDayQueued => 'ಸರದಿಯಲ್ಲಿದೆ';
+
+  @override
+  String get onTheWayNoDate => 'ದಿನಾಂಕವಿಲ್ಲ';
+
+  @override
+  String get onTheWayFootnote =>
+      'ವಿಫಲವಾದ ರೆಕಾರ್ಡಿಂಗ್‌ಗಳು ಹಿನ್ನೆಲೆಯಲ್ಲಿ ಮರುಪ್ರಯತ್ನಿಸುತ್ತಲೇ ಇರುತ್ತವೆ. ನಾವು ಟ್ರಾನ್ಸ್‌ಕ್ರೈಬ್ ಮಾಡಲಾಗದ ವಿಷಯಗಳು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನಮಗೆ ವರದಿಯಾಗುತ್ತವೆ.';
+
+  @override
+  String get onTheWayDetailsForSupport => 'ಬೆಂಬಲಕ್ಕಾಗಿ ವಿವರಗಳು';
+
+  @override
+  String homeNoiseFoldHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ಸಣ್ಣ ಕ್ಲಿಪ್‌ಗಳನ್ನು ಮರೆಮಾಡಲಾಗಿದೆ',
+      one: '1 ಸಣ್ಣ ಕ್ಲಿಪ್ ಮರೆಮಾಡಲಾಗಿದೆ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeNoiseFoldShow => 'ತೋರಿಸಿ';
+
+  @override
+  String homeNoiseFoldHide(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ಸಣ್ಣ ಕ್ಲಿಪ್‌ಗಳನ್ನು ಮರೆಮಾಡಿ',
+      one: '1 ಸಣ್ಣ ಕ್ಲಿಪ್ ಮರೆಮಾಡಿ',
+    );
+    return '$_temp0';
+  }
 }
