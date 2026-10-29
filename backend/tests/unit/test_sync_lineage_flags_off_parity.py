@@ -158,6 +158,10 @@ def _drive(module, patch, store, texts, assignment_module, capture_enabled):
 
 @pytest.fixture(autouse=True, params=['off', 'disabled-typo'])
 def off(monkeypatch, request):
+    # This immutable pre-hold snapshot specifies the rollback/eager behavior.
+    monkeypatch.setenv('SYNC_PROCESSING_HOLD_ENABLED', 'false')
+    monkeypatch.setenv('LATE_AUDIO_SYNC_INTAKE_ENABLED', 'false')
+    monkeypatch.setenv('CONVERSATION_OCCASION_RELEVANCE_ENABLED', 'false')
     for flag in FLAGS:
         monkeypatch.setenv(flag, request.param)
 

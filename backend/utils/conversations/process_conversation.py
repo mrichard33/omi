@@ -1,6 +1,9 @@
 from utils import funded_processing
+from utils.sync import processing_hold
+from utils.conversations.summary_delivery import PROCESS_CONTEXT
 from utils.processing_backlog import defer_estimate
 import os
+import time
 import json
 import random
 import re
@@ -14,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, cast
 
-from functools import wraps
+from functools import cache, wraps
 
 from fastapi import HTTPException
 
@@ -79,6 +82,8 @@ from utils.conversations.deterministic_minimum import (
 )
 from utils.conversations.duration import conversation_duration_seconds
 from utils.conversations.duplicate_capture import link_duplicate_captures
+from utils.conversations.sync_hold_completion import complete_explicit, defer_held_budget_denial
+from utils.conversations.merge_before_processing import before_notes, ConversationAbsorbed
 from utils.conversations.processing_trigger import is_recovery_trigger
 from utils.conversations.processing_trigger import PROCESSING_MODES, ProcessingTrigger
 from utils.conversations.recovery import (
@@ -112,6 +117,7 @@ from utils.conversations.relevance_io import (
     emit_recorded_decision,
     record_decision,
     rules_only_relevance,
+    occasion_retention,
 )
 from utils.conversations.factory import deserialize_conversation
 from utils.conversations.projection_payload import (
@@ -366,11 +372,17 @@ def _get_structured(
     llm_hashes: dict[str, str] | None = None,
     open_loop_out: Optional[dict[str, Any]] = None,
     meeting_context_override: Optional[CalendarMeetingContext] = None,
+    finalization_fence: tuple[str, int, int] | None = None,
 ) -> Tuple[Structured, bool]:
     try:
         if is_recovery_trigger(trigger) and not recovery_transcript_decoded:
             # An unreadable stored blob is never evidence of an empty capture.
             return Structured(), False
+
+        @cache
+        def occasion_reason():
+            return occasion_retention(uid, conversation, conversation_id)
+
         # refactor: superseded by utils.conversations.relevance_media when MEDIA_NOISE_MODE=serve
         media_minimum = None if is_release_probe_uid(uid) else content_minimum(uid, conversation, user_kept=user_kept)
         if media_minimum is not None:
@@ -380,6 +392,7 @@ def _get_structured(
                 user_kept=user_kept,
                 client_supports_discarded=getattr(conversation, 'client_platform', None) in ('ios', 'android'),
             )
+            hidden = hidden and not occasion_reason()
             if relevance_observer is not None:
                 relevance_observer(RelevanceDecision('discard' if hidden else 'keep', 'rule', 'content_kind', trigger))
             return media_minimum, hidden
@@ -538,6 +551,7 @@ def _get_structured(
                 exempt=is_release_probe_uid(uid),
                 trusted_wake_word=has_wake_word_marker,
                 model_discards=None,
+                occasion_retains=occasion_reason,
                 calendar_retains=lambda: _calendar_overlap_retains_conversation(
                     uid, main_conv.started_at, main_conv.finished_at
                 ),
@@ -596,6 +610,7 @@ def _get_structured(
             exempt=is_release_probe_uid(uid),
             trusted_wake_word=has_wake_word_marker,
             model_discards=model_discards,
+            occasion_retains=occasion_reason,
             calendar_retains=lambda: _calendar_overlap_retains_conversation(
                 uid, main_conv.started_at, main_conv.finished_at
             ),
@@ -616,6 +631,8 @@ def _get_structured(
             )
         if decision.discard:
             return Structured(emoji=random.choice(['🧠', '🎉'])), True
+
+        before_notes(uid, main_conv, trigger, finalization_fence=finalization_fence)
 
         conv_started_at = cast(datetime, main_conv.started_at)
 
@@ -669,6 +686,8 @@ def _get_structured(
             )
         validate_structured_source_segment_ids(structured, transcript_segment_ids)
         return structured, False
+    except ConversationAbsorbed:
+        raise
     except Exception as e:
         if funded_processing.enabled(uid, 'batch') and _is_funded_budget_denial(e):
             raise
@@ -2531,6 +2550,8 @@ def _preserve_capture_on_budget_denial(function):
                 or captured.processing_deferred
                 or (captured.status == ConversationStatus.processing and captured.structured == Structured())
             )
+            if not raw:
+                defer_held_budget_denial()
             persisted = False
             if raw:
                 captured, persisted = _store_budget_waiting(
@@ -2571,6 +2592,7 @@ def process_conversation(
     created_webhook_observer: Callable[[Callable[[], None]], None] | None = None,
     first_party_only: bool = False,
     derived_effects_transcript_sha256: str | None = None,
+    finalization_fence: tuple[str, int, int] | None = None,
 ) -> Conversation:
     """Process ``conversation``; ``trigger`` says why, and its ``ProcessingMode``
     fixes run-now, reprocess, bypass, and relevance policy together.
@@ -2662,6 +2684,7 @@ def process_conversation(
             # A retry/reprocess of an existing enriched row must not replace its
             # structure, discard state or derived-work markers with a raw shell.
             # Its transcript is already persisted by ingress; deny this attempt.
+            defer_held_budget_denial()
             report_persistence(False, derived_effects=DerivedEffectsDisposition.TERMINAL_NO_DERIVED_EFFECTS)
             return conversation
         if waiting:
@@ -2807,6 +2830,7 @@ def process_conversation(
         llm_hashes=llm_hashes,
         open_loop_out=open_loop_sink,
         meeting_context_override=meeting_context_override,
+        finalization_fence=finalization_fence,
     )
     if recovery_minimum_fallback:
         sys.stdout.write(
@@ -3174,6 +3198,7 @@ def process_conversation(
             logger.error('Conversation processing failed: %s', type(failure).__name__)
             raise HTTPException(status_code=502, detail=APP_RESULT_FAILED_ERROR_DETAIL) from failure
         raise conversation_processing_http_exception(failure, route='conversation_processing/app_result') from failure
+    complete_explicit(uid, conversation, trigger)
     logger.info(f'process_conversation completed conversation.id= {conversation.id}')
     return conversation
 
