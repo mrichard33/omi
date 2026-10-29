@@ -110,6 +110,8 @@ class StrictFirestoreDocument:
                 ["is_locked"],
                 ["folder_id"],
                 ["language"],
+                ['discarded', 'deleted', 'sync_merged_into'],
+                ['started_at', 'finished_at', 'discarded', 'deleted', 'sync_merged_into'],
                 ['manual_speaker_assignments', 'manual_speaker_assignments_compressed'],
                 [
                     'deleted',
@@ -120,7 +122,7 @@ class StrictFirestoreDocument:
                 ],
             ):
                 raise UnsupportedFirestoreOperationError(
-                    "only privacy, folder membership, language and speaker-receipt projections are supported"
+                    "only privacy, folder membership, language, episode visibility and speaker-receipt projections are supported"
                 )
             data = {key: value for key, value in data.items() if key in field_paths}
         return StrictFirestoreSnapshot(data)
@@ -327,8 +329,10 @@ class StrictFirestore:
             raise ValueError('Firestore document paths require an even number of non-empty segments')
         return StrictFirestoreDocument(self, segments)
 
-    def transaction(self) -> StrictFirestoreTransaction:
+    def transaction(self, max_attempts: int | None = None) -> StrictFirestoreTransaction:
         transaction = StrictFirestoreTransaction(self, allow_reads_after_writes=self._allow_reads_after_writes)
+        if max_attempts is not None:
+            transaction._max_attempts = max_attempts
         self.transactions.append(transaction)
         return transaction
 
