@@ -14994,4 +14994,29 @@ class AppLocalizationsMk extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'Денес се наплатени $amount. Обновување на $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count дела',
+      many: '$count дела',
+      few: '$count дела',
+      two: '$count дела',
+      one: '$count дел',
+      zero: '$count дела',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Испратете ја пораката во $app. Овој екран се ажурира штом Omi ќе ја добие.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Добијте нов код и испратете го од $app.';
+  }
 }

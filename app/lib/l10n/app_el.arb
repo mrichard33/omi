@@ -4514,5 +4514,8 @@
     "yearlySwitchPreviewFailed": "Δεν ήταν δυνατή η φόρτωση της τιμής.",
     "yearlySwitchUnavailable": "Η ετήσια χρέωση δεν είναι διαθέσιμη για το πρόγραμμά σας αυτή τη στιγμή.",
     "yearlySwitchDoneTitle": "Είστε πλέον σε ετήσια χρέωση",
-    "yearlySwitchDoneBody": "Χρεώθηκαν σήμερα {amount}. Ανανέωση στις {date}."
+    "yearlySwitchDoneBody": "Χρεώθηκαν σήμερα {amount}. Ανανέωση στις {date}.",
+    "episodePartsCount": "{count, plural, zero{{count} μέρη} one{{count} μέρος} two{{count} μέρη} few{{count} μέρη} many{{count} μέρη} other{{count} μέρη}}",
+    "chatAppsWaitingMessageIn": "Στείλε το μήνυμα από τα {app}. Αυτή η οθόνη ενημερώνεται μόλις το λάβει το Omi.",
+    "chatAppsCodeExpiredMessageIn": "Πάρε νέο κωδικό και στείλ' τον από τα {app}."
 }

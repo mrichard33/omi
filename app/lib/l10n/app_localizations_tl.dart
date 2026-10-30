@@ -15049,4 +15049,29 @@ class AppLocalizationsTl extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return '$amount ang siningil ngayon. Magre-renew sa $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bahagi',
+      many: '$count bahagi',
+      few: '$count bahagi',
+      two: '$count bahagi',
+      one: '$count bahagi',
+      zero: '$count bahagi',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Ipadala ang mensahe sa $app. Mag-a-update ang screen na ito pagkatanggap ni Omi.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Kumuha ng bagong code at ipadala ito mula sa $app.';
+  }
 }

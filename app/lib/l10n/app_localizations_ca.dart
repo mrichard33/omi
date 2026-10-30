@@ -15005,4 +15005,29 @@ class AppLocalizationsCa extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'Avui s\'han cobrat $amount. Es renova el $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count parts',
+      many: '$count parts',
+      few: '$count parts',
+      two: '$count parts',
+      one: '$count part',
+      zero: '$count parts',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Envia el missatge a $app. Aquesta pantalla s\'actualitzarà quan l\'Omi el rebi.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Obtén un codi nou i envia\'l des de $app.';
+  }
 }

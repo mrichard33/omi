@@ -11940,5 +11940,8 @@
     "yearlySwitchPreviewFailed": "Cijena se nije mogla učitati.",
     "yearlySwitchUnavailable": "Godišnje plaćanje trenutno nije dostupno za vaš plan.",
     "yearlySwitchDoneTitle": "Sada plaćate godišnje",
-    "yearlySwitchDoneBody": "Danas naplaćeno {amount}. Obnavlja se {date}."
+    "yearlySwitchDoneBody": "Danas naplaćeno {amount}. Obnavlja se {date}.",
+    "episodePartsCount": "{count, plural, zero{{count} dijelova} one{{count} dio} two{{count} dijelova} few{{count} dijela} many{{count} dijelova} other{{count} dijelova}}",
+    "chatAppsWaitingMessageIn": "Pošalji poruku u aplikaciji {app}. Ovaj ekran će se ažurirati čim je Omi primi.",
+    "chatAppsCodeExpiredMessageIn": "Uzmi novi kod i pošalji ga iz aplikacije {app}."
 }

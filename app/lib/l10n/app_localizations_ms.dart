@@ -14967,4 +14967,29 @@ class AppLocalizationsMs extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return '$amount dicaj hari ini. Diperbaharui pada $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count bahagian',
+      many: '$count bahagian',
+      few: '$count bahagian',
+      two: '$count bahagian',
+      one: '$count bahagian',
+      zero: '$count bahagian',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Hantar mesej dalam $app. Skrin ini dikemas kini sebaik sahaja Omi menerimanya.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Dapatkan kod baharu dan hantar daripada $app.';
+  }
 }

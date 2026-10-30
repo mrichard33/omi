@@ -28,6 +28,8 @@ SCHEMA_GROUPS = {
     'episodes': {
         'output': DEFAULT_OUTPUT_DIR / 'episodes_wire.g.dart',
         'schemas': (
+            'EpisodeMember',
+            'EpisodeListResponse',
             'EpisodeMoment',
             'EpisodeProvisionalItem',
             'Episode',
@@ -596,6 +598,10 @@ SCHEMA_GROUPS = {
             'MemoryEditResponse',
             'MemoryRevertRequest',
         ),
+    },
+    'flags': {
+        'output': DEFAULT_OUTPUT_DIR / 'flags_wire.g.dart',
+        'schemas': ('ClientFlag', 'ClientFlagsResponse'),
     },
     'goals': {
         'output': DEFAULT_OUTPUT_DIR / 'goals_wire.g.dart',

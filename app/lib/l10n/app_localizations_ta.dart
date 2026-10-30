@@ -15033,4 +15033,29 @@ class AppLocalizationsTa extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'இன்று $amount வசூலிக்கப்பட்டது. புதுப்பிப்பு $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count பகுதிகள்',
+      many: '$count பகுதிகள்',
+      few: '$count பகுதிகள்',
+      two: '$count பகுதிகள்',
+      one: '$count பகுதிகள்',
+      zero: '$count பகுதிகள்',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return '$app-இல் மெசேஜை அனுப்புங்கள். Omi-க்குக் கிடைத்தவுடன் இந்தத் திரை புதுப்பிக்கப்படும்.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'புதிய குறியீட்டைப் பெற்று $app-இலிருந்து அனுப்புங்கள்.';
+  }
 }
