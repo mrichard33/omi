@@ -36,6 +36,12 @@ SCREEN_TASK_CLIENT_BYPASS_TOTAL = Counter(
     'omi_screen_task_client_bypass_total', 'Flagged screenshot requests that bypassed a usable client gate', []
 )
 
+OMI_FLAG_DUAL_READ_TOTAL = Counter(
+    'omi_flag_dual_read_total',
+    'Server flag reads in OMI_FLAGS_SOURCE=dual: Omi store answer compared with the serving PostHog answer',
+    ['flag', 'outcome'],
+)
+
 OMI_LISTEN_STT_UNAVAILABLE_TOTAL = Counter(
     'omi_listen_stt_unavailable_total',
     'Listen sessions rejected before STT setup because providers or reconnect budget are unavailable',
@@ -643,10 +649,10 @@ OMI_CLIENT_JOURNEY_ACCEPTED_TOTAL = Counter(
 OMI_CLIENT_JOURNEY_TERMINAL_TOTAL = Counter(
     'omi_client_journey_terminal_total',
     (
-        'Terminal client-segmented product journey outcomes by bounded labels. '
+        'Terminal client-segmented product journey outcomes; reason is a closed issue class or none. '
         'Counters are per-pod; alert queries must sum() across job=backend-listen-metrics.'
     ),
-    ['journey', 'client_kind', 'app_build', 'outcome'],
+    ['journey', 'client_kind', 'app_build', 'outcome', 'reason'],
 )
 
 OMI_CLIENT_JOURNEY_ISSUES_TOTAL = Counter(

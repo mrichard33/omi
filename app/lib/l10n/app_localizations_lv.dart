@@ -14964,4 +14964,29 @@ class AppLocalizationsLv extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'Šodien iekasēti $amount. Atjaunojas $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count daļas',
+      many: '$count daļas',
+      few: '$count daļas',
+      two: '$count daļas',
+      one: '$count daļa',
+      zero: '$count daļu',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Nosūtiet ziņu lietotnē $app. Šis ekrāns atjaunosies, tiklīdz Omi to saņems.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Iegūstiet jaunu kodu un nosūtiet to no lietotnes $app.';
+  }
 }

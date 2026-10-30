@@ -14973,4 +14973,29 @@ class AppLocalizationsPl extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'Dziś pobrano $amount. Odnowienie $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count części',
+      many: '$count części',
+      few: '$count części',
+      two: '$count części',
+      one: '$count część',
+      zero: '$count części',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Wyślij wiadomość w aplikacji $app. Ten ekran odświeży się, gdy tylko Omi ją odbierze.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Pobierz nowy kod i wyślij go z aplikacji $app.';
+  }
 }

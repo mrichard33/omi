@@ -15,6 +15,7 @@ import os
 import time
 
 from config.policy import resolve_batch_policy
+from config.record_audio import require_record_audio_barrier
 from database.batch_pipeline_policy import load_job_policy
 from database.batch_ramp import ramp_admission_policy
 from config.batch_pipeline import Priority, RecordOwnerContention, record_capture_eligible
@@ -27,6 +28,7 @@ from utils.batch_pipeline.artifact_policy import create_artifact_store
 from utils.batch_pipeline.contracts import ProjectionBinding, WorkItem
 from utils.batch_pipeline.scheduler import owner_key
 from utils.batch_pipeline.source_audio import MAGIC, MAX_REFERENCES, read_reference
+from utils.batch_pipeline.record_barrier import validate_record_tail
 from utils.executors import db_executor, storage_executor, sync_executor, run_blocking
 from utils.other.local_storage import create_storage_client
 from utils.other.storage import list_audio_chunks, private_cloud_sync_bucket
@@ -62,7 +64,9 @@ def reserve_recording(uid: str, conversation: dict) -> str | None:
     return OWNER
 
 
-def register_recording(uid: str, conversation: dict, *, store=None, now=None) -> bool:
+def register_recording(
+    uid: str, conversation: dict, *, store=None, now=None, transaction=None, server_flags=None
+) -> bool:
     if conversation.get('record_lane_owner') != OWNER:
         return False
     if server_batch_owned(conversation) and not server_batch_has_audio(conversation):
@@ -71,13 +75,17 @@ def register_recording(uid: str, conversation: dict, *, store=None, now=None) ->
         return False
     if not conversation.get('private_cloud_sync_enabled'):
         return False
-    store = store or shadow_from_env(FirestoreStore(f'batch_pipeline_{current_stage()}'))
+    if transaction is None:
+        store = store or shadow_from_env(FirestoreStore(f'batch_pipeline_{current_stage()}'))
     now = time.time() if now is None else now
     content, segment = record_identity(uid, conversation['id'])
     # The immutable native owner is main's earlier admission receipt. A later
     # cohort rollback cannot cancel it before finalization registers the unit.
     policy = replace(
-        resolve_batch_policy(uid), batch_enabled=True, live_admission_enabled=True, live_record_enabled=True
+        resolve_batch_policy(uid, flags=server_flags) if server_flags is not None else resolve_batch_policy(uid),
+        batch_enabled=True,
+        live_admission_enabled=True,
+        live_record_enabled=True,
     )
     snapshot = {
         key: conversation.get(key)
@@ -122,10 +130,15 @@ def register_recording(uid: str, conversation: dict, *, store=None, now=None) ->
         )
         return True
 
+    # Operator seal backfill joins registration to the row's existing transaction.
+    # The caller owns flushing buffered writes after all privacy reads complete.
+    if transaction is not None:
+        return commit(transaction)
+    assert store is not None
     return store.run(commit)
 
 
-def _units(
+def retained_record_units(
     uid, conversation_id, chunks, client, key
 ) -> Generator[tuple[float, float, list[dict[str, Any]]], None, None]:
     """Bounded one-hour units, preserving capture clocks and verified overlaps."""
@@ -197,6 +210,9 @@ def _units(
 
 
 async def admit_recording(store, pending, *, now=None):
+    from config.batch_pipeline import require_record_protocol_ready
+
+    require_record_protocol_ready()
     now = time.time() if now is None else now
     uid, conversation_id = pending['owner_id'], pending['conversation_id']
     row = pending['record_snapshot']
@@ -214,8 +230,7 @@ async def admit_recording(store, pending, *, now=None):
         )
 
     current = await run_blocking(db_executor, read_current)
-    if current.get('status') != 'completed' or not current.get('record_audio_closed'):
-        raise ValueError('capture upload/finalization barrier not closed')
+    record_barrier = require_record_audio_barrier(current)
     client = await run_blocking(storage_executor, create_storage_client)
     bucket = os.getenv('BUCKET_BATCH_PIPELINE', '').strip()
     artifacts = create_artifact_store(store, client, bucket, os.getenv('ENCRYPTION_SECRET', '').encode())
@@ -237,7 +252,7 @@ async def admit_recording(store, pending, *, now=None):
         privacy_generation=pending['privacy_generation'],
     )
     protection = await run_blocking(db_executor, artifacts.authorize, seed)
-    iterator = _units(uid, conversation_id, chunks, client, artifacts.key_for_owner(uid))
+    iterator = retained_record_units(uid, conversation_id, chunks, client, artifacts.key_for_owner(uid))
     units = []
     try:
         while unit := await run_blocking(sync_executor, next, iterator, None):
@@ -246,13 +261,10 @@ async def admit_recording(store, pending, *, now=None):
                 raise ValueError('retained capture unit budget exceeded')
     finally:
         iterator.close()
-    if not 1 <= len(units) <= 128:
-        raise ValueError('retained capture unit budget exceeded')
     # Never claim a successful record whose final recognized speech is missing
     # from the durable upload. The pending obligation has no TTL.
-    finish = row.get('finished_at')
-    if finish is not None and units[-1][0] + units[-1][1] + 0.1 < finish.timestamp():
-        raise ValueError('retained capture tail not durable yet')
+    validate_record_tail(units, row.get('finished_at'))
+    validate_record_tail(units, current.get('finished_at'))
     items = [
         WorkItem(
             hashlib.sha256(f'{content}:{i}'.encode()).hexdigest(),
@@ -324,6 +336,7 @@ async def admit_recording(store, pending, *, now=None):
         namespace=store.namespace,
         policy=policy,
         require_artifacts=True,
+        record_barrier=record_barrier,
         intake={
             'owner_id': uid,
             'owner_key': owner_key(uid),

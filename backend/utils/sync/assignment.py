@@ -8,7 +8,7 @@ no expiring lock that lets a late worker overwrite a newer transcript.
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timedelta
-from utils.sync import processing_hold
+from utils.sync import processing_hold, bridge_pending
 from config.recorded_time import late_audio_intake_enabled
 from models.conversation_continuity import DEFAULT_GAP_SECONDS
 import time
@@ -42,9 +42,9 @@ from utils.capture_evidence import bounded_envelope, merge_track_receipts
 
 from config import merge_ancestry, merge_before_processing
 import config.speaker_match_scores as match_scores
-from utils.conversations.fragment_visibility import is_rule_discard_decision, is_user_curated
+from utils.conversations.fragment_visibility import superseded_intake_discard, is_user_curated
 from config.occasion_relevance import enabled as occasion_relevance_enabled
-from utils.conversations.recorded_time import recorded_span, sync_recorded_end
+from utils.conversations.recorded_time import recorded_span, sync_recorded_end, write_span
 from utils.conversations.relevance import sync_intake_decision
 from utils.conversations.smart_merge_policy import user_managed as _policy_user_managed
 from utils.conversations.relevance_rules import deterministic_relevance
@@ -69,7 +69,12 @@ from utils.sync.assignment_telemetry import created_sync_row_observation
 from utils.capture.dedupe import choose_segments
 from utils.capture.identity import assignment_keys_compatible, persist_identity
 from utils.sync.assignment_index import AssignmentIndex
-from utils.sync.live_overlap import choose_live_overlap, compatible_capture, live_overlap_enabled
+from utils.sync.live_overlap import (
+    choose_live_overlap,
+    compatible_capture,
+    discoverable_live_overlap,
+    live_overlap_enabled,
+)
 from utils.sync.assignment_errors import SyncAssignmentConflict, SyncAssignmentSuperseded
 from utils.sync.assignment_errors import SyncAssignmentConflictReason as Reason
 from models.conversation_continuity import intervals_connect
@@ -874,7 +879,7 @@ def assign_in_transaction(
         )
         if result['discarded']:
             result['relevance_decision'] = sync_intake_decision(rule)
-        elif is_rule_discard_decision(result.get('relevance_decision')):
+        elif superseded_intake_discard(result, bool(survivors or transfers)):
             result['relevance_decision'] = None
         result['is_locked'] = bool(incoming.get('is_locked'))
         result['private_cloud_sync_enabled'] = any(
@@ -910,11 +915,37 @@ def assign_in_transaction(
             ancestors = {cid for row in records for cid in row.get('sync_merged_from', [])}
             ancestors.update(cid for cid in matched if cid != canonical)
         result['sync_merged_from'] = sorted(ancestors)
+        if result['sync_live_target']:
+            result.pop(bridge_pending.FIELD, None)
+        elif (
+            not is_user_curated(result)
+            and not merge_before_processing.already_processed(result)
+            and result.get('status') == 'completed'
+            and live_overlap_enabled()
+        ):
+            # A coarse live hint is enough to hold visibility, never enough to
+            # transfer speech. The bridge revalidates recorded overlap later.
+            pending_targets = [
+                raw
+                for cid in live_candidate_ids
+                if (raw := load(cid))
+                and not tombstoned(cid)
+                and raw.get('status') in ('in_progress', 'processing')
+                and capture_mismatch(raw, incoming, user_ref.id) == 'none'
+                and discoverable_live_overlap(raw, incoming)
+            ]
+            if pending_targets and bridge_pending.FIELD not in result:
+                pending_target = min(pending_targets, key=lambda raw: raw['id'])
+                result[bridge_pending.FIELD] = {
+                    'target_id': pending_target['id'],
+                    'expires_at': time.time() + bridge_pending.MAX_WAIT_SECONDS,
+                }
         if incoming.get('geolocation') and not result.get('geolocation'):
             result['geolocation'] = incoming['geolocation']
 
         # Read all occupied day buckets before the first write.
         index.read(extent)
+        result.update(write_span(result, arrival_at=incoming.get('arrival_at')))
         payload = encode(result)
         payload.pop('photos', None)
         donor_updates = {cid: _donor_redirect_patch(raw, canonical) for cid, raw in matched.items() if cid != canonical}

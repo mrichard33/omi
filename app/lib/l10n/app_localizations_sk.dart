@@ -14924,4 +14924,29 @@ class AppLocalizationsSk extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return 'Dnes účtované $amount. Obnovenie $date.';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count častí',
+      many: '$count častí',
+      few: '$count časti',
+      two: '$count častí',
+      one: '$count časť',
+      zero: '$count častí',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return 'Pošlite správu v aplikácii $app. Táto obrazovka sa aktualizuje hneď, ako ju Omi dostane.';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return 'Získajte nový kód a pošlite ho z aplikácie $app.';
+  }
 }

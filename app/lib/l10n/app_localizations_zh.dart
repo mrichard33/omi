@@ -14698,4 +14698,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String yearlySwitchDoneBody(String amount, String date) {
     return '今日已扣款 $amount。续订日期：$date。';
   }
+
+  @override
+  String episodePartsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个部分',
+      many: '$count 个部分',
+      few: '$count 个部分',
+      two: '$count 个部分',
+      one: '$count 个部分',
+      zero: '$count 个部分',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatAppsWaitingMessageIn(String app) {
+    return '在“$app”中发送这条消息。Omi 一收到，此屏幕就会更新。';
+  }
+
+  @override
+  String chatAppsCodeExpiredMessageIn(String app) {
+    return '获取新验证码，并从“$app”中发送。';
+  }
 }
