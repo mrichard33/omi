@@ -1406,6 +1406,9 @@ def test_sync_scrape_retains_exporter_and_direct_sentinel_consumers():
         'omi_batch_pipeline_events_total',
         'omi_batch_pipeline_oldest_age_seconds',
         'omi_batch_ramp_heavy_owner_excluded_total',
+        # Batch ramp gates (batchdesign 2026-11-01 §7.1): the per-upload intake
+        # outcome counter gates every 25->100% ramp step.
+        'omi_batch_intake_outcome_total',
         # Shadow admission/CPU recovery outcomes must survive the same filter
         # as the GPU metrics; otherwise gate readouts lose paid/failed units.
         'omi_batch_shadow_outcome_total',
@@ -1451,6 +1454,9 @@ def test_sync_scrape_retains_exporter_and_direct_sentinel_consumers():
         'omi_stt_cap_cohort_percent',
         'omi_held_recovery_pacing_intents_total',
         'omi_held_recovery_pacing_audio_seconds_total',
+        # Sync-hold recovery gate denominator: items skipped before any attempt.
+        'omi_held_content_recovery_total',
+        'omi_held_content_recovery_skipped_total',
         # #23388 cap enforcement: the watch readout for finite allowances
         # (stt-cap-dispatch.md) — decisions and metered provider audio.
         'omi_stt_cap_dispatch_decisions_total',
