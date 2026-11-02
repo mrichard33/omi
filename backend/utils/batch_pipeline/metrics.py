@@ -4,8 +4,16 @@ import logging
 
 from prometheus_client import CollectorRegistry, Gauge, Histogram, Counter, REGISTRY
 
-from database.batch_pipeline_store import Store, FirestoreStore, PROJECTION_OBLIGATION_STATES
+from config.batch_timeliness import (
+    SLA_SECONDS,
+    TERMINAL_EMPTY_IS_PROCESSED,
+    batch_timeliness_alarm_enabled,
+    timeliness_epoch,
+    timeliness_interval_seconds,
+)
+from database.batch_pipeline_store import Store, FirestoreStore, PROJECTION_OBLIGATION_STATES, timeliness_sample
 from utils.batch_pipeline.contracts import Priority, WORK_OUTCOMES
+from utils.observability.reasons import AdmissionHoldReason, ReasonFamily, reason_label
 
 LABELS = {Priority.FRESH: 'fresh', Priority.RECENT: 'recent', Priority.DEEP: 'deep'}
 AGE_TARGETS = {Priority.FRESH: 30, Priority.RECENT: 300, Priority.DEEP: 3600}
@@ -33,6 +41,43 @@ class QueueMetrics:
             'Last successful oldest projection obligation observation',
             registry=registry,
         )
+        # 2-hour timeliness alarm (David, 2026-11-02). Alert-only: no scheduler, ramp or rollback guard reads it.
+        self.timeliness_age = Gauge(
+            'omi_batch_timeliness_new_oldest_age_seconds',
+            'Oldest unpublished unit admitted (projection legs: committed) at or after the epoch; alarm above 7200s',
+            ['leg'],
+            registry=registry,
+        )
+        self.timeliness_over_sla = Gauge(
+            'omi_batch_timeliness_new_over_sla_units',
+            'Units admitted at or after the epoch and still unpublished past the 2h SLA, by counted leg',
+            ['leg'],
+            registry=registry,
+        )
+        self.timeliness_backlog = Gauge(
+            'omi_batch_timeliness_backlog_units',
+            'Unpublished units from before the epoch, by leg; kept visible, never alarmed',
+            ['leg'],
+            registry=registry,
+        )
+        self.timeliness_truncated = Gauge(
+            'omi_batch_timeliness_scan_truncated',
+            '1 when a leg\'s bounded walk may hide an older unpublished unit',
+            ['leg'],
+            registry=registry,
+        )
+        self.timeliness_observed_at = Gauge(
+            'omi_batch_timeliness_observed_at_seconds',
+            'Last successful timeliness sample',
+            registry=registry,
+        )
+        self.timeliness_samples = Counter(
+            'omi_batch_timeliness_samples_total',
+            'Timeliness sample attempts by outcome',
+            ['outcome'],
+            registry=registry,
+        )
+        self._timeliness_due = 0.0
         self.oldest_age = Gauge(
             'omi_batch_pipeline_oldest_age_seconds',
             'Oldest admitted uncommitted item age',
@@ -71,7 +116,8 @@ class QueueMetrics:
         )
         self.owner_wait = Histogram(
             'omi_batch_pipeline_owner_wait_seconds',
-            'Per-item admission to lease wait; no owner labels',
+            'Per-item admission to lease wait; no owner labels; relet="true" is a re-lease, not fresh wait',
+            ['relet'],
             buckets=(1, 10, 30, 60, 300, 3600, 43200, 86400, 604800),
             registry=registry,
         )
@@ -79,6 +125,12 @@ class QueueMetrics:
             'omi_batch_pipeline_events_total',
             'Worker transition receipts; jobs/s is rate of completed events',
             ['event'],
+            registry=registry,
+        )
+        self.admission_hold_reasons = Counter(
+            'omi_batch_pipeline_admission_hold_reasons_total',
+            'Evaluated compute-admission hold reasons on policy defers; bounded enum, unknown folds to unknown',
+            ['reason'],
             registry=registry,
         )
         self.completed_audio = Counter(
@@ -165,7 +217,42 @@ class QueueMetrics:
                 self.ready_units.labels(LABELS[priority], *self.scope).set(count)
             self.capacity_refreshed_at.labels(*self.scope).set(now)
         if isinstance(store, FirestoreStore):
+            self.refresh_timeliness(store, now)
             self.refresh_projection(store, now)
+
+    def refresh_timeliness(self, store: FirestoreStore, now: float) -> None:
+        """At most one sample per interval per process; a failed sample keeps last values and freshness."""
+        if now < self._timeliness_due:
+            return
+        self._timeliness_due = now + timeliness_interval_seconds()
+        if not batch_timeliness_alarm_enabled():
+            self.timeliness_samples.labels('disabled').inc()
+            return
+        try:
+            sample = timeliness_sample(
+                store.client,
+                store.namespace,
+                timeliness_epoch(),
+                now,
+                SLA_SECONDS,
+                terminal_empty_processed=TERMINAL_EMPTY_IS_PROCESSED,
+            )
+        except Exception as error:
+            self.timeliness_samples.labels('error').inc()
+            logging.getLogger(__name__).warning(
+                'event=batch_timeliness_sample outcome=unavailable exception_type=%s', type(error).__name__
+            )
+            return
+        for leg, started in sample['new_oldest'].items():
+            self.timeliness_age.labels(leg).set(max(0.0, now - started) if started is not None else 0)
+        for leg, units in sample['new_over_sla'].items():
+            self.timeliness_over_sla.labels(leg).set(units)
+        for leg, units in sample['backlog'].items():
+            self.timeliness_backlog.labels(leg).set(units)
+        for leg, truncated in sample['truncated'].items():
+            self.timeliness_truncated.labels(leg).set(1 if truncated else 0)
+        self.timeliness_observed_at.set(now)
+        self.timeliness_samples.labels('ok').inc()
 
     def refresh_projection(self, store: FirestoreStore, now: float) -> None:
         # Reuses the indexed discovery shape, one row, including durable holds.
@@ -180,7 +267,14 @@ class QueueMetrics:
         self.projection_age.set(age)
         self.projection_observed_at.set(now)
 
-    def record(self, event: str, *, wait_seconds: float | None = None) -> None:
+    def record(
+        self,
+        event: str,
+        *,
+        wait_seconds: float | None = None,
+        relet: bool = False,
+        reason: str | None = None,
+    ) -> None:
         if event not in {
             'leased',
             'completed',
@@ -197,7 +291,11 @@ class QueueMetrics:
             raise ValueError('metric event must be a static worker transition')
         self.events.labels(event).inc()
         if event == 'leased' and wait_seconds is not None:
-            self.owner_wait.observe(max(0.0, wait_seconds))
+            self.owner_wait.labels('true' if relet else 'false').observe(max(0.0, wait_seconds))
+        if event == 'admission_policy_deferred' and reason:
+            self.admission_hold_reasons.labels(
+                reason=reason_label(ReasonFamily.ADMISSION_HOLD, reason, AdmissionHoldReason)
+            ).inc()
 
     def record_completed_audio(self, outcome: str, seconds: float) -> None:
         if outcome not in WORK_OUTCOMES:

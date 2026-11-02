@@ -27,11 +27,17 @@ from config.policy import resolve_batch_policy
 from config.policy.ramp import audio_span
 from database.batch_ramp import ramp_admission_policy
 from database.batch_pipeline_privacy import BatchPrivacyBlocked
+from database.batch_privacy_attempt import with_batch_privacy_attempt
 from database.account_deletion_marker import account_deletion_blocks_user_work
 from utils.batch_pipeline.intake import (
     accept_upload as accept_batch_upload,
     get_durable_job_status,
     privacy_blocked_response,
+)
+from utils.batch_pipeline.intake_outcome import (
+    IntakeRouteEvidence,
+    legacy_landing_outcome,
+    record_upload_outcome,
 )
 from models.sync_job_status import (
     SyncJobStartResponse,
@@ -865,6 +871,7 @@ async def sync_local_files_v2(
         content_id = await run_blocking(sync_executor, compute_sync_content_id, uid, paths)
 
         candidate_policy = resolve_batch_policy(uid)
+        intake_evidence = IntakeRouteEvidence()
         batch_policy = await run_blocking(
             db_executor,
             ramp_admission_policy,
@@ -875,6 +882,7 @@ async def sync_local_files_v2(
             incoming_audio_seconds=audio_span(
                 {'audio_start_seconds': audio_start_seconds, 'audio_end_seconds': audio_end_seconds}
             ),
+            evidence=intake_evidence,
         )
         record_response = await registered_record_response(
             uid=uid,
@@ -890,6 +898,7 @@ async def sync_local_files_v2(
             # A legacy_final_pass_v1 owner is re-homed to batch once legacy is
             # draining/dark (final_pass_rehome); the route answers BATCH then.
             legacy_mode=legacy_mode,
+            evidence=intake_evidence,
         )
         if isinstance(record_response, JSONResponse):
             return record_response
@@ -933,8 +942,14 @@ async def sync_local_files_v2(
                 },
                 record_router=registered_record_response,
                 policy=batch_policy,
+                evidence=intake_evidence,
             )
             if batch_response is not None:
+                # Count only a fresh admission this request (a re-ACK of prior
+                # custody, a fence/unavailable response, or a rehomed final-pass
+                # owner is a follow-on, not a batch landing).
+                if intake_evidence.batch_accepted and not intake_evidence.final_pass_owner_followed:
+                    record_upload_outcome('batch')
                 return batch_response
             sequencer_registration_started = False
 
@@ -973,6 +988,12 @@ async def sync_local_files_v2(
         else:
             admission_reason = legacy_dark.LegacyAdmissionReason.BATCH_NOT_ENABLED
         legacy_dark.record_legacy_admission(admission_reason, legacy_mode)
+        legacy_outcome = legacy_landing_outcome(intake_evidence, candidate_batch_enabled=candidate_policy.batch_enabled)
+        if legacy_outcome is not None:
+            # Fresh routing decisions only: an upload following a durable owner
+            # (legacy record owner, prior content receipt, final-pass owner) has
+            # no fresh decision and stays outside the closed outcome set.
+            record_upload_outcome(legacy_outcome)
 
         # Create Redis job — total_segments=0 until VAD completes in background
         await run_blocking(
@@ -2744,6 +2765,7 @@ async def _run_sync_job_body(request: Request, task_retry_count: int, attempt_st
 
 
 @sync_attempt
+@with_batch_privacy_attempt
 async def _run_sync_job_attempt(request: Request, task_retry_count: int, attempt_state: dict):
     """Cloud Tasks handler: runs one sync job inside the request.
 

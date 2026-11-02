@@ -15,6 +15,7 @@ from utils.other.playback_cache import write_once, cached_manifest
 from utils.other.playback_identity import playback_manifest_recovery_enabled
 from config.repeat_work import playback_on_demand
 from utils.other.audio_archive_metrics import ARCHIVE_OBJECTS, ARCHIVE_BYTES, PCM_WRITES_AVOIDED
+from utils.other.audio_raw_read_metrics import log_failure
 from utils.other.raw_audio_read import (
     list_packs,
     read_pack,
@@ -879,7 +880,19 @@ def reconcile_audio_chunk_prefix(
         require_spans=require_spans,
         bucket=get_private_cloud_sync_bucket(),
         list_chunks=list_audio_chunks,
+        bucket_for=chunk_source_bucket,
     )
+
+
+def chunk_source_bucket(name: Optional[str]) -> Any:
+    """Bucket holding a listed chunk: entries without a ``bucket`` key live in the private bucket."""
+    return _get_storage_client().bucket(name or private_cloud_sync_bucket)
+
+
+def _chunk_bucket_names(primary: str) -> List[str]:
+    """``primary`` first, then every other bucket a chunk path can live in."""
+    others = (private_cloud_sync_bucket, os.getenv('BUCKET_AUDIO_DERIVED', '').strip())
+    return [primary, *dict.fromkeys(name for name in others if name and name != primary)]
 
 
 def upload_audio_chunks_batch(
@@ -944,11 +957,13 @@ def upload_audio_chunks_batch(
         data_protection_level if data_protection_level is not None else users_db.get_data_protection_level(uid)
     )
 
-    bucket = _get_storage_client().bucket(private_cloud_sync_bucket)
+    private_bucket = _get_storage_client().bucket(private_cloud_sync_bucket)
+    bucket_name = audio_archive.regional_chunk_bucket(uid, private_cloud_sync_bucket)
+    bucket = private_bucket if bucket_name == private_cloud_sync_bucket else _get_storage_client().bucket(bucket_name)
 
     if audio_archive.admitted(uid, 'STOP_PCM') and audio_archive.admitted(uid, 'READ'):
         try:
-            raw_paths = verified_pcm_paths(bucket, uid, conversation_id, sorted_chunks, sample_rate)
+            raw_paths = verified_pcm_paths(private_bucket, uid, conversation_id, sorted_chunks, sample_rate)
             if raw_paths:
                 _archive_pusher_capture(sorted_chunks, uid, conversation_id, protection_level, sample_rate)
                 PCM_WRITES_AVOIDED.inc()
@@ -1009,17 +1024,23 @@ def upload_audio_chunks_batch(
                 if span is not None:
                     payload = b''.join(chunk['data'] for chunk in sorted_chunks)
                     payload_digest = hashlib.sha256(payload)
-                    try:
-                        exists = blob.exists()
-                    except Exception as error:
-                        # A probe that errors cannot prove the object absent; treat it
-                        # exactly like an existing blob we cannot read — fail closed
-                        # rather than open the blob for write over unknown bytes.
-                        raise ValueError(f'v2 audio blob existence check failed at {path}') from error
-                    if exists:
-                        identical = False
+                    # The same key may already be committed in the other chunk
+                    # bucket (a replay across a regional ramp step): readers
+                    # resolve one object per path, so check every bucket.
+                    committed = False
+                    for candidate in _chunk_bucket_names(bucket_name):
+                        probe = blob if candidate == bucket_name else _get_storage_client().bucket(candidate).blob(path)
                         try:
-                            existing_bytes = blob.download_as_bytes()
+                            exists = probe.exists()
+                        except Exception as error:
+                            # A probe that errors cannot prove the object absent; treat it
+                            # exactly like an existing blob we cannot read — fail closed
+                            # rather than open the blob for write over unknown bytes.
+                            raise ValueError(f'v2 audio blob existence check failed at {path}') from error
+                        if not exists:
+                            continue
+                        try:
+                            existing_bytes = probe.download_as_bytes()
                             existing_plain = (
                                 encryption.decrypt_audio_file(existing_bytes, uid)
                                 if protection_level == 'enhanced'
@@ -1033,11 +1054,14 @@ def upload_audio_chunks_batch(
                             # An existing blob we cannot read cannot be proven
                             # identical; fail closed rather than overwrite it.
                             raise ValueError(f'v2 audio blob collision at {path}: existing blob unreadable') from error
-                        if identical:
-                            # Identical retry: never overwrite or double-write.
-                            # Exit the playback gate before the optional archive.
-                            break
-                        raise AudioChunkContentConflict(f'v2 audio blob content conflict at {path}')
+                        if not identical:
+                            raise AudioChunkContentConflict(f'v2 audio blob content conflict at {path}')
+                        # Keep scanning: a divergent copy in another bucket must still conflict.
+                        committed = True
+                    if committed:
+                        # Identical retry: never overwrite or double-write.
+                        # Exit the playback gate before the optional archive.
+                        break
                     blob.metadata = {
                         **(blob.metadata or {}),
                         **span_blob_metadata(span),
@@ -1071,9 +1095,14 @@ def delete_audio_chunks(uid: str, conversation_id: str, timestamps: List[float])
     """Delete audio chunks after they've been merged.
 
     Handles both single-chunk blobs (per-timestamp lookup) and batch blobs
-    (listed and matched by start timestamp).
+    (listed and matched by start timestamp). Sweeps every chunk bucket: a
+    regional-cohort owner's batches live in BUCKET_AUDIO_DERIVED.
     """
-    bucket = _get_storage_client().bucket(private_cloud_sync_bucket)
+    for name in _chunk_bucket_names(private_cloud_sync_bucket):
+        _delete_audio_chunks_in(_get_storage_client().bucket(name), uid, conversation_id, timestamps)
+
+
+def _delete_audio_chunks_in(bucket: Any, uid: str, conversation_id: str, timestamps: List[float]) -> None:
     deleted_batch_paths: set[str] = set()
 
     for timestamp in timestamps:
@@ -1343,23 +1372,17 @@ def download_and_decode_chunk_blob(
             on_failure('missing_blob')
         return None
 
+    failure_result = 'decrypt_error' if encrypted else 'decode_error'
     try:
-        if encrypted:
-            raw_data = encryption.decrypt_audio_file(chunk_data, uid)
-        else:
-            raw_data = chunk_data
-
-        if is_opus:
-            pcm_data = decode_opus_to_pcm(raw_data, sample_rate=sample_rate)
-            del raw_data
-        else:
-            pcm_data = raw_data
-
+        raw_data = encryption.decrypt_audio_file(chunk_data, uid) if encrypted else chunk_data
+        failure_result = 'decode_error'
+        pcm_data = decode_opus_to_pcm(raw_data, sample_rate=sample_rate) if is_opus else raw_data
+        del raw_data
         return _align_pcm16_frames(pcm_data, path)
-    except Exception as e:
+    except Exception:
         if on_failure:
             on_failure('decode_failed')
-        logger.warning(f"Failed to decode/decrypt {path}: {e}")
+        log_failure(failure_result, 'opus' if is_opus else 'pcm16')
         return None
 
 
