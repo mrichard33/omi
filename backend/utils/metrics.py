@@ -16,6 +16,7 @@ from prometheus_client import (
     generate_latest,
     start_http_server,
 )
+from utils.conversations import phase_shadow as _phase_shadow  # pyright: ignore[reportUnusedImport]  # noqa: F401
 from utils.episodes import metrics as _episode_metrics  # pyright: ignore[reportUnusedImport]  # noqa: F401
 from utils.sync import absorption_metrics as _absorption_metrics  # pyright: ignore[reportUnusedImport]  # noqa: F401
 
@@ -688,8 +689,22 @@ LISTEN_FINALIZATION_OLDEST_NONTERMINAL_AGE_SECONDS = Gauge(
 
 LISTEN_FINALIZATION_OLDEST_BLOCKED_BYOK_AGE_SECONDS = Gauge(
     'listen_finalization_oldest_blocked_byok_age_seconds',
-    'Global age of the oldest listen finalization job waiting for user BYOK credentials; '
-    'replicated per process, aggregate with max() not sum(); informational only',
+    'Global age since created_at of the oldest BYOK-blocked job; no blocked-status entry timestamp is recorded; '
+    'replicated per process, aggregate with max() not sum()',
+    registry=None,
+)
+
+LISTEN_FINALIZATION_OLDEST_DEAD_LETTER_AGE_SECONDS = Gauge(
+    'listen_finalization_oldest_dead_letter_age_seconds',
+    'Global time in dead_letter for the oldest terminal_at timestamp; '
+    'replicated per process, aggregate with max() not sum()',
+    registry=None,
+)
+
+LISTEN_FINALIZATION_BYOK_SESSION_ABANDONED_LAST_24H = Gauge(
+    'listen_finalization_byok_session_abandoned_last_24h',
+    'Global COUNT of dead_letter jobs with byok_session_abandoned and terminal_at in the last 24 hours; '
+    'derived from committed job documents, aggregate with max() not sum()',
     registry=None,
 )
 
@@ -712,6 +727,8 @@ def register_listen_finalization_summary_metrics() -> None:
         for metric in (
             LISTEN_FINALIZATION_OLDEST_NONTERMINAL_AGE_SECONDS,
             LISTEN_FINALIZATION_OLDEST_BLOCKED_BYOK_AGE_SECONDS,
+            LISTEN_FINALIZATION_OLDEST_DEAD_LETTER_AGE_SECONDS,
+            LISTEN_FINALIZATION_BYOK_SESSION_ABANDONED_LAST_24H,
             LISTEN_FINALIZATION_SUMMARY_LAST_SUCCESS_TIMESTAMP_SECONDS,
         ):
             REGISTRY.register(metric)
@@ -777,8 +794,8 @@ for _disposition in CANDIDATE_INTEGRATION_SWEEP_DISPOSITIONS:
 LISTEN_FINALIZATION_JOB_STATUS = Gauge(
     'listen_finalization_jobs',
     'Global durable listen finalization job count by non-success status; replicated '
-    'per process, aggregate with max() not sum(). dead_letter is cumulative and only '
-    'ever rises: it is an all-time terminal total, not a backlog',
+    'per process, aggregate with max() not sum(). dead_letter is terminal stock '
+    'across every generation from a status COUNT; other statuses use projection shards',
     ['status'],
 )
 
@@ -810,6 +827,40 @@ LISTEN_FINALIZATION_DEAD_LETTER_TOTAL = Counter(
     'Listen finalization jobs terminalized after their final Cloud Tasks attempt',
 )
 
+FINALIZATION_DEAD_LETTER_CAUSES = (  # closed set; mirror smart_merge._INCOMPLETE_CODES (no import: keep metrics light)
+    'donor_receipt_revision_changed',
+    'refresh_lease_busy',
+    'survivor_changed_before_refresh',
+    'refresh_not_persisted',
+    'survivor_vector_failed',
+    'refresh_completion_fenced',
+    'processing_checkpoint_fenced',
+    'donor_cleanup_deferred',
+    'flatten_cleanup_source_invalid',
+    'processing_failed',
+    'worker_failed',
+    'invalid_job',
+    'recovery_structure_unavailable',
+    'final_attempt_failed',
+    'unknown',
+)
+OMI_CONVERSATION_FINALIZATION_DEAD_LETTER_TOTAL = Counter(
+    'omi_conversation_finalization_dead_letter_total',
+    'Terminal listen finalization jobs by bounded cause class',
+    ['cause'],
+)
+OMI_CONVERSATION_FINALIZATION_BUDGET_REQUEUES_TOTAL = Counter(
+    'omi_conversation_finalization_budget_requeues_total',
+    'Attempt-budget exhaustion delayed requeues granted, by bounded cause class',
+    ['cause'],
+)
+
+# Zero-initialize the closed cause set so an idle process exports every
+# series, distinguishing no dead-letters yet from a missing scrape target.
+for _cause in FINALIZATION_DEAD_LETTER_CAUSES:
+    OMI_CONVERSATION_FINALIZATION_DEAD_LETTER_TOTAL.labels(cause=_cause)
+    OMI_CONVERSATION_FINALIZATION_BUDGET_REQUEUES_TOTAL.labels(cause=_cause)
+
 LISTEN_FINALIZATION_STALE_PROCESSING_RECONCILIATIONS_TOTAL = Counter(
     'listen_finalization_stale_processing_reconciliations_total',
     'Stale bare-processing conversation reconciliation outcomes by the crash-orphan sweep',
@@ -820,6 +871,11 @@ LISTEN_FINALIZATION_STALE_PROCESSING_RECONCILIATIONS_TOTAL = Counter(
 # series, distinguishing no stranded rows from a missing scrape target.
 for _outcome in ('completed', 'migrated', 'skipped', 'error'):
     LISTEN_FINALIZATION_STALE_PROCESSING_RECONCILIATIONS_TOTAL.labels(outcome=_outcome)
+
+LISTEN_FINALIZATION_BYOK_SESSION_ABANDONED_TOTAL = Counter(
+    'listen_finalization_byok_session_abandoned_total',
+    'Best-effort post-commit BYOK abandonment signal; use the document-derived last_24h gauge for alerting',
+)
 
 LISTEN_FINALIZATION_BYOK_ABANDONMENTS_TOTAL = Counter(
     'listen_finalization_byok_abandonments_total',
