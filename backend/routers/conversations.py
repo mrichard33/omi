@@ -31,6 +31,8 @@ from database.legal_holds import destructive_operation_gate
 from utils.other.account_gate_http import account_gate_busy_http_exception
 from database.firestore_read_metrics import FirestoreReadSite
 from utils.list_version_check import ListVersionCheck
+from config.episodes import home_transcription_presentation_gate_enabled
+from utils.conversations import transcribing_hold
 from utils.conversations.list_filters import aware_datetime, reject_oversized_filter
 from database.vector_db import (
     delete_action_item_vector,
@@ -126,6 +128,7 @@ from utils.conversations.search import (
 )
 from utils.llm.conversation_processing import SummaryProviderError, generate_summary_with_prompt
 from utils.speaker_assignment_teaching import commit_manual_assignment
+from utils.ignored_voice_markers import record_exclusion_markers, retire_exclusion_markers
 from utils.speaker_learning_jobs import schedule_reprocessed_learning
 from utils.other import endpoints as auth
 from utils.other.storage import get_conversation_recording_if_exists
@@ -995,7 +998,9 @@ def get_conversations(
     from utils.episodes import home_membership
 
     held_request = home_membership.held_for(request)
-    version_check = ListVersionCheck.start(None if held_request else request, uid, 'conversations')
+    # Reader-enforced expiry changes the body without a writer-version bump.
+    time_dependent = home_transcription_presentation_gate_enabled()
+    version_check = ListVersionCheck.start(None if held_request or time_dependent else request, uid, 'conversations')
     if version_check.not_modified is not None:
         return version_check.not_modified
 
@@ -1016,6 +1021,7 @@ def get_conversations(
         starred=starred,
         budget=budget,
         list_fields_only=True,
+        presentation=True,
     )
 
     conversations = home_membership.project_list(
@@ -1028,6 +1034,7 @@ def get_conversations(
         ),
     )
     _heal_locked_conversations_if_eligible(uid, conversations)
+    conversations = [transcribing_hold.project(row) for row in conversations]
     redact_conversations_for_list(conversations)
     if budget.truncated and response is not None:
         response.headers[OMI_LIST_TRUNCATED_HEADER] = OMI_LIST_TRUNCATED_VALUE
@@ -1037,7 +1044,7 @@ def get_conversations(
     version_check.finish(
         response,
         truncated=budget.truncated,
-        cacheable=not held_request and not any(row.get('is_locked') for row in conversations),
+        cacheable=not held_request and not time_dependent and not any(row.get('is_locked') for row in conversations),
     )
     return conversations
 
@@ -1142,7 +1149,7 @@ def get_conversation_by_id(
     show_discarded = True if include_discarded is None else include_discarded
     if hidden_from_default_detail(conversation) and include_discarded is not True:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    if not conversations_db.is_visible_conversation(conversation, include_discarded=show_discarded):
+    if not conversations_db.is_visible_conversation(conversation, include_discarded=show_discarded, presentation=True):
         raise HTTPException(status_code=404, detail="Conversation not found")
     # A desktop conversation stored raw (deferred) for a freemium/Neo user is
     # enriched on first open. Other conversations are returned unchanged.
@@ -1160,7 +1167,7 @@ def get_conversation_by_id(
             response.headers['X-Translation-Status'] = translation_status
             if next_cursor is not None:
                 response.headers['X-Translation-Cursor'] = next_cursor
-    return conversation
+    return transcribing_hold.project(conversation)
 
 
 @router.patch(
@@ -1612,15 +1619,26 @@ def set_action_item_status(
             action_item = action_items[action_item_idx]
             new_completed_status = data.values[i]
 
-            for ai in description_to_items.get(action_item.description, []):
-                if not action_items_db.mark_action_item_completed(uid, ai['id'], bool(new_completed_status)):
+            # A row with a durable target_task_id links exactly one standalone
+            # task; mirroring by description would flip every sibling that
+            # shares the wording. Rows without the link keep the legacy
+            # description-wide mirror for released clients.
+            linked_task_ids = [action_item.target_task_id] if action_item.target_task_id else None
+            if linked_task_ids is None:
+                linked_task_ids = [ai['id'] for ai in description_to_items.get(action_item.description, [])]
+            id_to_item = {ai['id']: ai for ai in existing_items}
+            for ai_id in linked_task_ids:
+                ai = id_to_item.get(ai_id) or action_items_db.get_action_item(uid, ai_id)
+                if ai is None:
                     continue
-                updated_item = action_items_db.get_action_item(uid, ai['id'])
+                if not action_items_db.mark_action_item_completed(uid, ai_id, bool(new_completed_status)):
+                    continue
+                updated_item = action_items_db.get_action_item(uid, ai_id)
                 if not updated_item:
                     continue
                 sync_action_item_reminder(
                     user_id=uid,
-                    action_item_id=ai['id'],
+                    action_item_id=ai_id,
                     description=updated_item.get('description', ''),
                     completed=bool(updated_item.get('completed')),
                     due_at=updated_item.get('due_at'),
@@ -1721,11 +1739,12 @@ def _assign_manual_speaker(
     use_for_speech_training=True,
     time_range=None,
 ):
-    if assign_type not in {'is_user', 'person_id'}:
+    if assign_type not in {'is_user', 'person_id', 'not_a_person'}:
         raise HTTPException(status_code=400, detail='Invalid assign type')
     value = None if value == 'null' else value
     is_user = assign_type == 'is_user' and str(value).lower() in {'true', '1'}
     person_id = value if assign_type == 'person_id' else None
+    excluded = assign_type == 'not_a_person'
     try:
         raw, resolved, removed, before = commit_manual_assignment(
             uid,
@@ -1735,8 +1754,12 @@ def _assign_manual_speaker(
             segment_ids=segment_ids,
             speaker_id=speaker_id,
             segment_index=segment_index,
-            use_for_speech_training=use_for_speech_training,
-            rejection={'kind': 'not_me', 'person_id': None} if assign_type == 'is_user' and not is_user else None,
+            use_for_speech_training=False if excluded else use_for_speech_training,
+            rejection=(
+                {'kind': 'not_a_person', 'person_id': None}
+                if excluded
+                else {'kind': 'not_me', 'person_id': None} if assign_type == 'is_user' and not is_user else None
+            ),
             background_tasks=background_tasks,
             **({"time_range": time_range} if time_range is not None else {}),
         )
@@ -1748,6 +1771,22 @@ def _assign_manual_speaker(
         raise HTTPException(status_code=409, detail=str(error)) from error
     conversation = deserialize_conversation(raw)
     resolved_conversation_id = raw.get('id') or conversation_id
+    if excluded:
+        # Live-sheet exclusions write the same ignored-voice marker the reject
+        # route and tag-prompt answers write, so the voice shows under
+        # Settings > Ignored Voices and can be restored from there.
+        record_exclusion_markers(uid, resolved_conversation_id, raw, resolved, speaker_id=speaker_id)
+    else:
+        # Every other committed decision must reconcile the ignored-voice
+        # marker, not only person/user positives: the supported
+        # assign_type=is_user&value=false path commits a whole-voice not_me
+        # rejection that supersedes an earlier media exclusion (person_id and
+        # is_user are both false there, which the old `elif` skipped). The
+        # shared helper distinguishes rejection kinds itself — range-only
+        # (segment_only) entries keep the marker restorable and a
+        # still-winning not_a_person keeps it — so route every non-exclusion
+        # assignment through it.
+        retire_exclusion_markers(uid, resolved_conversation_id, raw, resolved, speaker_id=speaker_id)
     _drop_display_projection(conversation)
     _emit_speaker_identity_confirmed(
         uid=uid,
@@ -2054,7 +2093,10 @@ def set_conversation_starred(conversation_id: str, starred: bool, uid: str = Dep
     logger.info(f'update_conversation_starred {conversation_id} {starred} {uid}')
     _get_valid_conversation_by_id(uid, conversation_id)
     conversations_db.set_conversation_starred(uid, conversation_id, starred)
-    return {"status": "Ok", "conversation": _get_valid_conversation_by_id(uid, conversation_id)}
+    return {
+        "status": "Ok",
+        "conversation": transcribing_hold.project(_get_valid_conversation_by_id(uid, conversation_id)),
+    }
 
 
 @router.get(
@@ -2082,7 +2124,7 @@ def get_shared_conversation_by_id(conversation_id: str):
     visibility = conversation.get('visibility', ConversationVisibility.private)
     if not visibility or visibility == ConversationVisibility.private:
         raise HTTPException(status_code=404, detail="Conversation is private")
-    conversation = deserialize_conversation(conversation)
+    conversation = deserialize_conversation(transcribing_hold.project(conversation))
 
     # Fetch people data for speaker names
     person_ids = conversation.get_person_ids()
@@ -2163,6 +2205,7 @@ async def _search_exact_conversation_reference(
     ]
     if exact_page != 1:
         conversations = []
+    conversations = [transcribing_hold.project(row) for row in conversations]
     redact_conversations_for_list(conversations)
     return {
         'items': conversations[:exact_per_page],
@@ -2212,6 +2255,7 @@ async def _browse_speaker_conversations(
         raise HTTPException(
             status_code=503, detail="Saved conversation access could not be restored. Please retry."
         ) from error
+    browse_results['items'] = [transcribing_hold.project(row) for row in browse_results['items']]
     redact_conversations_for_list(browse_results['items'])
     finish_list_budget(response, budget)
     return browse_results
@@ -2331,6 +2375,7 @@ async def search_conversations_endpoint(
     # clears segments on locked rows.
     if (search_request.query or '').strip():
         conversations = attach_match_snippets_to_conversations(conversations, search_request.query)
+    conversations = [transcribing_hold.project(row) for row in conversations]
     redact_conversations_for_list(conversations)
     search_results['items'] = conversations
     # Recompute total_pages from the effective (clamped) pagination the search actually ran with, not the

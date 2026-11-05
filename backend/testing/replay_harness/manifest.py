@@ -12,13 +12,14 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 from typing import Any
 
 SCHEMA_VERSION = 1
-STAGES = ('capture_upload', 'admission', 'worker', 'projection', 'final_pass', 'titling', 'episodes')
-IMPLEMENTED_STAGES = ('capture_upload', 'admission', 'titling')
+STAGES = ('capture_upload', 'admission', 'worker', 'projection', 'final_pass', 'titling', 'episodes', 'privacy_cache')
+IMPLEMENTED_STAGES = ('capture_upload', 'admission', 'titling', 'privacy_cache')
 _STAGE_SCHEMA = {
     'type': 'object',
     'additionalProperties': False,
@@ -45,7 +46,23 @@ JSON_SCHEMA = {
     'additionalProperties': False,
     'required': ['schema_version', 'id', 'tier', 'scrub', 'seed_blob_sha256', 'created', 'prod_evidence', 'stages'],
     'allOf': [
-        {'if': {'properties': {'tier': {'const': 'S'}}}, 'then': {'properties': {'stages': {'minProperties': 1}}}}
+        {'if': {'properties': {'tier': {'const': 'S'}}}, 'then': {'properties': {'stages': {'minProperties': 1}}}},
+        {
+            'if': {
+                'required': ['gate'],
+                'properties': {'gate': {'required': ['fixed_by_ref'], 'properties': {'fixed_by_ref': {'const': True}}}},
+            },
+            'then': {
+                'properties': {
+                    'stages': {
+                        'anyOf': [
+                            {'required': [stage], 'properties': {stage: {'required': ['expect_stop_stage']}}}
+                            for stage in IMPLEMENTED_STAGES
+                        ]
+                    }
+                }
+            },
+        },
     ],
     'properties': {
         'schema_version': {'const': SCHEMA_VERSION},
@@ -59,6 +76,11 @@ JSON_SCHEMA = {
         },
         'created': {'type': 'string', 'format': 'date-time'},
         'prod_evidence': {'type': 'object'},
+        'gate': {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {'fixed_by_ref': {'type': 'boolean'}},
+        },
         'expect': {'const': 'pass'},
         'notes': {'type': 'string', 'minLength': 1},
         'stages': {
@@ -68,7 +90,18 @@ JSON_SCHEMA = {
             'properties': {
                 stage: {
                     **_STAGE_SCHEMA,
-                    'properties': {**_STAGE_SCHEMA['properties'], 'expect_stop_stage': {'const': stage}},
+                    'properties': {
+                        **_STAGE_SCHEMA['properties'],
+                        'expect_stop_stage': {'const': stage},
+                        **(
+                            {
+                                'bound_s': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 86400},
+                                'min_verified_transitions': {'type': 'integer', 'enum': [0, 1000], 'default': 1000},
+                            }
+                            if stage == 'privacy_cache'
+                            else {}
+                        ),
+                    },
                 }
                 for stage in IMPLEMENTED_STAGES
             },
@@ -85,14 +118,15 @@ class Manifest:
     seed_blob_sha256: list[str]
     created: str
     prod_evidence: dict[str, Any]
-    stages: dict[str, dict[str, str]]
+    stages: dict[str, dict[str, Any]]
     schema_version: int = SCHEMA_VERSION
     expect: str | None = None
     notes: str | None = None
+    gate: dict[str, bool] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
-        for optional in ('expect', 'notes'):
+        for optional in ('expect', 'notes', 'gate'):
             if value[optional] is None:
                 del value[optional]
         return value
@@ -130,6 +164,14 @@ def validate_manifest(value: Any) -> Manifest:
         raise ValueError('invalid top-level expectation')
     if 'notes' in value and (not isinstance(value['notes'], str) or not value['notes'].strip()):
         raise ValueError('notes must be nonempty text')
+    if 'gate' in value:
+        gate = value['gate']
+        if (
+            not isinstance(gate, dict)
+            or gate.keys() - {'fixed_by_ref'}
+            or any(type(flag) is not bool for flag in gate.values())
+        ):
+            raise ValueError('invalid gate block')
     stages = value['stages']
     if not isinstance(stages, dict) or (not stages and value['tier'] != 'C') or stages.keys() - set(STAGES):
         raise ValueError('stages must select known boundaries')
@@ -138,6 +180,16 @@ def validate_manifest(value: Any) -> Manifest:
     for stage, expectation in stages.items():
         if not isinstance(expectation, dict):
             raise ValueError('stage expectation must be an object')
+        if stage == 'privacy_cache' and 'min_verified_transitions' in expectation:
+            minimum = expectation['min_verified_transitions']
+            if type(minimum) is not int or minimum not in (0, 1000):
+                raise ValueError('privacy min_verified_transitions must be 0 (smoke) or 1000 (qualification)')
+            expectation = {key: value for key, value in expectation.items() if key != 'min_verified_transitions'}
+        if stage == 'privacy_cache' and 'bound_s' in expectation:
+            bound = expectation['bound_s']
+            if type(bound) not in (int, float) or not math.isfinite(bound) or not 0 < bound <= 86400:
+                raise ValueError('privacy bound_s must be finite and in (0, 86400]')
+            expectation = {key: value for key, value in expectation.items() if key != 'bound_s'}
         if expectation == {'expect': 'pass'}:
             continue
         if set(expectation) != {'expect_stop_stage', 'expect_reason'} or expectation['expect_stop_stage'] != stage:
@@ -151,6 +203,8 @@ def validate_manifest(value: Any) -> Manifest:
             raise ValueError('invalid expected reason regex') from error
         if value.get('expect') == 'pass':
             raise ValueError('pass case cannot expect a stop')
+    if value.get('gate', {}).get('fixed_by_ref') and not any('expect_stop_stage' in e for e in stages.values()):
+        raise ValueError('fixed_by_ref requires an expected failing stop')
     return Manifest(**value)
 
 

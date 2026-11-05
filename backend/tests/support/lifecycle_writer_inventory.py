@@ -66,7 +66,7 @@ FIELD_SITES = {
         ('ProjectionStore.complete.commit', 'projection_state', "'ready'", ('projection_state',)),
         ('ProjectionStore.complete.commit', 'state', "'ready'", ('conversation_id', 'created', 'state')),
         ('ProjectionStore.complete_partial.commit', 'state', "'ready'", ('conversation_id', 'created', 'state')),
-        ('ProjectionStore.hold_for_quarantine.commit', 'projection_state', "'quarantine_held'", ('projection_state',)),
+        ('ProjectionStore.hold_for_quarantine.commit', 'projection_state', "'ready'", ('projection_state',)),
         (
             'ProjectionStore.mark_enrichment.commit',
             'state',
@@ -374,6 +374,12 @@ FIELD_SITES = {
             ('resolution_reason', 'status', 'updated_at'),
         ),
         (
+            'claim_candidate_integration_dispatch.apply',
+            'status',
+            "'suppressed'",
+            ('resolution_reason', 'status', 'updated_at'),
+        ),
+        (
             'complete_candidate_integration_dispatch.apply',
             'status',
             "'completed'",
@@ -417,6 +423,12 @@ FIELD_SITES = {
             'status',
             "'dead_letter'",
             ('dead_letter_reason', 'last_error_text', 'lease_token', 'status', 'updated_at'),
+        ),
+        (
+            'note_candidate_integration_provider_attempt.apply',
+            'status',
+            "'suppressed'",
+            ('resolution_reason', 'status', 'updated_at'),
         ),
     ],
     'database/candidates.py': [
@@ -504,7 +516,10 @@ FIELD_SITES = {
             '_abandon_byok_finalization_job_txn',
             'finalization_status',
             "'dead_letter'",
-            ('finalization_status', 'status'),
+            (
+                'finalization_status',
+                'status',
+            ),
         ),
         ('_abandon_byok_finalization_job_txn', 'status', "'completed'", ('finalization_status', 'status')),
         (
@@ -527,8 +542,11 @@ FIELD_SITES = {
         (
             '_byok_abandonment',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('conversation_outcome', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'conversation_outcome',
+                'status',
+            ),
         ),
         (
             '_claim_finalization_job_txn',
@@ -565,7 +583,14 @@ FIELD_SITES = {
             '_claim_finalization_replay_txn',
             'status',
             "'missing'",
-            ('created', 'dispatch_generation', 'fanout_key', 'job_id', 'requires_byok', 'status'),
+            (
+                'created',
+                'dispatch_generation',
+                'fanout_key',
+                'job_id',
+                'requires_byok',
+                'status',
+            ),
         ),
         (
             '_claim_finalization_replay_txn',
@@ -588,37 +613,102 @@ FIELD_SITES = {
         (
             '_claim_result',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('attempt_count', 'created_at', 'lease_epoch', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'attempt_count',
+                'created_at',
+                'lease_epoch',
+                'status',
+            ),
         ),
+        (
+            '_complete_server_batch_capture_txn',
+            'home_transcription_deadline_at',
+            'now + timedelta(seconds=home_transcription_deadline_seconds())',
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        (
+            '_complete_server_batch_capture_txn',
+            'home_transcription_pending_at',
+            'now',
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        # Zero-preview server-batch transaction: job terminal, conversation
+        # terminal/relevance update, and the relevance input snapshot.
+        (
+            '_complete_server_batch_capture_txn',
+            'status',
+            "'completed'",
+            (
+                'completed_at',
+                'fanout_completed_at',
+                'fanout_key',
+                'fanout_lease_epoch',
+                'fanout_status',
+                'finalization_outcome',
+                'last_failure_code',
+                'lease_expires_at',
+                'reconcile_after_at',
+                'status',
+                'terminal_outcome',
+                'updated_at',
+            ),
+        ),
+        (
+            '_complete_server_batch_capture_txn',
+            'status',
+            "'completed'",
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        ('_complete_server_batch_capture_txn', 'status', "'completed'", ('status',)),
         (
             '_create_or_get_finalization_intent_txn',
             'finalization_status',
             "job.get('status', 'queued')",
-            ('finalization_job_id', 'finalization_revision', 'finalization_status', 'status'),
+            (
+                'finalization_job_id',
+                'finalization_revision',
+                'finalization_status',
+                'status',
+            ),
         ),
         (
             '_create_or_get_finalization_intent_txn',
             'finalization_status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('finalization_job_id', 'finalization_revision', 'finalization_status', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'finalization_job_id',
+                'finalization_revision',
+                'finalization_status',
+                'status',
+            ),
         ),
         (
             '_create_or_get_finalization_intent_txn',
             'status',
             "'processing'",
-            ('finalization_job_id', 'finalization_revision', 'finalization_status', 'status'),
+            (
+                'finalization_job_id',
+                'finalization_revision',
+                'finalization_status',
+                'status',
+            ),
         ),
         (
             '_create_or_get_finalization_intent_txn',
             'status',
             "'processing'",
-            ('finalization_job_id', 'finalization_revision', 'finalization_status', 'status'),
+            (
+                'finalization_job_id',
+                'finalization_revision',
+                'finalization_status',
+                'status',
+            ),
         ),
         (
             '_create_or_get_finalization_intent_txn',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
             (
                 'attempt_count',
                 'client_platform',
@@ -678,8 +768,11 @@ FIELD_SITES = {
         (
             '_fanout_claim',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('fanout_key', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'fanout_key',
+                'status',
+            ),
         ),
         (
             '_fenced_finalization_update',
@@ -719,7 +812,14 @@ FIELD_SITES = {
             '_intent_from_job',
             'status',
             "str(data.get('status') or 'queued')",
-            ('created', 'dispatch_generation', 'fanout_key', 'job_id', 'requires_byok', 'status'),
+            (
+                'created',
+                'dispatch_generation',
+                'fanout_key',
+                'job_id',
+                'requires_byok',
+                'status',
+            ),
         ),
         (
             '_mark_finalization_completed_txn',
@@ -739,19 +839,37 @@ FIELD_SITES = {
             '_mark_finalization_retryable_txn',
             'status',
             "'queued'",
-            ('attempt_count', 'last_failure_code', 'lease_expires_at', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'attempt_count',
+                'last_failure_code',
+                'lease_expires_at',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         (
             '_no_finalization_intent',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('created', 'dispatch_generation', 'fanout_key', 'job_id', 'requires_byok', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'created',
+                'dispatch_generation',
+                'fanout_key',
+                'job_id',
+                'requires_byok',
+                'status',
+            ),
         ),
         (
             '_reacquire_deferred_processing_txn',
             'status',
             "'processing'",
-            ('deferred', 'processing_admitted_at', 'status'),
+            (
+                'deferred',
+                'processing_admitted_at',
+                'status',
+            ),
         ),
         ('_record_meeting_receipt_txn', 'finalization_status', "'completed'", ('finalization_status',)),
         (
@@ -783,18 +901,30 @@ FIELD_SITES = {
         ('_record_meeting_receipt_txn', 'status', "'identity_mismatch'", ('status',)),
         ('_record_meeting_receipt_txn', 'status', "'missing'", ('status',)),
         ('_record_meeting_receipt_txn', 'status', "'recorded'", ('job_id', 'status')),
-        ('_recover_deferred_processing_failure_txn', 'status', "'completed'", ('deferred', 'status')),
         (
             '_resume_blocked_byok_job_txn',
             'status',
             "'missing'",
-            ('created', 'dispatch_generation', 'fanout_key', 'job_id', 'requires_byok', 'status'),
+            (
+                'created',
+                'dispatch_generation',
+                'fanout_key',
+                'job_id',
+                'requires_byok',
+                'status',
+            ),
         ),
         (
             '_resume_blocked_byok_job_txn',
             'status',
             "'queued'",
-            ('byok_last_activity_at', 'last_byok_resume_at', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'byok_last_activity_at',
+                'last_byok_resume_at',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         ('_resume_blocked_byok_job_txn', 'status', "'queued'", ('status',)),
         (
@@ -811,24 +941,37 @@ FIELD_SITES = {
                 'updated_at',
             ),
         ),
-        ('get_finalization_job_summary', 'status', "'dead_letter'", ('after', 'before', 'failure_code', 'status')),
+        (
+            'get_finalization_job_summary',
+            'status',
+            "'dead_letter'",
+            (
+                'after',
+                'before',
+                'failure_code',
+                'status',
+            ),
+        ),
         ('get_finalization_job_summary', 'status', "'dead_letter'", ('status',)),
         (
             'get_finalization_job_summary',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
             ('status',),
         ),
         (
             'recover_stranded_byok_jobs',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
-            ('requires_byok', 'status'),
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
+            (
+                'requires_byok',
+                'status',
+            ),
         ),
         (
             'recover_stranded_byok_jobs',
             'status',
-            "status; literal aliases=[('status', ('blocked_byok', " "'queued'))]",
+            "status; literal aliases=[('status', ('blocked_byok', 'queued'))]",
             ('status',),
         ),
         ('scan_in_progress_conversations', 'status', "'in_progress'", ('finished_before', 'status')),
@@ -859,33 +1002,65 @@ FIELD_SITES = {
             'begin_recovery.commit',
             'status',
             "'dead_letter'",
-            ('failure_code', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'failure_code',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         (
             'begin_recovery.commit',
             'status',
             "'leased'",
-            ('lease_epoch', 'lease_expires_at', 'phase', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'lease_epoch',
+                'lease_expires_at',
+                'phase',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         (
             'begin_recovery.commit',
             'status',
             "'queued'",
-            ('dispatch_generation', 'lease_epoch', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'dispatch_generation',
+                'lease_epoch',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         (
             'claim.commit',
             'status',
             "'leased'",
-            ('attempt_count', 'lease_epoch', 'lease_expires_at', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'attempt_count',
+                'lease_epoch',
+                'lease_expires_at',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
         ('finish.commit', 'status', "'completed'", ('reconcile_after_at', 'status', 'updated_at')),
-        ('finish_recovery.commit', 'status', "'completed'", ('merge_job_id', 'status')),
+        ('finish_recovery.commit', 'status', "'completed'", ('merge_job_id', 'relevance_decision', 'status')),
+        ('finish_recovery.commit', 'status', "'completed'", ('status',)),
         (
             'finish_recovery.commit',
             'status',
             "'dead_letter'",
-            ('failure_code', 'phase', 'reconcile_after_at', 'status', 'updated_at'),
+            (
+                'failure_code',
+                'phase',
+                'reconcile_after_at',
+                'status',
+                'updated_at',
+            ),
         ),
     ],
     'database/conversation_mutations.py': [
@@ -963,9 +1138,24 @@ FIELD_SITES = {
             'dead_letter_conversation_updates',
             'finalization_status',
             "'dead_letter'",
-            ('discarded', 'finalization_status', 'status'),
+            (
+                'discarded',
+                'finalization_status',
+                'status',
+            ),
         ),
-        ('dead_letter_conversation_updates', 'status', "'completed'", ('discarded', 'finalization_status', 'status')),
+        (
+            'dead_letter_conversation_updates',
+            'status',
+            "'completed'",
+            (
+                'discarded',
+                'finalization_status',
+                'status',
+            ),
+        ),
+        ('fit_document_limit', 'status', "'failed'", ('status',)),
+        ('recover_deferred_processing_failure_txn', 'status', "'completed'", ('deferred', 'status')),
     ],
     'database/conversations.py': [
         ('claim_conversation_status._claim', 'status', 'claimed_status.value', ('status',)),
@@ -1529,6 +1719,7 @@ FIELD_SITES = {
         ),
     ],
     'database/record_audio.py': [
+        ('abandon_record_upload_session.commit', 'record_upload_sessions', 'sessions', ('record_upload_sessions',)),
         (
             'mark_record_upload_failed.commit',
             'record_audio_closed',
@@ -1594,6 +1785,9 @@ FIELD_SITES = {
         )
     ],
     'database/redis_db.py': [('set_migration_status', 'status', 'status', ('status',))],
+    'database/referral_campaign.py': [
+        ('claim_months.apply', 'status', "'active'", ('campaign_id', 'ends_at', 'starts_at', 'status'))
+    ],
     'database/review_memory_hygiene.py': [
         (
             'record_change.apply',
@@ -2370,6 +2564,22 @@ FIELD_SITES = {
             ),
         )
     ],
+    'utils/conversations/late_meeting_notes.py': [
+        (
+            'refresh_notes_after_evidence',
+            'status',
+            "'completed'",
+            (
+                '_notes_evidence_reprocess',
+                '_notes_identity',
+                'id',
+                'status',
+                'structured',
+                'sync_content_revision',
+                'transcript_segments',
+            ),
+        ),
+    ],
     'utils/conversations/minimum_derived.py': [
         ('waive_short_clip_summary_debt', 'summary_due_at', 'None', ('summary_due_at',))
     ],
@@ -2393,6 +2603,13 @@ FIELD_SITES = {
         ('prepare', 'summary_due_at', "data['summary_first_pending_at'] + deadline_seconds()", ('summary_due_at',)),
         ('prepare', 'summary_first_pending_at', 'current', ('summary_first_pending_at',)),
         ('prepare', 'summary_first_pending_at', 'current', ('summary_first_pending_at',)),
+        ('rearm_on_revision_change', 'summary_due_at', 'None', ('summary_blocked_reason', 'summary_due_at')),
+        (
+            'rearm_on_revision_change',
+            'summary_due_at',
+            'current + deadline_seconds()',
+            ('summary_blocked_reason', 'summary_due_at', 'summary_empty_failures', 'summary_empty_rearms'),
+        ),
     ],
     'utils/conversations/transcript_for_llm.py': [
         ('render_cluster_transcript', 'status', "'resolved' if resolution_available else 'unavailable'", ('status',))
@@ -2654,12 +2871,8 @@ FIELD_SITES = {
         ),
     ],
     'utils/episodes/home_read.py': [
-        (
-            'project_episode',
-            'status',
-            "status; literal aliases=[('status', ('failed', 'processing'))]",
-            ('emoji', 'finished_at', 'id', 'started_at', 'status', 'title'),
-        )
+        ('project_episode', 'status', "'completed'", ('status',)),
+        ('project_episode', 'status', 'status', ('emoji', 'finished_at', 'id', 'started_at', 'status', 'title')),
     ],
     'utils/episodes/service.py': [
         ('_close', 'status', "'dropped'", ('status',)),
@@ -3394,6 +3607,14 @@ FIELD_SITES = {
         ('PusherRecordBarrier.__init__', 'record_upload_failed', 'False', ('record_upload_failed',)),
         ('PusherRecordBarrier.hold_recording', 'record_upload_failed', 'True', ('record_upload_failed',)),
     ],
+    'utils/referral_campaign.py': [
+        (
+            'effective_subscription_payload',
+            'status',
+            "'active'",
+            ('cancel_at_period_end', 'current_period_end', 'current_period_start', 'plan', 'status'),
+        )
+    ],
     'utils/referrals.py': [
         (
             'referral_claim_patch',
@@ -3427,6 +3648,70 @@ FIELD_SITES = {
         ('_create_or_update_persona', 'status', "'approved'", ('status',)),
     ],
     'utils/stripe_webhook_ledger.py': [('dispatch_with_ledger', 'status', "'success'", ('status',))],
+    'utils/stt/diarization_eval.py': [
+        ('aggregate_scorecards', 'status', "'EVALUATED'", ('status',)),
+        ('aggregate_scorecards', 'status', "'NOT_EVALUATED'", ('status',)),
+        (
+            'model_reference_wer',
+            'status',
+            "'EVALUATED' if left else 'NOT_EVALUATED'",
+            (
+                'hypothesis_tokens',
+                'reference_kind',
+                'reference_tokens',
+                'status',
+                'wer',
+            ),
+        ),
+        (
+            'score_recording',
+            'status',
+            "'EVALUATED' if ref_tokens else 'NOT_EVALUATED'",
+            (
+                'aligned_word_coverage',
+                'aligned_words',
+                'hypothesis_tokens',
+                'reference_tokens',
+                'reference_words',
+                'status',
+            ),
+        ),
+        (
+            'score_recording',
+            'status',
+            "'EVALUATED' if total else 'NOT_EVALUATED'",
+            (
+                'abstention_words',
+                'anonymous_voices',
+                'end_to_end_alignment',
+                'engineering_gate',
+                'enrollment_excluded_words',
+                'false_owner_words',
+                'hungarian_oracle_diagnostic',
+                'ignored_words',
+                'input_words',
+                'model_reference_wer',
+                'named_word_coverage',
+                'named_words',
+                'owner_enrolled_accuracy',
+                'owner_enrolled_correct',
+                'owner_enrolled_coverage',
+                'owner_enrolled_words',
+                'predicted_voices',
+                'scored_word_coverage',
+                'speaker_count_within_one',
+                'status',
+                'strict_all_word_accuracy',
+                'strict_all_word_correct',
+                'truth_voices',
+                'words',
+                'wrong_name_false_owner_rate',
+                'wrong_name_words',
+            ),
+        ),
+        ('score_recording', 'status', "'NOT_EVALUATED'", ('reference_kind', 'status')),
+        ('score_recording', 'status', "'NOT_EVALUATED'", ('reference_words', 'status')),
+    ],
     'utils/stt/streaming.py': [('ProviderAccountRejection.__init__', 'status', 'status', ('status',))],
     'utils/subscription.py': [('reconcile_basic_plan_with_stripe', 'status', 'SubscriptionStatus.active', ('status',))],
     'utils/sync/assignment.py': [
@@ -3548,26 +3833,9 @@ FIELD_SITES = {
     ],
     'utils/task_intelligence/chat_first_e2e_fixture.py': [
         (
-            '_capture_payload',
-            'status',
-            "'completed'",
-            (
-                'created_at',
-                'data_protection_level',
-                'discarded',
-                'finished_at',
-                'id',
-                'source',
-                'started_at',
-                'status',
-                'structured',
-                'transcript_segments',
-            ),
-        ),
-        (
             '_goal_payload',
             'status',
-            'GoalStatus.focused.value if focused else ' 'GoalStatus.background.value',
+            'GoalStatus.focused.value if focused else GoalStatus.background.value',
             (
                 'account_generation',
                 'created_at',
@@ -3609,6 +3877,25 @@ FIELD_SITES = {
             ),
         ),
     ],
+    'utils/task_intelligence/chat_first_fixture_capture.py': [
+        (
+            'capture_payload',
+            'status',
+            "'completed'",
+            (
+                'created_at',
+                'data_protection_level',
+                'discarded',
+                'finished_at',
+                'id',
+                'source',
+                'started_at',
+                'status',
+                'structured',
+                'transcript_segments',
+            ),
+        ),
+    ],
     'utils/task_intelligence/conversation_capture.py': [
         (
             'canonical_fields',
@@ -3628,4 +3915,7 @@ FIELD_SITES = {
     ],
     'utils/workers/consumer.py': [('http_response', 'status', 'result.outcome.value', ('reason', 'status'))],
     'utils/workers/retry.py': [('retry_response', 'status', "'retry'", ('reason', 'status'))],
+    'utils/conversations/transcribing_hold.py': [
+        ('project', 'status', "'completed' if status == 'failed' else status", ('status', 'structured'))
+    ],
 }

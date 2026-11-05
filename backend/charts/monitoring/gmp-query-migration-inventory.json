@@ -106,7 +106,20 @@
       "scope": "normalized-omi-consumer-source-review"
     },
     {
-      "expression": "((max(time() - omi_batch_pipeline_metrics_refreshed_at_seconds{namespace=\"prod-omi-backend\"}) >= bool 120) or vector(1)) + (count(omi_batch_pipeline_oldest_age_seconds{namespace=\"prod-omi-backend\"} != omi_batch_pipeline_oldest_age_seconds{namespace=\"prod-omi-backend\"}) or vector(0)) + (count(omi_batch_pipeline_retry_age_seconds{namespace=\"prod-omi-backend\"} != omi_batch_pipeline_retry_age_seconds{namespace=\"prod-omi-backend\"}) or vector(0))",
+      "expression": "(sum(increase(omi_batch_pipeline_vendor_overflow_audio_seconds_total{project_id=\"based-hardware\",cluster=\"__run__\",job=\"omi-cloud-run-application-metrics\",namespace=~\"backend-sync|backend-sync-backfill|backend-integration\",route=\"modulate\"}[24h])) / 3600 * 0.06) or vector(0)",
+      "file": "alerts/backend-sync.json",
+      "issues": [],
+      "metrics": [
+        "omi_batch_pipeline_vendor_overflow_audio_seconds_total"
+      ],
+      "owner_title": "Batch Modulate overflow - spend over $50/day",
+      "owner_uid": "omi-batch-vendor-overflow-spend",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "((max(time() - omi_batch_pipeline_metrics_refreshed_at_seconds{namespace=\"prod-omi-backend\"}) >= bool 120) or vector(1)) + (count(count by (priority) (omi_batch_pipeline_oldest_age_seconds{namespace=\"prod-omi-backend\"} != omi_batch_pipeline_oldest_age_seconds{namespace=\"prod-omi-backend\"})) or vector(0)) + (count(count by (priority) (omi_batch_pipeline_retry_age_seconds{namespace=\"prod-omi-backend\"} != omi_batch_pipeline_retry_age_seconds{namespace=\"prod-omi-backend\"})) or vector(0))",
       "file": "alerts/batch-queue-safety.json",
       "issues": [],
       "metrics": [
@@ -1710,6 +1723,87 @@
       ],
       "owner_title": "New BYOK blocked state exceeds three days scan blind",
       "owner_uid": "omi-finalization-byok-dwell-page-blind",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "max((sum without(kind) (omi_finalization_pair_new_mismatch)) and topk by(leg) (1, omi_finalization_pair_observed_at_seconds) and (time() - omi_finalization_pair_observed_at_seconds < 2100))",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_finalization_pair_new_mismatch",
+        "omi_finalization_pair_observed_at_seconds"
+      ],
+      "owner_title": "Fresh lifecycle pair drift persists",
+      "owner_uid": "omi-finalization-pair-drift",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "max((sum without(kind) (omi_finalization_pair_mismatch)) and topk by(leg) (1, omi_finalization_pair_observed_at_seconds))",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_finalization_pair_mismatch",
+        "omi_finalization_pair_observed_at_seconds"
+      ],
+      "owner_title": "Lifecycle pair mismatch stock exceeds 25",
+      "owner_uid": "omi-finalization-pair-stock",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "(time() - min(max by(leg) (omi_finalization_pair_observed_at_seconds))) or vector(1e9)",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_finalization_pair_observed_at_seconds"
+      ],
+      "owner_title": "Lifecycle pair census stale",
+      "owner_uid": "omi-finalization-pair-drift-stale",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "max(omi_finalization_pair_scan_truncated and topk by(leg) (1, omi_finalization_pair_observed_at_seconds) and (time() - omi_finalization_pair_observed_at_seconds < 2100)) or vector(1)",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_finalization_pair_observed_at_seconds",
+        "omi_finalization_pair_scan_truncated"
+      ],
+      "owner_title": "Lifecycle pair census incomplete",
+      "owner_uid": "omi-finalization-pair-drift-blind",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "max(omi_enrichment_summary_repair_count)",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_enrichment_summary_repair_count"
+      ],
+      "owner_title": "Enrichment repair-fence stock exceeds 100",
+      "owner_uid": "omi-enrichment-summary-repair-stock",
+      "panel": null,
+      "pointer": "/data/0/model/expr",
+      "scope": "normalized-omi-consumer-source-review"
+    },
+    {
+      "expression": "(time() - max(omi_enrichment_summary_repair_observed_at_seconds)) or vector(1e9)",
+      "file": "alerts/resilience.json",
+      "issues": [],
+      "metrics": [
+        "omi_enrichment_summary_repair_observed_at_seconds"
+      ],
+      "owner_title": "Enrichment repair stock observer stale",
+      "owner_uid": "omi-enrichment-repair-stock-stale",
       "panel": null,
       "pointer": "/data/0/model/expr",
       "scope": "normalized-omi-consumer-source-review"
@@ -3616,7 +3710,7 @@
   ],
   "counts": {
     "explicit_bridge": 25,
-    "query_consumers": 239
+    "query_consumers": 246
   },
   "schema_version": 1,
   "source": "repository, not live Grafana export"

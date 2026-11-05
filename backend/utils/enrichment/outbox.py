@@ -41,7 +41,7 @@ from config.sync_reprocess import settle_seconds
 from utils.sync import processing_hold
 from config.repeat_work import revision_reuse
 from database._client import get_firestore_client
-from database.summary_processing import record_empty_failure, EMPTY_BLOCKED_REASON
+from database.summary_processing import record_empty_failure, EmptyFailureOutcome
 
 Row: TypeAlias = dict[str, Any]
 ResultT = TypeVar('ResultT')
@@ -249,7 +249,7 @@ def _recent_conversation(uid: str, conversation_id: str, now: float) -> bool:
         return False
 
 
-def _dispatch_binding(
+def dispatch_binding(
     *, backfill: bool = False, effects_only: bool = False, recent: bool = False
 ) -> dict[str, str] | None:
     if enrichment_config.route() == 'enrichment_queue':
@@ -426,7 +426,7 @@ def mark_update(
         nonlocal candidate, recent
         if stamps is not None:
             stamps.clear()  # A CAS or transaction retry re-runs this operation.
-        if old and old.get('summary_blocked_reason') == EMPTY_BLOCKED_REASON:
+        if old and old.get('summary_blocked_reason') in summary_delivery.EMPTY_BLOCKED_REASONS:
             return old, ({**old, '_wake': False}, True)
         row = dict(old or {})
         row.pop('_wake', None)  # Dispatch intent belongs to this CAS result, not its persisted replay.
@@ -502,10 +502,10 @@ def mark_update(
                 task_due_at=row['due_at'],
                 lease_until=0,
                 dispatch=(new_dispatch() if new_dispatch else None)
-                or _dispatch_binding(backfill=backfill, effects_only=effects_only, recent=bool(recent)),
+                or dispatch_binding(backfill=backfill, effects_only=effects_only, recent=bool(recent)),
             )
         elif old.get('dormant'):
-            row['dispatch'] = _dispatch_binding(backfill=backfill, effects_only=effects_only, recent=bool(recent))
+            row['dispatch'] = dispatch_binding(backfill=backfill, effects_only=effects_only, recent=bool(recent))
         elif not valid_dispatch_binding(row.get('dispatch')):
             row['dispatch'] = None
         wake = old is None
@@ -705,12 +705,18 @@ def run(document_id: str, task_token: str, process: Callable[[str, str, str], An
                 raise
             held_reason = HELD_DOCUMENT_SIZE_LIMIT
         except summary_delivery.SummaryOutputUnavailable:
-            if not process_context or not record_empty_failure(
-                get_firestore_client(), COLLECTION, document_id, owner, task_token
-            ):
+            if not process_context:
                 raise
-            record_delivery('summary', 'failed')
-            empty_blocked = True
+            empty_outcome = record_empty_failure(get_firestore_client(), COLLECTION, document_id, owner, task_token)
+            if empty_outcome is EmptyFailureOutcome.STALE:
+                return 'stale'
+            if empty_outcome is EmptyFailureOutcome.RETRY:
+                raise
+            if empty_outcome is EmptyFailureOutcome.OWNER_MISMATCH:
+                process_context.update(defer_reason='summary_owner_changed', defer_until=current + LIVE_DEFER_SECONDS)
+            else:
+                record_delivery('summary', 'failed')
+                empty_blocked = True
         finally:
             ADMITTED_OWNER.reset(admitted_token)
             summary_delivery.REPAIR_CONTEXT.reset(context_token)
@@ -934,7 +940,7 @@ def sweep(
             ):
                 if recent is None:
                     recent = _recent_conversation(row['uid'], row['conversation_id'], current)
-                desired = _dispatch_binding(recent=recent)
+                desired = dispatch_binding(recent=recent)
                 previous = row['dispatch']
                 if (
                     desired is not None
@@ -965,7 +971,7 @@ def sweep(
             if not expired and row.get('wake_check_after', 0) > current:
                 return old, ('skipped', None)
             if not injected and not valid_effects_binding(row):
-                binding = _dispatch_binding(
+                binding = dispatch_binding(
                     backfill=row.get('summary_lane') == 'backfill' and not first_summary_pending(row),
                     effects_only=bool(row.get('effects_only')),
                     recent=(
@@ -1117,7 +1123,7 @@ def mark_effects(uid: str, conversation_id: str, language: str, *, immediate: bo
 
 
 def _effects_binding() -> dict[str, str]:
-    binding = _dispatch_binding(backfill=summary_delivery.lane({}) == 'backfill', effects_only=True)
+    binding = dispatch_binding(backfill=summary_delivery.lane({}) == 'backfill', effects_only=True)
     if binding is not None:
         return binding
     # Listen/pusher already have the durable finalization queue, identity and

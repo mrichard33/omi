@@ -57,6 +57,8 @@ run_proof() {
 
 run_proof "sync/live overlap admission race (coarse hint, contention retry, no twin)" \
   "$PYTHON" scripts/sync_live_overlap_contention_emulator_test.py
+run_proof "canonical apply-control read retry (transient / exhausted / wipe race)" \
+  "$PYTHON" scripts/canonical_apply_control_retry_emulator_test.py
 run_proof "destructive gate contention (same-kind block / stale takeover fence)" \
   "$PYTHON" scripts/destructive_gate_contention_emulator_test.py
 run_proof "ledger correction, revert, standalone reopen, privacy fence" \
@@ -75,6 +77,11 @@ run_proof "summary task recovery, concurrency and expiry" \
 run_proof "record replay (capture, admission, titling and scoped receipts)" \
   "$PYTHON" -m pytest -q -p no:cacheprovider tests/integration/test_replay_harness_firestore.py \
   tests/integration/test_replay_harness_titling_firestore.py
+
+# The committed 120-transition privacy smoke plus mutation controls; the full
+# qualification corpus stays on the explicit heavy-lane Make target.
+run_proof "privacy cache replay (120-transition smoke and catch proofs)" \
+  "$PYTHON" -m pytest -q -p no:cacheprovider tests/integration/test_replay_harness_privacy_firestore.py
 
 # Job-store conformance (legacy-retire lane 12): sim + Firestore emulator legs here; the Postgres leg
 # skips in CI (no Postgres service, decision S6) and is proven locally/staging.
