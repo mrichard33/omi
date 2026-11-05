@@ -9,12 +9,16 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from testing.hermetic_network import block_outbound_network, block_local_redis
+from testing.replay_harness.gate_resources import CURRENT_SCOPE, journal_writes
 
 NAMESPACE = 'batch_pipeline_test_replayharness'
 
 
 def emulator_endpoint() -> str:
-    endpoint = os.getenv('FIRESTORE_EMULATOR_HOST', '')
+    return validate_emulator_endpoint(os.getenv('FIRESTORE_EMULATOR_HOST', ''))
+
+
+def validate_emulator_endpoint(endpoint):
     host, separator, port = endpoint.rpartition(':')
     if host not in ('127.0.0.1', 'localhost') or not separator or not port.isdigit() or not 0 < int(port) < 65536:
         raise RuntimeError('replay requires a loopback FIRESTORE_EMULATOR_HOST; no cloud fallback')
@@ -39,7 +43,7 @@ class ReplayEnvironment:
 
 
 @contextmanager
-def replay_environment():
+def replay_environment(runtime_env=None):
     endpoint = emulator_endpoint()
     import google.auth
     from google.cloud import firestore, storage
@@ -98,6 +102,8 @@ def replay_environment():
             'RECORD_DRAIN_CONCURRENCY': '16',
         }
     )
+    if runtime_env is not None:
+        runtime_env.apply(settings)
     with ExitStack() as stack:
         stack.enter_context(patch.dict(os.environ, settings, clear=True))
         stack.enter_context(block_outbound_network())
@@ -112,6 +118,11 @@ def replay_environment():
 
         harness = make_emulator()
         stack.callback(harness.close)
+        scope = CURRENT_SCOPE.get()
+        if scope:
+            # Parent chooses this token before launch, so recovery owns a precise namespace.
+            harness.uid_suffix = scope['token']
+            stack.enter_context(journal_writes(harness.store.client, scope))
         # make_emulator allocated a private client + namespace. Give this lane
         # a discoverable prefix while retaining its unique run token.
         from database.batch_pipeline_store import FirestoreStore
@@ -145,10 +156,10 @@ def replay_environment():
         import fakeredis
         from testing.pipeline_sim.clock import VirtualClock
         from utils.other.local_storage import LocalBlob, LocalBucket, LocalStorageClient
-        from utils.other import storage as product_storage
+        from utils.other import storage as product_storage, local_storage
         from database import redis_db
 
-        scratch = Path('/Volumes/Ephemeral/scratch')
+        scratch = Path(scope['root']) if scope else Path('/Volumes/Ephemeral/scratch')
         root = Path(
             stack.enter_context(TemporaryDirectory(prefix='replay-harness-', dir=scratch if scratch.is_dir() else None))
         )
@@ -178,6 +189,7 @@ def replay_environment():
         fake_redis = fakeredis.FakeRedis(decode_responses=True)
         stack.callback(fake_redis.close)
         stack.enter_context(patch.object(product_storage, '_get_storage_client', lambda: local))
+        stack.enter_context(patch.object(local_storage, 'create_storage_client', lambda: local))
         # Override the import-time bucket constant if a test process previously
         # imported storage under different ambient defaults.
         stack.enter_context(patch.object(product_storage, 'private_cloud_sync_bucket', 'replay-chunks'))

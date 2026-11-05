@@ -37,6 +37,24 @@ def entries():
             },
         ),
         DriverEntry(
+            'utils.batch_pipeline.record_seal_cluster_repair.discover_jobs',
+            domains={
+                'after': [
+                    None,
+                    {
+                        'path': 'batch_pipeline_prod_jobs/old',
+                        'finished_at': datetime(2026, 10, 1, tzinfo=timezone.utc),
+                    },
+                ]
+            },
+            neutrals={
+                'budget': (SimpleNamespace(check=lambda: None, timeout=lambda: 10), 'RPC deadline only'),
+                'max_rows': (8, 'in-memory candidate cap only'),
+                'max_scan': (128, 'aggregate scan bound only'),
+                'selected_cursors': (None, 'output-only selected metadata; no filter or ordering change'),
+            },
+        ),
+        DriverEntry(
             'utils.batch_pipeline.record_seal_sweeper.discover_pending',
             domains={'namespace': namespaces},
             neutrals={
@@ -371,18 +389,29 @@ def entries():
             domains={'namespace': namespaces, 'after_id': [None, 'result-100']},
             neutrals={'limit': (128, 'bounded page size only; equality is served by the automatic single-field index')},
         ),
+        DriverEntry(
+            'database.batch_pipeline_projection_release.assignment_held_page_ids',
+            domains={'namespace': namespaces, 'after_id': [None, 'job-100']},
+            neutrals={'limit': (128, 'bounded page size only')},
+        ),
         CoveredByEntry(
             'database.batch_pipeline_projection_release.release_page',
-            covered_by=('database.batch_pipeline_projection_release.held_page_ids',),
-            reason='bounded release scan delegates its only query to held_page_ids; resets are document transactions',
+            covered_by=(
+                'database.batch_pipeline_projection_release.held_page_ids',
+                'database.batch_pipeline_projection_release.assignment_held_page_ids',
+            ),
+            reason='bounded release scan delegates queries to both page builders; resets are document transactions',
             expect_observed=False,
-            body_digest='51d879075128af7e074b0ab3ccdb376e2171678351cad3ade376a3a3f78e2e69',
+            body_digest='6585eb78557d3f1f336d97ca78325be4a55146f44f5e21c6c72f11abec183580',
         ),
         CoveredByEntry(
             'database.batch_pipeline_projection_release.release_scan_pass',
-            covered_by=('database.batch_pipeline_projection_release.held_page_ids',),
-            reason='durable-cursor wrapper over release_page; the cursor is one document get and set',
+            covered_by=(
+                'database.batch_pipeline_projection_release.held_page_ids',
+                'database.batch_pipeline_projection_release.assignment_held_page_ids',
+            ),
+            reason='two durable cursors share release_page; cursor reads and writes are document operations',
             expect_observed=False,
-            body_digest='1b9c67910b80e2628cf61514e1b24875242fc623069e6a2f64764cb90f2fa27e',
+            body_digest='7f3bbdcf0a450474ce7ed6255c758eb795706d8f1b8b69563d64471443250e58',
         ),
     )

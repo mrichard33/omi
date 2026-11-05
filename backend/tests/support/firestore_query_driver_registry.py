@@ -146,14 +146,15 @@ BODY_DIGEST = {
     'database.lifecycle_metrics_queries._where': '51d3e38b20df6800101fbf671471d2538c487d9c702698c6a9ad221c43f89a79',
     'database.batch_pipeline_store.FirestoreStore.ready_for_capacity': '975eabd92f43ba5da3d847439f4d8e3592525ccd31c11dcac6463365535eac10',
     'database.batch_pipeline_store.FirestoreStore.oldest_admissible_ready': '293687cc6708d7ab2f673cb2984e6bb8cbfe581fa526db8c1040fd011dc00107',
-    'database.batch_pipeline_projection_release.release_page': '51d879075128af7e074b0ab3ccdb376e2171678351cad3ade376a3a3f78e2e69',
-    'database.batch_pipeline_projection_release.release_scan_pass': '1b9c67910b80e2628cf61514e1b24875242fc623069e6a2f64764cb90f2fa27e',
+    'database.batch_pipeline_projection_release.release_page': '6585eb78557d3f1f336d97ca78325be4a55146f44f5e21c6c72f11abec183580',
+    'database.batch_pipeline_projection_release.release_scan_pass': '7f3bbdcf0a450474ce7ed6255c758eb795706d8f1b8b69563d64471443250e58',
     'database.monthly_usage_totals._rebuild': '2c9be83589399a6824fbb2ef7376cd7baf8492e8a780671e31b67a8294b40db0',
     'database.batch_pipeline_shadow.ShadowStore._busy': 'bf2a9290745e8dd01ebb927b03ed67b08fac05fdb43fd76f81f2dcfa54e0b85a',
     'database.batch_pipeline_shadow.ShadowStore.reap': '014a779e64fb2ab2baded6c4baef3ae9528bd080b8b7bafbd0e68948e8c418d4',
     # Re-reviewed 2026-11-01: intake-outcome evidence kwarg only; no query or read added.
     'database.batch_ramp.ramp_admission_policy': '2d702e87308e65426820bbe9b4b89f492a966a01bc056fa39d63ed3a8545d649',
-    'database.conversations._collect_cursor_conversation_page': '1d5fc817a402bd5bb5cb8fae5492d29b1e34cb4a15405bd06a784fc8730fa4e9',
+    # Re-reviewed 2026-11-05: forward presentation visibility only; cursor/query/budget bounds unchanged.
+    'database.conversations._collect_cursor_conversation_page': 'bd16ecd16fae8402a6abd848e94163c38f1272e64bdbbb3131df863cddc79018',
     'database.batch_pipeline_store.FirestoreTransaction.ready_predecessor': '345662386754d78758580d321467fcd012838fc0a9ae8194eeb7b3e6ede54f14',
     'database.batch_pipeline_store.projection_pending': '52cc913cca9086557133a8f7118b9980ce5f13649897207fafcfa221513a5629',
     'database.batch_pipeline_store.FirestoreStore.projection_page': 'bc9fe5cd08a05748eaa118af15031abdcb1a68d91d7f0b74bf177a27eb980a94',
@@ -199,7 +200,7 @@ BODY_DIGEST = {
     # Encoded-size preflight and the size backstop add no serving query; the
     # discarded-barrier scan is still covered by the same two driven callees.
     # Recorded-span recomputation is pure; barrier queries still run under the covered callees.
-    'database.smart_merge.absorb_conversation': '531806c3dc28aa6d728effd0a0ff8037b7621128037ed7350cf06beb3bd5674b',
+    'database.smart_merge.absorb_conversation': 'b8cbd9130ee1570309163a3300fcd90ecd953f58c4fc6e8f15849854104d3d81',
     'database.omi_flags.read_all': '58b65fc434cd3253a55aa54c6defc2a4cfc40dc33b565326b6c688eb8ed374d3',
     'database.omi_flags.read_audit': '12ee243338e5fc080b8e2f81223586837bb454f8d8e14d711f3805c74e258cfa',
     'database.client_telemetry.recent_owner_ids': '65fe8200d7ad9418b793ccb0fa53a172b2576a80bba644caa3b36cdb53b74510',
@@ -1165,6 +1166,7 @@ _add(
     DriverEntry(
         'database.conversations.get_conversations',
         base={'uid': UID},
+        domains={'presentation': [False, True]},
         profiles=PHOTO_PROFILES,
         neutrals={
             'limit': _LIMIT,
@@ -1194,7 +1196,7 @@ _add(
     DriverEntry(
         'database.conversations.get_conversations_without_photos',
         base={'uid': UID},
-        domains={'list_fields_only': [False, True]},
+        domains={'list_fields_only': [False, True], 'presentation': [False, True]},
         patchers=(
             lambda client: unittest.mock.patch.object(
                 importlib.import_module('database.conversations'), 'indexed_list_reads_enabled', return_value=True
@@ -2402,7 +2404,8 @@ _add(
         ),
         reason='the discarded-barrier scan runs inside absorb_attempt through '
         'has_intervening_discarded/find_preceding_conversations, so the terminal '
-        'stream records under those callees, never under absorb_conversation',
+        'stream records under those callees, never under absorb_conversation. '
+        'The revision-debt hook is a pure payload update with no query or read',
         expect_observed=False,
         body_digest=BODY_DIGEST['database.smart_merge.absorb_conversation'],
     )
@@ -3129,12 +3132,13 @@ _add(
         'database.conversation_terminal_title.dead_letter_conversation_updates',
         base={
             'uid': UID,
-            'conversation': {'transcript_segments': []},
+            'conversation': {'source': 'omi', 'transcript_segments': []},
             'conversation_ref': ref_document(f'users/{UID}/conversations/conv-1'),
             'transaction': ref_transaction(),
             'failure_code': 'processing_failed',
             'time_zone_for_uid': None,
         },
+        neutrals={'calendar_probe': (None, 'precomputed evidence; photo query runs before calendar policy')},
     )
 )
 _add(
@@ -3143,6 +3147,40 @@ _add(
         covered_by=('database.conversation_terminal_title.dead_letter_conversation_updates',),
         reason='photo-description probe streams the photos subcollection inside the caller transaction '
         'when a retryable failure row has no transcript text',
+    )
+)
+
+_add(
+    DriverEntry(
+        'database.conversation_terminal_title.kept_row_terminal_update',
+        base={
+            'uid': UID,
+            'conversation': {'source': 'omi', 'transcript_segments': []},
+            'conversation_ref': ref_document(f'users/{UID}/conversations/conv-1'),
+            'base_update': {'status': 'completed'},
+            'time_zone_for_uid': None,
+        },
+        domains={
+            'path': ['orphan_terminal', 'byok_abandoned', 'oversized_terminal'],
+            'assess_empty_transcript': [True, False],
+        },
+        neutrals={'transaction': (ref_transaction(), 'snapshot fence; does not change the photo query shape')},
+    )
+)
+_add(
+    DriverEntry(
+        'database.conversation_terminal_title.with_terminal_relevance',
+        base={
+            'uid': UID,
+            'conversation': {'source': 'omi'},
+            'base': {'status': 'completed'},
+            'texts': [],
+            'decoded': True,
+            'path': 'dead_letter',
+            'conversation_ref': ref_document(f'users/{UID}/conversations/conv-1'),
+            'transaction': ref_transaction(),
+        },
+        neutrals={'calendar_probe': (None, 'precomputed evidence; photo query runs before calendar policy')},
     )
 )
 
@@ -3842,3 +3880,15 @@ for _function in ('projected_stream_iter',):
             },
         )
     )
+
+
+from database.batch_final_pass_retry import FinalPassRetries
+
+_add(
+    DriverEntry(
+        'database.batch_final_pass_retry.FinalPassRetries.due',
+        base={'self': FinalPassRetries()},
+        neutrals={'now': (T0.timestamp(), 'due-time range operand only'), 'limit': _LIMIT},
+        patchers=(_stub('utils.sync.stage.current_stage', 'prod'),),
+    )
+)

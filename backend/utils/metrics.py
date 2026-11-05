@@ -4,6 +4,7 @@ import threading
 from typing import Any
 
 from database.fsr_cache_telemetry import OMI_FALLBACK_TOTAL as OMI_FALLBACK_TOTAL
+from utils.conversation_relevance_labels import DECISION_TRIGGERS, TERMINAL_METRIC_TRIGGERS, TERMINAL_METRIC_REASONS
 
 from fastapi import Response
 from prometheus_client import (
@@ -492,18 +493,7 @@ def record_lazy_desktop_deferral(*, event: str) -> None:
 # assess; a share of them that grows is a path skipping the gate by design,
 # and degraded reasons identify the cheaper arm that resolved a model failure.
 CONVERSATION_RELEVANCE_LABELS = {
-    'trigger': frozenset(
-        {
-            'capture_end',
-            'client_finalize',
-            'sync_update',
-            'first_open',
-            'user_reprocess',
-            'merge',
-            'sync_intake',
-            'smart_merge',
-        }
-    ),
+    'trigger': DECISION_TRIGGERS,
     'verdict': frozenset({'keep', 'discard'}),
     'decided_by': frozenset({'policy', 'user', 'rule', 'model', 'jev', 'override', 'deterministic'}),
 }
@@ -529,7 +519,12 @@ def record_conversation_relevance(*, trigger: str, verdict: str, decided_by: str
             name: value if value in CONVERSATION_RELEVANCE_LABELS[name] else 'other'
             for name, value in (('trigger', trigger), ('verdict', verdict), ('decided_by', decided_by))
         }
-        labels['reason'] = reason if _RELEVANCE_REASON.match(reason) else 'other'
+        allowed_reason = (
+            reason in TERMINAL_METRIC_REASONS
+            if trigger in TERMINAL_METRIC_TRIGGERS
+            else bool(_RELEVANCE_REASON.match(reason))
+        )
+        labels['reason'] = reason if allowed_reason else 'other'
         CONVERSATION_RELEVANCE_DECISION_TOTAL.labels(**labels).inc()
     except Exception:
         pass
@@ -689,7 +684,7 @@ LISTEN_FINALIZATION_OLDEST_NONTERMINAL_AGE_SECONDS = Gauge(
 
 LISTEN_FINALIZATION_OLDEST_BLOCKED_BYOK_AGE_SECONDS = Gauge(
     'listen_finalization_oldest_blocked_byok_age_seconds',
-    'Global age since created_at of the oldest BYOK-blocked job; no blocked-status entry timestamp is recorded; '
+    'Legacy global age since created_at; recent state-entry dwell is exported by omi_finalization_byok; '
     'replicated per process, aggregate with max() not sum()',
     registry=None,
 )
@@ -1360,6 +1355,11 @@ OMI_ACTION_ITEM_IDENTITY_TOTAL = Counter(
     ['outcome'],
 )
 
+OMI_ENRICHMENT_EARLY_ABORT_TOTAL = Counter(
+    'omi_enrichment_early_abort_total',
+    'Enrichment revision checkpoints: stage=pre_notes|pre_persist, outcome=superseded|check_failed',
+    ['stage', 'outcome'],
+)
 OMI_ACTION_ITEM_REFRESH_TOTAL = Counter(
     'omi_action_item_refresh_total',
     'Automatic refresh task preservation: kept_existing|added_new|transferred_from_donor|skipped_duplicate|disabled',

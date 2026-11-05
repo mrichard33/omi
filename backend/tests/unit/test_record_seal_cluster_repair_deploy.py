@@ -31,13 +31,27 @@ def test_independent_job_uses_worker_identity_and_has_separate_deadline():
     assert pod['containers'][0]['image'] == worker['containers'][0]['image']
     assert pod['containers'][0]['command'] == ['python', 'scripts/record_seal_repair_job.py']
     env = {e['name']: e.get('value') for e in pod['containers'][0]['env']}
-    assert env['RECORD_SEAL_REPAIR_WORKERS'] == '8'
+    # Prod runs repair at 16 workers with the committed policy map (lead2 2026-11-04 3b814c).
+    assert env['RECORD_SEAL_REPAIR_WORKERS'] == '16'
     assert env['RECORD_SEAL_REPAIR_ROW_SECONDS'] == '270'
     assert env['RECORD_SEAL_REPAIR_ENABLED'] == 'true'
+    assert env['RECORD_SEAL_REPAIR_JOBS'] == 'on'
     assert env['RECORD_SEAL_OVERLAP_TRIM_ENABLED'] == 'true'
     assert env['RECORD_SEAL_UPLOAD_FAILED_REPAIR_ENABLED'] == 'true'
     assert env['RECORD_SEAL_REPAIR_MODE'] == 'apply'
-    assert json.loads(env['RECORD_SEAL_REPAIR_SERVER_FLAGS']) == {}
+    flags = json.loads(env['RECORD_SEAL_REPAIR_SERVER_FLAGS'])
+    assert flags == {
+        'K_SERVICE': 'backend',
+        'BATCH_PIPELINE_ENABLED': 'true',
+        'BATCH_PIPELINE_LIVE_ADMISSION_ENABLED': 'false',
+        'BATCH_PIPELINE_PERCENT': '100',
+        'BATCH_LIVE_STT_RETIRE_PERCENT': '0',
+        'TRANSCRIPTION_FINAL_PASS_AUTHORITATIVE': 'true',
+        'TRANSCRIPTION_FINAL_PASS_DIARIZER': 'pyannote_shadow',
+        'TRANSCRIPTION_FINAL_PASS_PERCENT': '5',
+    }
+    # UID allowlists hold real account ids and the repo is public: they never live in git.
+    assert not any('ALLOWLIST' in key for key in flags)
     assert 'nvidia.com/gpu' not in pod['containers'][0]['resources']['limits']
     assert pod['containers'][0]['securityContext']['readOnlyRootFilesystem']
 
@@ -174,3 +188,15 @@ def test_log_metrics_use_only_allowlisted_row_counts_and_numeric_age():
     pattern = json.loads(gap['labelExtractors']['tail_gap_bucket'].split(', ', 1)[1][:-1])
     for private in ('A' * 28, 'private@example.invalid', 'users/private/conversations/private', 'under_1s_private'):
         assert re.search(pattern, json.dumps({'tail_gap_bucket': private})) is None
+
+
+def test_jobs_discovery_rollback_reaches_only_repair_cron():
+    before = documents()
+    after = documents('--set-string', 'recordSealRepair.jobsDiscovery=off')
+    assert before.keys() == after.keys()
+    assert [key for key in before if before[key] != after[key]] == [('CronJob', 'record-seal-repair')]
+    container = after[('CronJob', 'record-seal-repair')]['spec']['jobTemplate']['spec']['template']['spec'][
+        'containers'
+    ][0]
+    env = {entry['name']: entry.get('value') for entry in container['env']}
+    assert env['RECORD_SEAL_REPAIR_JOBS'] == 'off'
