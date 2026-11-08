@@ -188,7 +188,8 @@ def test_rendered_dev_pusher_direct_bindings_match_source_contract(preflight: Si
     assert preflight.direct_pusher_bindings(deployment) == expected
     assert {name: preflight.literal_pusher_values(deployment)[name] for name in literals} == literals
     assert literals == {
-        "PUSHER_STORAGE_PCM_BUDGET_MB": "0",
+        # Dev-only canary (lead2 2afa3e); prod stays "0".
+        "PUSHER_STORAGE_PCM_BUDGET_MB": "512",
         "CONVERSATION_TERMINAL_FAMILY_MODE": "on",
         "HOME_TRANSCRIPTION_PRESENTATION_GATE": "true",
         "HOME_TRANSCRIPTION_DEADLINE_SECONDS": "7200",
@@ -201,6 +202,7 @@ def test_rendered_dev_pusher_direct_bindings_match_source_contract(preflight: Si
         "FIRST_SUMMARY_DEADLINE_PERCENT": "0",
         "BATCH_PIPELINE_READ_ONLY_METRICS_ENABLED": "false",
         "BATCH_PIPELINE_PROJECTION_TIMING_ENABLED": "false",
+        "BATCH_PIPELINE_PROJECTION_GHOST_SETTLE_COHORT": "g1",
         "FIRST_SUMMARY_PRESERVE_ADMITTED_ENABLED": "false",
         "BATCH_PIPELINE_LIVE_ADMISSION_ENABLED": "false",
         "DEMAND_PROCESSING_ENABLED": "false",
@@ -288,9 +290,12 @@ def test_rendered_dev_pusher_direct_bindings_match_source_contract(preflight: Si
     assert preflight.validate_dev_pusher_binding_contract(deployment) == []
 
 
-@pytest.mark.parametrize("env_name", ["PROACTIVITY_V2_POSTHOG_TOKEN", "PROACTIVITY_V2_POSTHOG_HOST"])
+@pytest.mark.parametrize(
+    "env_name",
+    ["PROACTIVITY_V2_POSTHOG_TOKEN", "PROACTIVITY_V2_POSTHOG_HOST", "BATCH_PIPELINE_PROJECTION_GHOST_SETTLE_COHORT"],
+)
 @pytest.mark.parametrize("mutation", ["missing", "changed", "secret"])
-def test_dev_pusher_dedicated_posthog_literals_reject_rendered_drift(
+def test_dev_pusher_literal_contracts_reject_rendered_drift(
     monkeypatch,
     preflight: SimpleNamespace,
     dev_pusher_contract_baseline: tuple[dict, tuple],

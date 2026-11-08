@@ -24,7 +24,7 @@ FIELD_SITES = {
     ],
     'database/action_items.py': [
         (
-            'retire_action_items_for_conversation',
+            'FirestoreActionItems.retire_conversation_documents',
             'status',
             "'superseded' if replacement_id else 'cancelled'",
             ('completed', 'completed_at', 'deleted', 'status', 'superseded_by', 'updated_at'),
@@ -128,7 +128,12 @@ FIELD_SITES = {
                 'projection_state',
             ),
         ),
-        ('ProjectionReleaseStore.release.commit', 'projection_state', "'ready'", ('projection_state',)),
+        (
+            'ProjectionReleaseStore.release.commit',
+            'projection_state',
+            "'ready'",
+            ('ghost_settled_cohort', 'projection_state'),
+        ),
     ],
     'database/batch_pipeline_projection_session.py': [
         ('ProjectionSession.persist', 'projection_state', "'pending'", ('projection_state',)),
@@ -195,6 +200,21 @@ FIELD_SITES = {
     ],
     'database/batch_pipeline_purge.py': [
         ('_write_erased_result', 'projection_state', "'erased'", ('previous_segment_id', 'projection_state'))
+    ],
+    'database/batch_pipeline_record_dead_letter.py': [
+        (
+            'requeue_record.commit',
+            'state',
+            "'record_pending'",
+            (
+                'available_at',
+                'dead_letter_reason',
+                'merge_pending',
+                'record_dead_letter_at',
+                'record_dead_letter_deadline_at',
+                'state',
+            ),
+        ),
     ],
     'database/batch_pipeline_quarantine_recovery.py': [
         (
@@ -1070,6 +1090,21 @@ FIELD_SITES = {
             ),
         ),
     ],
+    # Transport acknowledgements use the same reviewed inventory as conversation mutations.
+    'database/cells/mutations.py': [
+        (
+            'apply_space_mutation',
+            'status',
+            "'ok'",
+            ('client_mutation_id', 'entity', 'entity_id', 'replayed', 'rev', 'seq', 'status'),
+        ),
+        (
+            'apply_space_mutation.conflict',
+            'status',
+            "'conflict'",
+            ('client_mutation_id', 'code', 'entity', 'entity_id', 'row', 'status'),
+        ),
+    ],
     'database/conversation_mutations.py': [
         (
             'apply_conversation_sync_mutation',
@@ -1188,6 +1223,11 @@ FIELD_SITES = {
     ],
     'database/daily_summaries.py': [
         ('set_daily_summary_generation_status', 'status', 'status', ('generated_at', 'status', 'updated_at'))
+    ],
+    'database/directory/wipe.py': [
+        ('purge_owner_planes', 'status', "'absent' if cell is None else 'purged'", ('status',)),
+        ('purge_owner_planes', 'status', "'noop'", ('status',)),
+        ('purge_owner_planes', 'status', "'purged'", ('status',)),
     ],
     'database/dream_store.py': [
         (
@@ -1310,6 +1350,42 @@ FIELD_SITES = {
     ],
     'database/goals.py': [
         (
+            'FirestoreGoals.delete_document',
+            'status',
+            'GoalStatus.abandoned.value',
+            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreGoals.focus_document.apply',
+            'status',
+            'GoalStatus.background.value',
+            ('focus_rank', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreGoals.focus_document.apply',
+            'status',
+            'GoalStatus.focused.value',
+            ('focus_rank', 'is_active', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreGoals.transition_lifecycle_document.apply',
+            'status',
+            'status.value',
+            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreGoals.transition_lifecycle_document.apply',
+            'status',
+            'status.value',
+            ('relationship_disposition', 'status'),
+        ),
+        (
+            'FirestoreGoals.unfocus_document.apply',
+            'status',
+            'GoalStatus.background.value',
+            ('focus_rank', 'status', 'updated_at'),
+        ),
+        (
             '_new_goal_payload',
             'status',
             'status.value',
@@ -1333,14 +1409,6 @@ FIELD_SITES = {
             ),
         ),
         (
-            'delete_goal',
-            'status',
-            'GoalStatus.abandoned.value',
-            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
-        ),
-        ('focus_goal.apply', 'status', 'GoalStatus.background.value', ('focus_rank', 'status', 'updated_at')),
-        ('focus_goal.apply', 'status', 'GoalStatus.focused.value', ('focus_rank', 'is_active', 'status', 'updated_at')),
-        (
             'normalize_goal_storage',
             'status',
             'status_value',
@@ -1359,14 +1427,6 @@ FIELD_SITES = {
                 'why_it_matters',
             ),
         ),
-        (
-            'transition_goal_lifecycle.apply',
-            'status',
-            'status.value',
-            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
-        ),
-        ('transition_goal_lifecycle.apply', 'status', 'status.value', ('relationship_disposition', 'status')),
-        ('unfocus_goal.apply', 'status', 'GoalStatus.background.value', ('focus_rank', 'status', 'updated_at')),
     ],
     'database/import_jobs.py': [
         (
@@ -2006,11 +2066,13 @@ FIELD_SITES = {
                 'processed_segments',
                 'reason_code',
                 'recording_age_seconds',
+                'recording_ids',
                 'result',
                 'retry_after',
                 'started_at',
                 'status',
                 'successful_segments',
+                'target_conversation_id',
                 'total_files',
                 'total_segments',
                 'uid',
@@ -2127,6 +2189,47 @@ FIELD_SITES = {
     ],
     'database/workstreams.py': [
         (
+            'FirestoreWorkstreams.create_artifact_document.apply',
+            'status',
+            'ArtifactStatus.superseded.value',
+            ('status',),
+        ),
+        (
+            'FirestoreWorkstreams.import_links_documents.complete',
+            'status',
+            "'complete'",
+            ('completed_at', 'result', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreWorkstreams.import_links_documents.reserve',
+            'status',
+            "'processing'",
+            ('created_at', 'outcomes', 'request_hash', 'status', 'updated_at'),
+        ),
+        (
+            'FirestoreWorkstreams.resolve_candidate_document.apply',
+            'status',
+            "'pending'",
+            (
+                'account_generation',
+                'attempt_count',
+                'candidate_id',
+                'created_at',
+                'outbox_id',
+                'status',
+                'task_id',
+                'updated_at',
+            ),
+        ),
+        (
+            'FirestoreWorkstreams.resolve_candidate_document.apply',
+            'status',
+            'CandidateStatus.accepted.value',
+            ('resolution_reason', 'resolved_at', 'result_task_id', 'result_workstream_id', 'status'),
+        ),
+        ('FirestoreWorkstreams.transition_artifact_document.apply', 'status', 'request.status', ('status',)),
+        ('FirestoreWorkstreams.transition_artifact_document.apply', 'status', 'request.status.value', ('status',)),
+        (
             '_task_storage',
             'status',
             'TaskStatus.active.value',
@@ -2153,37 +2256,6 @@ FIELD_SITES = {
                 'workstream_id',
             ),
         ),
-        ('create_artifact_descriptor.apply', 'status', 'ArtifactStatus.superseded.value', ('status',)),
-        ('import_task_goal_links.complete', 'status', "'complete'", ('completed_at', 'result', 'status', 'updated_at')),
-        (
-            'import_task_goal_links.reserve',
-            'status',
-            "'processing'",
-            ('created_at', 'outcomes', 'request_hash', 'status', 'updated_at'),
-        ),
-        (
-            'resolve_workstream_candidate.apply',
-            'status',
-            "'pending'",
-            (
-                'account_generation',
-                'attempt_count',
-                'candidate_id',
-                'created_at',
-                'outbox_id',
-                'status',
-                'task_id',
-                'updated_at',
-            ),
-        ),
-        (
-            'resolve_workstream_candidate.apply',
-            'status',
-            'CandidateStatus.accepted.value',
-            ('resolution_reason', 'resolved_at', 'result_task_id', 'result_workstream_id', 'status'),
-        ),
-        ('transition_artifact_status.apply', 'status', 'request.status', ('status',)),
-        ('transition_artifact_status.apply', 'status', 'request.status.value', ('status',)),
     ],
     'database/wrapped.py': [
         (
@@ -2353,6 +2425,12 @@ FIELD_SITES = {
     ],
     'utils/batch_pipeline/live.py': [
         (
+            'drain_recordings.admit_and_defer.defer',
+            'state',
+            "'dead'",
+            ('dead_letter_reason', 'merge_pending', 'record_dead_letter_at', 'state'),
+        ),
+        (
             'register_recording.commit',
             'state',
             "'record_pending'",
@@ -2372,7 +2450,7 @@ FIELD_SITES = {
                 'segment_id',
                 'state',
             ),
-        )
+        ),
     ],
     'utils/batch_pipeline/merge.py': [
         (
