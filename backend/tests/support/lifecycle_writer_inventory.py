@@ -1,6 +1,80 @@
 """Reviewed payload sites, including values/keys and duplicate sites. Never refresh in a test."""
 
 FIELD_SITES = {
+    'database/cells/adapters/action_items.py': [
+        (
+            'CellActionItems.retire_for_conversation',
+            'status',
+            "'superseded' if replacement else 'cancelled'",
+            ('completed', 'completed_at', 'deleted', 'status', 'superseded_by', 'updated_at'),
+        )
+    ],
+    'database/cells/adapters/goals.py': [
+        (
+            'CellGoals.create.build',
+            'status',
+            "data.get('status', 'background')",
+            (
+                'account_generation',
+                'created_at',
+                'focus_rank',
+                'goal_id',
+                'id',
+                'is_active',
+                'latest_progress_sequence',
+                'status',
+                'updated_at',
+            ),
+        ),
+        (
+            'CellGoals.delete',
+            'status',
+            "'abandoned'",
+            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
+        ),
+        ('CellGoals.focus.build', 'status', "'background'", ('focus_rank', 'status', 'updated_at')),
+        ('CellGoals.focus.build', 'status', "'focused'", ('focus_rank', 'is_active', 'status', 'updated_at')),
+        (
+            'CellGoals.transition_lifecycle.build',
+            'status',
+            'status',
+            ('ended_at', 'focus_rank', 'is_active', 'relationship_disposition', 'status', 'updated_at'),
+        ),
+        ('CellGoals.unfocus.build', 'status', "'background'", ('focus_rank', 'status', 'updated_at')),
+    ],
+    'database/cells/adapters/workstreams.py': [
+        (
+            'CellWorkstreams.create.build',
+            'status',
+            "data.get('status', 'open')",
+            (
+                'account_generation',
+                'created_at',
+                'current_state_summary',
+                'id',
+                'latest_event_sequence',
+                'objective',
+                'revision',
+                'status',
+                'updated_at',
+                'workstream_id',
+            ),
+        ),
+        (
+            'CellWorkstreams.create_artifact_descriptor.build',
+            'status',
+            "'draft'",
+            ('artifact_id', 'created_at', 'status', 'workstream_id'),
+        ),
+        ('CellWorkstreams.create_artifact_descriptor.build', 'status', "'superseded'", ('status',)),
+        (
+            'CellWorkstreams.resolve_candidate',
+            'status',
+            "'accepted'",
+            ('candidate_id', 'newly_resolved', 'receipt_id', 'resolved_at', 'status', 'task_id', 'workstream_id'),
+        ),
+        ('CellWorkstreams.transition_artifact_status.build', 'status', 'target', ('status',)),
+    ],
     'database/_client.py': [
         ('run_transactional', 'status', "'exhausted'", ('status',)),
         ('run_transactional', 'status', "'retried_ok'", ('status',)),
@@ -1142,9 +1216,18 @@ FIELD_SITES = {
         ('_complete_unstampable_orphan_conversation_txn', 'status', "'completed'", ('status',)),
     ],
     'database/conversation_quiet_checks.py': [
+        # Dark quiet-check retirement names the orphan-repair exit; it does
+        # not terminalize the capture or create another arm site.
+        ('_evaluate_quiet_check.evaluate', 'status', "'done'", ('exit', 'reason', 'status')),
         ('_evaluate_quiet_check.evaluate', 'status', "'done'", ('reason', 'status')),
         ('_evaluate_quiet_check.evaluate', 'status', "'done'", ('reason', 'status')),
         ('_evaluate_quiet_check.evaluate', 'status', "'done'", ('status',)),
+        (
+            '_evaluate_quiet_check.evaluate',
+            'status',
+            "'quiet_done'",
+            ('last_failure_code', 'reconcile_after_at', 'status', 'updated_at'),
+        ),
         ('_evaluate_quiet_check.evaluate', 'status', "'quiet_done'", ('reconcile_after_at', 'status', 'updated_at')),
         ('_evaluate_quiet_check.evaluate', 'status', "'quiet_done'", ('reconcile_after_at', 'status', 'updated_at')),
         ('_evaluate_quiet_check.evaluate', 'status', "'quiet_done'", ('reconcile_after_at', 'status', 'updated_at')),
@@ -2644,6 +2727,27 @@ FIELD_SITES = {
         ('_load_admitted_conversation', 'status', 'ConversationStatus.processing', ('status',))
     ],
     'utils/conversations/lifecycle.py': [
+        # Reviewed orphan completion: one in-memory relevance snapshot and
+        # one persisted patch with bounded Home-pending metadata.
+        (
+            'complete_orphan_batch_capture',
+            'home_transcription_deadline_at',
+            'now + timedelta(seconds=home_transcription_deadline_seconds())',
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        (
+            'complete_orphan_batch_capture',
+            'home_transcription_pending_at',
+            'now',
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        (
+            'complete_orphan_batch_capture',
+            'status',
+            "'completed'",
+            ('home_transcription_deadline_at', 'home_transcription_pending_at', 'relevance_decision', 'status'),
+        ),
+        ('complete_orphan_batch_capture', 'status', "'completed'", ('status',)),
         (
             'get_finalization_status',
             'status',
@@ -2659,7 +2763,7 @@ FIELD_SITES = {
                 'terminal',
                 'terminal_outcome',
             ),
-        )
+        ),
     ],
     'utils/conversations/late_meeting_notes.py': [
         (
@@ -4072,6 +4176,7 @@ KNOWN_TERMINAL_WRITERS = {
         ('database/stuck_backfill.py', '_close_txn'): 'unclassified',
         ('utils/conversations/late_meeting_notes.py', 'refresh_notes_after_evidence'): 'unclassified',
         ('utils/conversations/lifecycle.py', 'complete'): 'owner',
+        ('utils/conversations/lifecycle.py', 'complete_orphan_batch_capture'): 'owner',
         ('utils/conversations/lifecycle.py', 'fail_and_discard_processing'): 'owner',
         ('utils/conversations/lifecycle.py', 'transition'): 'owner',
         ('utils/conversations/process_conversation.py', '_store_budget_waiting'): 'unclassified',
