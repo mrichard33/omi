@@ -350,6 +350,9 @@ environments:
           HOME_TRANSCRIPTION_DEADLINE_SECONDS:
             value: '7200'
             category: config
+          HOME_PROCESSING_MAX_AGE_SECONDS:
+            value: '21600'
+            category: config
           BATCH_PIPELINE_UID_ALLOWLIST:
             value: ''
           HOSTED_TRANSLATION_API_URL:
@@ -488,6 +491,9 @@ environments:
             category: ops_kill
           HOME_TRANSCRIPTION_DEADLINE_SECONDS:
             value: '7200'
+            category: config
+          HOME_PROCESSING_MAX_AGE_SECONDS:
+            value: '21600'
             category: config
           OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
           TRANSCRIPTION_SHADOW_ENABLED: {value: 'true', category: rollout}
@@ -1068,6 +1074,9 @@ environments:
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
               category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
+              category: config
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             OMI_CUSTOMER_DATA_PROJECT:
               value: based-hardware
@@ -1243,10 +1252,6 @@ environments:
               provisional: true
               value: 'true'
               category: rollout
-            SYNC_BACKFILL_INFLIGHT_LIMIT:
-              provisional: true
-              value: 'false'
-              category: rollout
             SYNC_BACKFILL_UID_SEQUENCER:
               provisional: true
               value: 'off'
@@ -1375,6 +1380,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             TRANSCRIPTION_SHADOW_ENABLED: {value: 'false', category: rollout}
@@ -1553,10 +1561,6 @@ environments:
               provisional: true
               value: 'true'
               category: rollout
-            SYNC_BACKFILL_INFLIGHT_LIMIT:
-              provisional: true
-              value: 'false'
-              category: rollout
             SYNC_BACKFILL_UID_SEQUENCER:
               provisional: true
               value: 'off'
@@ -1668,6 +1672,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             OMI_SHAPED_AGENT_MODE: {value: 'on', category: rollout}
             OMI_CUSTOMER_DATA_PROJECT:
@@ -1920,6 +1927,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             BATCH_PIPELINE_INDEPENDENT_LANGUAGE_RECOVERY_ENABLED:
               value: 'false'
@@ -2582,6 +2592,9 @@ environments:
           HOME_TRANSCRIPTION_DEADLINE_SECONDS:
             value: '7200'
             category: config
+          HOME_PROCESSING_MAX_AGE_SECONDS:
+            value: '21600'
+            category: config
           BATCH_FINAL_PASS_ENABLED:
             config_map:
               name: prod-omi-backend-config
@@ -2828,6 +2841,9 @@ environments:
             category: ops_kill
           HOME_TRANSCRIPTION_DEADLINE_SECONDS:
             value: '7200'
+            category: config
+          HOME_PROCESSING_MAX_AGE_SECONDS:
+            value: '21600'
             category: config
           BATCH_FINAL_PASS_ENABLED:
             config_map:
@@ -3263,7 +3279,7 @@ environments:
               category: service_discovery
             FIRESTORE_READ_LEDGER:
               value: '1'
-            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":0,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0}',
+            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":10,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0,"privacy_negative_lookup_cache":100,"batch_timeliness_leader":0}',
               category: rollout}
             FSR_QUEUE_AGE_PUBLISHER: {value: '0', category: rollout}
             FSR_QUEUE_AGE_LEASE_SECONDS: {value: '120', category: rollout}
@@ -3431,6 +3447,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             BATCH_FINAL_PASS_ENABLED:
               value: 'true'
@@ -3694,7 +3713,7 @@ environments:
               category: service_discovery
             FIRESTORE_READ_LEDGER:
               value: '1'
-            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":0,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":100,"usage_month_total":100}',
+            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":10,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":100,"usage_month_total":100,"privacy_negative_lookup_cache":100,"batch_timeliness_leader":0}',
               category: rollout}
             FSR_QUEUE_AGE_PUBLISHER: {value: '0', category: rollout}
             FSR_QUEUE_AGE_LEASE_SECONDS: {value: '120', category: rollout}
@@ -3737,10 +3756,6 @@ environments:
             SYNC_BACKFILL_ENABLED:
               provisional: true
               value: 'true'
-              category: rollout
-            SYNC_BACKFILL_INFLIGHT_LIMIT:
-              provisional: true
-              value: 'false'
               category: rollout
             SYNC_BACKFILL_UID_SEQUENCER:
               provisional: true
@@ -3870,6 +3885,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             BATCH_FINAL_PASS_ENABLED:
               value: 'true'
@@ -4137,7 +4155,7 @@ environments:
               category: service_discovery
             FIRESTORE_READ_LEDGER:
               value: '1'
-            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":0,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0}',
+            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":100,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0,"privacy_negative_lookup_cache":100,"batch_timeliness_leader":0}',
               category: rollout}
             FSR_QUEUE_AGE_PUBLISHER: {value: '0', category: rollout}
             FSR_QUEUE_AGE_LEASE_SECONDS: {value: '120', category: rollout}
@@ -4180,10 +4198,6 @@ environments:
             SYNC_BACKFILL_ENABLED:
               provisional: true
               value: 'true'
-              category: rollout
-            SYNC_BACKFILL_INFLIGHT_LIMIT:
-              provisional: true
-              value: 'false'
               category: rollout
             SYNC_BACKFILL_UID_SEQUENCER:
               provisional: true
@@ -4296,6 +4310,9 @@ environments:
               category: ops_kill
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
+              category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
               category: config
             BATCH_FINAL_PASS_ENABLED:
               value: 'true'
@@ -4537,7 +4554,7 @@ environments:
               category: service_discovery
             FIRESTORE_READ_LEDGER:
               value: '1'
-            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":0,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0}',
+            FIRESTORE_READ_LEVERS: {value: '{"action_items_page":100,"action_items_ttl120":100,"backfill_task_reads":100,"bpp_decision_cache":0,"bpp_generation_memo":100,"candidates_page":100,"canonical_statuses_dedupe":100,"conversation_list_cursor":100,"deletion_marker_cache":100,"finjob_candidate_queries":100,"historical_scan_memo":100,"ledger_purge_coalesce":100,"lifecycle_record_pending_head":5,"mcp_conversation_cards_cache":100,"memory_list_index_window":100,"people_scan_dedupe":100,"privacy_checks_shadow":10,"privacy_ttl60":0,"queue_age_sample_budget":100,"request_read_dedupe":100,"serving_config_cache":100,"singleton_loops":100,"subscription_cache":100,"sync_snapshot_resolve_cache":100,"usage_month_cache":0,"usage_month_total":0,"privacy_negative_lookup_cache":100,"batch_timeliness_leader":0}',
               category: rollout}
             FSR_QUEUE_AGE_PUBLISHER: {value: '0', category: rollout}
             FSR_QUEUE_AGE_LEASE_SECONDS: {value: '120', category: rollout}
@@ -4662,6 +4679,9 @@ environments:
             HOME_TRANSCRIPTION_DEADLINE_SECONDS:
               value: '7200'
               category: config
+            HOME_PROCESSING_MAX_AGE_SECONDS:
+              value: '21600'
+              category: config
             BATCH_FINAL_PASS_ENABLED:
               value: 'false'
               category: ops_kill
@@ -4698,6 +4718,7 @@ environments:
             PROVIDER_STT_TASKS_OIDC_AUDIENCE:
               value: https://backend-integration-hhibjajaja-uc.a.run.app
               category: service_auth
+            SUMMARY_DEBT_REPAIR_ENABLED: {value: 'true', category: rollout}
             BATCH_PIPELINE_INDEPENDENT_LANGUAGE_RECOVERY_ENABLED:
               value: 'true'
               category: ops_kill

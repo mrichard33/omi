@@ -4,6 +4,7 @@ import ast
 from dataclasses import FrozenInstanceError, replace
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -85,7 +86,12 @@ def test_cohort_registry_and_live_switch_contract():
     rows = yaml.load((ROOT / 'config/feature-flags.yaml').read_text(), Loader=loader)['flags']
     by_key = {row['key']: row for row in rows}
     for key in KILL_SWITCHES:
-        assert by_key[key]['lifecycle'] == 'ops_kill'
+        # Live default-off controls may be cohort ramps or permanent opt-in knobs;
+        # default-on controls remain incident kill switches in the registry.
+        if KILL_SWITCHES[key]:
+            assert by_key[key]['lifecycle'] == 'ops_kill'
+        else:
+            assert by_key[key]['lifecycle'] in {'ops_kill', 'config_switch', 'rollout'}
         assert kill_switch(key, flags={}) is KILL_SWITCHES[key]
         disabled = (
             'off'
@@ -95,6 +101,7 @@ def test_cohort_registry_and_live_switch_contract():
                 'BATCH_PIPELINE_PROJECTION_STRIPING_ENABLED',
                 'PROJECTION_DRAIN_CLAIM_AWARE',
                 'PROJECTION_DRAIN_PRIVACY_BACKOFF',
+                'PROJECTION_DRAIN_LIVE_TARGET_BACKOFF',
                 'PROJECTION_PRIVACY_REFUSAL_RESUME',
             }
             else 'false'
@@ -106,6 +113,58 @@ def test_cohort_registry_and_live_switch_contract():
     assert kill_switch(
         'BATCH_PIPELINE_LEADER_LEASE_ENABLED', flags={'BATCH_PIPELINE_LEADER_LEASE_ENABLED': 'unexpected'}
     )
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        'BATCH_PIPELINE_SERVING_PROJECTION_SWEEP',
+        'BATCH_PIPELINE_PROJECTION_STRIPING_ENABLED',
+        'PROJECTION_DRAIN_CLAIM_AWARE',
+        'PROJECTION_DRAIN_PRIVACY_BACKOFF',
+        'PROJECTION_PRIVACY_REFUSAL_RESUME',
+    ],
+)
+@pytest.mark.parametrize(
+    'value,expected',
+    [
+        ('off', False),
+        ('false', True),
+        ('0', True),
+        ('no', True),
+        ('on', True),
+        (None, True),
+        (' OFF ', False),
+        (' FaLsE ', True),
+        (' 0 ', True),
+        (' No ', True),
+    ],
+)
+@pytest.mark.parametrize('source', ['flags', 'environ'])
+def test_projection_kill_switch_off_only_contract_and_warning(monkeypatch, caplog, name, value, expected, source):
+    flags = {} if value is None else {name: value}
+    with caplog.at_level(logging.WARNING, logger='config.policy.kill_switches'):
+        if source == 'environ':
+            if value is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, value)
+            assert kill_switch(name) is expected
+        else:
+            assert kill_switch(name, flags=flags) is expected
+    normalized = value.strip().lower() if value is not None else None
+    expected_warnings = (
+        [
+            (
+                'config.policy.kill_switches',
+                logging.WARNING,
+                f"only 'off' disables {name}; value '{normalized}' keeps it ON",
+            )
+        ]
+        if normalized in {'false', '0', 'no'}
+        else []
+    )
+    assert caplog.record_tuples == expected_warnings
 
 
 @pytest.fixture(scope='module')

@@ -44,6 +44,9 @@ PROJECTION_DRAIN_PRIVACY_STOPS = Counter(
 PROJECTION_DRAIN_PRIVACY_BACKOFFS = Counter(
     'omi_batch_projection_privacy_backoffs_total', 'Zero-progress privacy owner drain backoffs applied'
 )
+PROJECTION_DRAIN_LIVE_TARGET_BACKOFFS = Counter(
+    'omi_batch_projection_live_target_backoffs_total', 'Zero-progress awaiting-live-target owner drain backoffs applied'
+)
 PROJECTION_DRAIN_PRIVACY_ROW_CHANGED = Counter(
     'omi_batch_projection_privacy_row_changed_total', 'Early owner re-requests after a blocked head row changes'
 )
@@ -169,6 +172,11 @@ class QueueMetrics:
         self.projection_pump_last_tick = Gauge(
             'omi_batch_projection_pump_last_tick_seconds',
             'Unix timestamp of the last completed projection pump tick, including failed ticks; zero before first tick',
+            registry=registry,
+        )
+        self.projection_pump_last_success = Gauge(
+            'omi_batch_projection_pump_last_success_seconds',
+            'Unix timestamp of the last successful projection pump tick; zero before first success',
             registry=registry,
         )
         self.projection_age = Gauge(

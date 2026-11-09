@@ -31,6 +31,7 @@ KILL_SWITCHES = {
     'BATCH_PIPELINE_PROJECTION_GHOST_SETTLE_WAKE_ENABLED': True,
     'PROJECTION_DRAIN_CLAIM_AWARE': True,
     'PROJECTION_DRAIN_PRIVACY_BACKOFF': True,
+    'PROJECTION_DRAIN_LIVE_TARGET_BACKOFF': True,
     'PROJECTION_PRIVACY_REFUSAL_RESUME': True,
     'BATCH_PIPELINE_PROJECTION_INDEX_DEFERRED_ENABLED': True,
     'PARAKEET_WINDOW_STRANDED_DRIFT_SETTLE_ENABLED': True,
@@ -52,9 +53,12 @@ def kill_switch(name: str, *, policy_id: str = 'control', flags=None, log: bool 
         'BATCH_PIPELINE_PROJECTION_STRIPING_ENABLED',
         'PROJECTION_DRAIN_CLAIM_AWARE',
         'PROJECTION_DRAIN_PRIVACY_BACKOFF',
+        'PROJECTION_DRAIN_LIVE_TARGET_BACKOFF',
         'PROJECTION_PRIVACY_REFUSAL_RESUME',
     }:
         enabled = value != 'off'
+        if value in {'false', '0', 'no'}:
+            logger.warning("only 'off' disables %s; value '%s' keeps it ON", name, value)
     elif name == 'CONVERSATION_TERMINAL_FAMILY_MODE':
         enabled = value not in {'false', '0', 'off', 'no'}
     elif name == 'PARAKEET_WINDOW_STRANDED_DRIFT_SETTLE_ENABLED':
@@ -75,6 +79,7 @@ def kill_switch(name: str, *, policy_id: str = 'control', flags=None, log: bool 
         'BATCH_PIPELINE_PROJECTION_STRIPING_ENABLED',
         'PROJECTION_DRAIN_CLAIM_AWARE',
         'PROJECTION_DRAIN_PRIVACY_BACKOFF',
+        'PROJECTION_DRAIN_LIVE_TARGET_BACKOFF',
         'PROJECTION_PRIVACY_REFUSAL_RESUME',
     }:
         enabled = default_on(name, enabled, environ=env)
