@@ -40,6 +40,8 @@ from database.batch_pipeline_privacy import BatchPrivacyBlocked, assert_batch_wr
 from database.batch_pipeline_store import (
     ADMISSIBLE_READY_SCAN_LIMIT,
     OLDEST_POLICY_HOLD_SCAN_LIMIT,
+    PROJECTION_DISCOVERY_STATES,
+    PROJECTION_OBLIGATION_STATES,
     is_admissible_ready,
     is_policy_hold,
     is_queue_dispositioned,
@@ -443,6 +445,32 @@ class PostgresStore:
 
         return self.run(revoke)
 
+    def cancel_fenced_recovery(self, segment_id: str) -> bool:
+        """Revoke a prepared/running recovery when privacy blocks; same fence recheck and revoke-only write as Firestore."""
+        from database.batch_pipeline_privacy import BatchPrivacyBlocked
+        from database.batch_pipeline_projection_protocol import normalized_binding
+
+        def cancel(tx: PostgresTransaction) -> bool:
+            job = tx.get('jobs', segment_id)
+            if not job or not job.get('recovery'):
+                return False
+            binding = normalized_binding(job['projection_binding'])
+            ids = [value for value in (job.get('conversation_id'), binding.target_conversation_id) if value]
+            ids.extend(job.get('conversation_ids') or [])
+            try:
+                tx.check_privacy(
+                    binding.owner_id,
+                    conversation_ids=ids,
+                    expected_generation=binding.privacy_generation,
+                )
+            except BatchPrivacyBlocked:
+                cancelled = {**job, 'recovery_state': 'cancelled'}
+                tx.store.write_doc(tx.conn, 'jobs', segment_id, cancelled)
+                return True
+            return False
+
+        return self.run(cancel)
+
     def defer_privacy_blocked_record(self, segment_id: str, until: float, now: float) -> bool:
         """Same fence recheck and available_at-only change as the Firestore privacy defer."""
         from database.batch_pipeline_recovery import privacy_defer_update
@@ -469,26 +497,39 @@ class PostgresStore:
         return self.projection_page(limit)[0]
 
     def projection_page(
-        self, limit: int = 100, *, after=None, states: tuple[str, ...] | None = None
+        self,
+        limit: int = 100,
+        *,
+        after: tuple | None = None,
+        states: tuple[str, ...] = PROJECTION_DISCOVERY_STATES,
+        due_before: float | None = None,
     ) -> tuple[list[str], Any]:
-        from database.batch_pipeline_store import PROJECTION_DISCOVERY_STATES, PROJECTION_OBLIGATION_STATES
-
-        states = PROJECTION_DISCOVERY_STATES if states is None else states
         if not states or not set(states) <= set(PROJECTION_OBLIGATION_STATES):
             raise ValueError('projection discovery states must be drain states')
-        size = max(1, min(limit, 100))
-        clause, params = '', [self.namespace, list(states)]
+        size = max(1, min(limit, 200))
+        columns = ['committed_at', 'key COLLATE "C"']
+        fields, clauses = 'key, committed_at', ['committed_at IS NOT NULL']
+        params: list[Any] = [self.namespace, list(states)]
+        if due_before is not None:
+            due = "(doc->>'projection_finish_due_at')::float8"
+            columns.insert(0, due)
+            fields += f', {due}'
+            clauses.append(f'{due} <= %s')
+            params.append(float(due_before))
         if after is not None:
-            clause = 'AND (committed_at, key COLLATE "C") > (%s, %s)'
-            params += [after[0], after[1]]
+            if due_before is not None and len(after) != 3 or due_before is None and after[1] == '':
+                clauses.append(f'{columns[0]} >= %s')
+                params.append(after[0])
+            else:
+                clauses.append(f'({", ".join(columns)}) > ({", ".join(["%s"] * len(columns))})')
+                params.extend(after)
         with self._read_conn() as conn:
             rows = conn.execute(
-                "SELECT key, committed_at FROM results WHERE namespace = %s "
-                f"AND projection_state = ANY(%s) {clause} "
-                'ORDER BY committed_at, key COLLATE "C" LIMIT %s',
+                f'SELECT {fields} FROM results WHERE namespace = %s AND projection_state = ANY(%s) '
+                f'AND {" AND ".join(clauses)} ORDER BY {", ".join(columns)} LIMIT %s',
                 (*params, size),
             ).fetchall()
-        cursor = (rows[-1][1], rows[-1][0]) if len(rows) == size else None
+        cursor = (*reversed(rows[-1][1:]), rows[-1][0]) if len(rows) == size else None
         return [row[0] for row in rows], cursor
 
     # -- internals ---------------------------------------------------------------------------
