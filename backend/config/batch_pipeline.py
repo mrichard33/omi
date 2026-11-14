@@ -573,13 +573,11 @@ PROJECTION_FINISH_BACKOFF_SECONDS = (60.0, 300.0, 900.0)
 def projection_finish_backoff_enabled() -> bool:
     """Default off; only ``true`` defers an unchanged persisted/ready finish walk.
 
-    Dark read lever: with this off the finish page keeps its exact shape and no
-    result field is written. With it on, a finish walk that changed nothing
-    writes a durable next-attempt clock on the row and the page skips rows whose
-    clock has not passed, so a replay of already-projected work costs no reads.
-    A state change clears the clock in the same transaction, so no obligation
-    waits on it. Rollback is this one switch; the field is additive and unused
-    when off, so no backfill is needed.
+    Off keeps the legacy query and disables no-change deferral transactions.
+    Clock writes on state transitions are unconditional on every writer host.
+    On uses the due-clock filter only after the shared backfill marker exists;
+    until then it keeps the legacy page without per-row stamping. Rollback and
+    re-enable are safe because flag-off writers keep maintaining the clock.
     """
     from config.policy import kill_switch
 
@@ -648,6 +646,20 @@ def provider_backlog_release_enabled() -> bool:
     from config.refactor_modes import default_off
 
     return default_off('BATCH_PIPELINE_PROVIDER_BACKLOG_RELEASE_ENABLED')
+
+
+def provider_fresh_capture_lag_seconds() -> int:
+    """Longest capture-to-admission lag at which a provider-route upload is still fresh (2026-11-13).
+
+    Default 86400. The GPU lane keeps ``FRESH_CAPTURE_LAG_SECONDS`` (600). While the provider
+    backlog is held, a provider row not stamped fresh does not commit, and it cannot commit in
+    plain order either because the owner's held rows sit in front of it. With the shared
+    10-minute bar, every provider upload that arrived late was therefore not delivered: 167 of
+    1,195 provider admissions in 36 minutes on 2026-11-13, 103 of them within a day of capture,
+    none committed. A device that was offline for a day and then syncs is normal use.
+    ``600`` restores the shared bar; values are clamped to 600-86400.
+    """
+    return _pump_bound(os.getenv('BATCH_PIPELINE_PROVIDER_FRESH_CAPTURE_LAG_SECONDS', '86400'), 86400, 86400, 600)
 
 
 def provider_merge_membership_enabled() -> bool:
@@ -720,6 +732,18 @@ def _pump_bound(raw: str, default: int, maximum: int, minimum: int = 1) -> int:
         return max(minimum, min(int(raw), maximum))
     except ValueError:
         return default
+
+
+def ready_discovery_cursor_enabled() -> bool:
+    return kill_switch('BATCH_PIPELINE_READY_DISCOVERY_CURSOR_ENABLED', log=False)
+
+
+def ready_discovery_owners_per_tick(default: int = 20) -> int:
+    return _pump_bound(os.getenv('BATCH_PIPELINE_READY_DISCOVERY_OWNERS_PER_TICK', str(default)), 20, 100)
+
+
+def ready_discovery_tick_seconds() -> int:
+    return _pump_bound(os.getenv('BATCH_PIPELINE_READY_DISCOVERY_TICK_SECONDS', '10'), 10, 60)
 
 
 def serving_sweep_page_rows() -> int:

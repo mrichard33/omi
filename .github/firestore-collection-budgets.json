@@ -41,6 +41,67 @@
       "reviewed": "2026-11-13"
     }
   ],
-  "dynamic": [],
+  "dynamic": [
+    {
+      "site": "backend/database/batch_pipeline_fresh_guard.py",
+      "expression": "f'{namespace}_results'",
+      "collection_pattern": "batch_pipeline_*_results",
+      "owner": "Goal: Pipeline fresh-delivery guard",
+      "unit": "one maintenance-leader sample at up to 100,000 fresh results per window per environment",
+      "reads_per_unit_budget": 200,
+      "reads_per_day_budget": 576000,
+      "basis": "planning-bound",
+      "source": "SCA-2012: two count aggregations per 60s per prod/dev leader; each costs max(1, ceil(index entries/1000)); 100,000 total and <=100,000 pending => 200/sample, 288,000/day/environment. Not a throughput cap; revisit budget if cohorts exceed this planning envelope. Normally empty/small windows cost 2/sample. Existing lease check adds <=1 metadata read per maintenance call outside this count budget.",
+      "reviewed": "2026-11-13"
+    },
+    {
+      "site": "backend/database/batch_pipeline_projection_finish_backfill.py",
+      "expression": "f'{namespace}_control'",
+      "collection_pattern": "batch_pipeline_*_control",
+      "owner": "batch projection finish backfill (SCA-2024)",
+      "unit": "serving process-minute or backfill page",
+      "reads_per_unit_budget": 2,
+      "reads_per_day_budget": 80000,
+      "basis": "planning-bound",
+      "source": "backend/docs/runbooks/projection-finish-backfill.md: 35 replicas x 1440 negative-marker checks/day plus up to 10000 backfill pages x 2 checkpoint reads. Completed marker is read once per process lifetime; lever off reads zero.",
+      "reviewed": "2026-11-13"
+    },
+    {
+      "site": "backend/database/batch_pipeline_projection_finish_backfill.py",
+      "expression": "f'{store.namespace}_results'",
+      "collection_pattern": "batch_pipeline_*_results",
+      "owner": "batch projection finish backfill (SCA-2024)",
+      "unit": "historical finish row stamped (including page query)",
+      "reads_per_unit_budget": 4,
+      "reads_per_day_budget": 2000000,
+      "basis": "planning-bound",
+      "source": "SCA-2024 census ~478000 persisted/ready rows: one page-query read plus one transactional fence read per row, allowing one repeated pass/retry (~1.912M). Operator-only, capped at 200 rows/page and 10000 pages/invocation; normal serving never invokes stamping.",
+      "reviewed": "2026-11-13"
+    },
+    {
+      "site": "backend/database/batch_pipeline_delivered_share.py",
+      "expression": "f'{namespace}_jobs'",
+      "collection_pattern": "batch_pipeline_*_jobs",
+      "owner": "Goal: Pipeline delivered-share signal (SCA-2117)",
+      "unit": "one maintenance-leader sample of the admitted-unit cohort",
+      "reads_per_unit_budget": 5000,
+      "reads_per_day_budget": 1440000,
+      "basis": "planning-bound",
+      "source": "One bounded metadata page per 300s per prod/dev leader, ordered by enqueued_at and capped at PAGE_LIMIT=5000 document reads: 5,000 x 288 = 1,440,000/day/environment. Normal cohort is ~2,800 units at the 2026-11 peak (~800k/day); a saturated page is reported by omi_batch_pipeline_delivered_share_truncated. Metadata only: no transcript, audio, user id or email. Revisit if admission volume triples or the cohort grows.",
+      "reviewed": "2026-11-14"
+    },
+    {
+      "site": "backend/scripts/batch_pipeline_delivered_share_report.py",
+      "expression": "f'{namespace}_results'",
+      "collection_pattern": "batch_pipeline_*_results",
+      "owner": "Goal: Pipeline delivered-share backfill report (operator-run)",
+      "unit": "one unstamped job in a backfill cohort, including a legacy timestamp-leaf fallback",
+      "reads_per_unit_budget": 2,
+      "reads_per_day_budget": 1000000,
+      "basis": "planning-bound",
+      "source": "Operator-run only, never scheduled. One result read selects projection_state, projection.persisted_at and projection_part_count. A completed legacy receipt without a summary timestamp gets one additional read selecting projection_state and explicit projection_parts.<index>.persisted_at leaves for 1..5000 parts; unsupported counts abort the report. At most two result reads per admitted unstamped unit (~800k reads at 400k units/day). Job pages stay capped at 5000 rows per 900-second UTC cohort. No whole receipt map or identifiers are selected. The release operator must declare the complete target/baseline query budget before reading production.",
+      "reviewed": "2026-11-14"
+    }
+  ],
   "exempt": []
 }
