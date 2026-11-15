@@ -1,5 +1,6 @@
 """Serving-side lease API. Authentication is at the router; all IO is lazy."""
 
+import random
 import asyncio
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -29,14 +30,16 @@ from database.batch_pipeline_staging import reap
 from utils.batch_pipeline.artifact_policy import artifacts_for
 from utils.batch_pipeline.live import drain_recordings
 from utils.batch_pipeline.projection import HELD_PARTIAL_PAGE, Projector, error_type
-from utils.executors import run_blocking, start_background_task, sync_executor
+from utils.executors import db_executor, run_blocking, start_background_task, sync_executor
 from utils.batch_pipeline.contracts import PoolCapacity, WorkResult
+from config.batch_pipeline_leader import UPLOAD_COALESCING_SCAN, UPLOAD_COALESCING_SCAN_TTL
 from utils.batch_pipeline.leader import QUEUE_METRICS, SERVING_MAINTENANCE, LeaderLease
 from utils.batch_pipeline.held_dead_letter import HeldDeadLetter, ProjectionHeldDeadLetter
 from utils.batch_pipeline.ready_discovery import ReadyDiscovery
 from utils.batch_pipeline.merge import OrderedMerge
 from utils.batch_pipeline.metrics import QueueMetrics
 from utils.batch_pipeline.scheduler import Scheduler
+from utils.batch_pipeline.allowance_hold import AllowanceHolds, entitlement
 from utils.batch_pipeline.retention import cleanup_completed_artifacts
 from utils.sync.stage import current_stage
 from utils.sync import reprocess
@@ -82,6 +85,7 @@ class Serving:
         self.reap_staging = reap_staging
         self.enrichment_sweep = enrichment_sweep
         self.recovery = recovery
+        self.allowance_hold_due = 0.0
         # Optional single-owner lease for periodic maintenance (see reconcile).
         self.leader = leader
         self.held_dead_letter = HeldDeadLetter(store, metrics=metrics)
@@ -295,15 +299,25 @@ class Serving:
             )
             self.held_pass_started = None
 
+    def refresh_fresh_guard(self) -> bool:
+        """Use the maintenance lease, including outside the potentially slow pass."""
+        if not self.metrics:
+            return False
+        # Explicit reconcile bypasses the periodic lease; the guard never does.
+        leads = self._leads(True)
+        if leads:
+            self.metrics.fresh_guard.refresh(self.store)
+        else:
+            self.metrics.fresh_guard.deactivate()
+        return leads
+
     def _maintain(self, *, recover_quarantine: bool):
         """Idempotent, transaction-fenced maintenance: cleanup, sweeps, discovery, recovery, drain."""
+        leads = self.refresh_fresh_guard()
         if self.metrics:
-            # Explicit reconcile bypasses the periodic lease; the guard never does.
-            if self._leads(True):
-                self.metrics.fresh_guard.refresh(self.store)
+            if leads:
                 self.metrics.delivered_share.refresh(self.store)
             else:
-                self.metrics.fresh_guard.deactivate()
                 self.metrics.delivered_share.deactivate()
         if self.cleanup:
             try:
@@ -366,6 +380,9 @@ class Serving:
                 'event=batch_projection action=redrive_expired outcome=retry exception_type=%s', type(error).__name__
             )
         self.queue().recover(time.time())
+        if time.monotonic() >= self.allowance_hold_due and self._leads(True):
+            self.allowance_hold_due = time.monotonic() + 30
+            AllowanceHolds(self.store, entitlement).tick(time.time())
         page = self.ready_discovery.page()
         if page is not None:
             for _, owner_id in self.ready_discovery.owners(page):
@@ -428,6 +445,24 @@ def serving_for_stage(stage: str) -> Serving:
 @lru_cache(maxsize=1)
 def _metrics() -> QueueMetrics:
     return QueueMetrics(min_refresh_seconds=serving_metrics_min_refresh_seconds())
+
+
+async def _supervise_fresh_guard(stop):
+    # General maintenance (and its sync executor) may be occupied for minutes.
+    # Keep the same maintenance leader, but borrow a DB thread only for this
+    # bounded count pair. FreshGuard coalesces overlaps and enforces 60s spacing.
+    while not stop.is_set():
+        try:
+            service = await run_blocking(db_executor, serving_for_stage, current_stage())
+            await run_blocking(db_executor, service.refresh_fresh_guard)
+        except Exception as error:
+            logging.getLogger(__name__).error(
+                'event=batch_fresh_guard outcome=retry exception_type=%s', type(error).__name__
+            )
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=20)
+        except asyncio.TimeoutError:
+            pass
 
 
 def start_serving_from_env():
@@ -542,10 +577,18 @@ def start_serving_from_env():
     async def drain_upload_holds():
         from utils.batch_pipeline.upload_coalescing import drain as drain_uploads
 
+        leader = None
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=random.uniform(0, 2))
+        except asyncio.TimeoutError:
+            pass
+
         while not stop.is_set():
             try:
                 service = await run_blocking(sync_executor, serving_for_stage, current_stage())
-                await drain_uploads(service.store)
+                if leader is None:
+                    leader = LeaderLease(service.store, UPLOAD_COALESCING_SCAN, ttl_seconds=UPLOAD_COALESCING_SCAN_TTL)
+                await drain_uploads(service.store, leader=leader)
             except Exception as error:
                 logging.getLogger(__name__).warning(
                     'event=batch_coalescing outcome=scan_retry exception_type=%s', type(error).__name__
@@ -565,7 +608,9 @@ def start_serving_from_env():
             if pump_enabled:
                 await asyncio.gather(projection_pump(), drain_upload_holds())
             else:
-                await asyncio.gather(supervise(), drain(), dispatch_recovery(), drain_upload_holds())
+                await asyncio.gather(
+                    supervise(), drain(), dispatch_recovery(), drain_upload_holds(), _supervise_fresh_guard(stop)
+                )
         finally:
             set_recurring_sweep(None)
 

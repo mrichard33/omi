@@ -1,6 +1,72 @@
 """Reviewed payload sites, including values/keys and duplicate sites. Never refresh in a test."""
 
 FIELD_SITES = {
+    # Home visibility defaults and response metadata only; no lifecycle writes.
+    'database/home_feed.py': [
+        ('_visible', 'status', "'completed'", ('status',)),
+        (
+            'feed.project',
+            'status',
+            "row.get('home_status') or 'completed'",
+            (
+                'detail_id',
+                'emoji',
+                'finished_at',
+                'has_tasks',
+                'home_step',
+                'id',
+                'is_locked',
+                'kind',
+                'member_count',
+                'preview',
+                'revision',
+                'sort_at',
+                'sources',
+                'starred',
+                'started_at',
+                'status',
+                'summary_available',
+                'title',
+            ),
+        ),
+    ],
+    # Read-only gate input for the member-notes wait; no lifecycle document write.
+    'utils/episodes/member_notes.py': [
+        (
+            'before_notes',
+            'status',
+            "getattr(conversation, 'status', None)",
+            ('finalization_job_id', 'id', 'record_lane_owner', 'source', 'status'),
+        ),
+    ],
+    # Close acceptance wire response only; no lifecycle document write.
+    'utils/pusher_record_close.py': [
+        (
+            'result_frame',
+            'status',
+            'status',
+            ('conversation_id', 'phase', 'request_id', 'status', 'type', 'version', 'watermark'),
+        ),
+    ],
+    # Census response metadata only; no lifecycle document writes.
+    'utils/sync/batch_census.py': [
+        (
+            'snapshot',
+            'status',
+            "OUTCOME_DISABLED; literal aliases=[('OUTCOME_DISABLED', ('disabled',))]",
+            ('failed', 'status', 'stocks', 'units'),
+        ),
+        ('snapshot', 'status', 'outcome', ('failed', 'status', 'stocks', 'units')),
+    ],
+    'database/batch_pipeline_allowance_hold.py': [
+        (
+            'park',
+            'state',
+            "STATE; literal aliases=[('STATE', ('allowance_held',))]",
+            ('allowance_held_at', 'merge_pending', 'state'),
+        ),
+        ('restore_retry', 'state', "'retry'", ('available_at', 'lease_until', 'merge_pending', 'state', 'token')),
+    ],
     # Shadow allowance operation lifecycle, separate from audio custody.
     'database/free_allowance_leases.py': [
         ('reserve.commit.record', 'status', "'active'", ('had_refusal', 'has_hold', 'last_reason', 'months', 'status')),
@@ -213,6 +279,12 @@ FIELD_SITES = {
             'state',
             "'ready' if finished else 'persisted'",
             ('conversation_id', 'state'),
+        ),
+        (
+            'ProjectionStore.mark_enrichment.commit',
+            'state',
+            "'ready' if finished else 'persisted'",
+            ('record_notes_deferred', 'state'),
         ),
         ('ProjectionStore.ready.commit', 'state', "'ready'", ('state',)),
         (
@@ -1997,13 +2069,13 @@ FIELD_SITES = {
             'mark_record_upload_failed.commit',
             'record_audio_closed',
             'False',
-            ('record_audio_closed', 'record_upload_failed', 'record_upload_revision'),
+            ('record_audio_closed', 'record_upload_failed', 'record_upload_failed_at', 'record_upload_revision'),
         ),
         (
             'mark_record_upload_failed.commit',
             'record_upload_failed',
             'True',
-            ('record_audio_closed', 'record_upload_failed', 'record_upload_revision'),
+            ('record_audio_closed', 'record_upload_failed', 'record_upload_failed_at', 'record_upload_revision'),
         ),
         ('renew_record_token_lease.commit', 'record_audio_closed', 'False', ('record_audio_closed',)),
         ('renew_record_token_lease.commit', 'record_upload_sessions', 'sessions', ('record_upload_sessions',)),
@@ -2856,6 +2928,7 @@ FIELD_SITES = {
             "'ready'",
             ('available_at', 'failure', 'lease_until', 'retry_started_at', 'state', 'token'),
         ),
+        ('Scheduler.release_allowance_in_transaction', 'state', "'ready'", ('compute_decision', 'state')),
         (
             'Scheduler.requeue_quarantined_in_transaction',
             'state',
