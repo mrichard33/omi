@@ -1,11 +1,12 @@
 {
   "about": "CI flag budget for the transcription pipeline env surface plus explicitly registered helper-backed kill switches (ADR 0006, backend/docs/adr/0006-pipeline-flag-budget.md). tests/unit/test_flag_budget.py fails when a read name is missing here, a registry entry drifts, or budget drifts.",
-  "as_of": "2026-11-14",
+  "as_of": "2026-11-15",
   "scope": [
     "utils/batch_pipeline/**/*.py",
     "diarizer/batch_pipeline*.py",
     "config/batch_pipeline*.py",
     "config/batch_language_recovery.py",
+    "config/listen_reconnect.py",
     "utils/sync/**/*.py",
     "utils/stt/**/*.py",
     "parakeet/language_gate.py",
@@ -25,6 +26,11 @@
   "seed_review_by": "2026-11-15",
   "budget": 161,
   "names": {
+    "MCP_CONVERSATION_FETCH_DEFAULT_MAX_SEGMENTS": {
+      "owner": "quality-lead / q12-mcp-paging",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
+    },
     "BATCH_ADMISSION_LANGUAGE_EXCLUSION_ENABLED": {
       "owner": "Goal: Pipeline",
       "review_by": "2026-12-14"
@@ -76,6 +82,30 @@
       "owner": "SCA-2015",
       "review_by": "2026-12-14",
       "registry": "config/feature-flags.yaml"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_MODE": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_OWNER_KEYS": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_RATE_PER_HOUR": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_REACH_SECONDS": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_STATE": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
+    },
+    "BATCH_PIPELINE_BACKLOG_RELEASE_WRITER": {
+      "owner": "quality-12h/Q12-BB",
+      "review_by": "2026-12-16"
     },
     "BATCH_PIPELINE_CONTENTION_RETRY_ENABLED": {
       "owner": "batch record lane / rollout lead",
@@ -244,6 +274,15 @@
       "review_by": "2026-12-06",
       "registry": "config/feature-flags.yaml"
     },
+    "BATCH_PIPELINE_PROTECTED_SHARE_ENABLED": {
+      "owner": "Pipeline / SCA-1894",
+      "review_by": "2026-11-23",
+      "registry": "config/feature-flags.yaml"
+    },
+    "BATCH_PIPELINE_PROTECTED_SHARE_PERCENT": {
+      "owner": "Pipeline / SCA-1894",
+      "review_by": "2026-11-23"
+    },
     "BATCH_PIPELINE_PROVIDER_BACKLOG_RELEASE_ENABLED": {
       "owner": "provider-stt drain",
       "review_by": "2026-11-27",
@@ -252,10 +291,6 @@
     "BATCH_PIPELINE_PROVIDER_FRESH_CAPTURE_LAG_SECONDS": {
       "owner": "provider-stt drain",
       "review_by": "2026-12-12"
-    },
-    "BATCH_PIPELINE_PROVIDER_STT_SWEEP_MAX_AGE_DAYS": {
-      "owner": "omi-pipeline",
-      "review_by": "2026-11-30"
     },
     "BATCH_PIPELINE_PUBLISH_CONCURRENCY": {
       "seeded": "2026-10-25"
@@ -409,6 +444,10 @@
     "BATCH_PIPELINE_WORKER_VALIDATION_DISPOSITION_ENABLED": {
       "seeded": "2026-10-25"
     },
+    "BATCH_PROJECTION_FINISH_CLASSIFY_PAGE_LIMIT": {
+      "owner": "firestore-lead / SCA-2280",
+      "review_by": "2026-12-14"
+    },
     "BATCH_PULL_BUSY_BORROW_ENABLED": {
       "owner": "cl2-gpueff / batch rollout lead",
       "review_by": "2026-12-04"
@@ -424,6 +463,11 @@
     "BATCH_SKIP_UNCHANGED_CONTROL_WRITE_ENABLED": {
       "owner": "pinecone2 / batch rollout lead",
       "review_by": "2026-12-05"
+    },
+    "BATCH_SOURCE_REUSE_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
     },
     "BATCH_TIMELINESS_ALL_TIME_COUNTS_ENABLED": {
       "owner": "omi-pipeline",
@@ -459,6 +503,10 @@
       "review_by": "2026-11-29"
     },
     "BATCH_VENDOR_OVERFLOW_MIN_READY_UNITS": {
+      "owner": "overflow / two-lane lead",
+      "review_by": "2026-11-29"
+    },
+    "BATCH_VENDOR_OVERFLOW_PRIORITIES": {
       "owner": "overflow / two-lane lead",
       "review_by": "2026-11-29"
     },
@@ -584,6 +632,22 @@
       "review_by": "2026-12-10",
       "registry": "config/feature-flags.yaml"
     },
+    "EPISODE_COMPOSE_ANCHORED_WAIT_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
+    },
+    "EPISODE_COMPOSE_SETTLED_TERMINAL_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
+    },
+    "EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-11-22",
+      "reason": "2026-11-16 renewed: default-off opt-in detach (gated off in d4dcd04); quality lead decides keep-and-ramp or delete by 2026-11-22",
+      "registry": "config/feature-flags.yaml"
+    },
     "EPISODE_HARD_CAP_ACROSS_CONVERSATIONS": {
       "owner": "rollout-meetings / occasion architecture",
       "review_by": "2026-11-28",
@@ -621,6 +685,11 @@
       "owner": "q12-live-notes",
       "registry": "config/feature-flags.yaml",
       "review_by": "2026-12-14"
+    },
+    "HOME_SETTLED_EMPTY_WIRE_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
     },
     "HOSTED_LID_API_URL": {
       "owner": "planscost",
@@ -859,6 +928,26 @@
       "review_by": "2026-12-14",
       "registry": "config/feature-flags.yaml"
     },
+    "RECORD_WAL_HANDOFF_ENABLED": {
+      "owner": "quality WAL custody",
+      "review_by": "2026-12-15"
+    },
+    "RECORD_WAL_PENDING_GLOBAL_BYTES": {
+      "owner": "quality / existing release owner",
+      "review_by": "2026-12-15"
+    },
+    "RECORD_WAL_PENDING_GLOBAL_FILES": {
+      "owner": "quality / existing release owner",
+      "review_by": "2026-12-15"
+    },
+    "RECORD_WAL_PENDING_OWNER_BYTES": {
+      "owner": "quality / existing release owner",
+      "review_by": "2026-12-15"
+    },
+    "RECORD_WAL_PENDING_OWNER_FILES": {
+      "owner": "quality / existing release owner",
+      "review_by": "2026-12-15"
+    },
     "REDIS_DB_HOST": {
       "seeded": "2026-10-25"
     },
@@ -1043,6 +1132,11 @@
     "SYNC_FRESH_MAX_AGE_SECONDS": {
       "seeded": "2026-10-25"
     },
+    "SYNC_FUTURE_CAPTURE_CLAMP_ENABLED": {
+      "owner": "Q12-AD / sync capture recovery",
+      "review_by": "2026-11-22",
+      "reason": "2026-11-16 renewed: review_by expiry failed the flag-budget guard for every branch; enabling waits on the product decision how recovered future-dated recordings appear on Home; quality lead keeps or deletes by 2026-11-22"
+    },
     "SYNC_INLINE_BACKFILL_CONCURRENCY": {
       "seeded": "2026-10-25"
     },
@@ -1118,6 +1212,24 @@
     },
     "VAD_GATE_MODE": {
       "seeded": "2026-10-25"
+    },
+    "BATCH_ORIGINAL_IDENTITY_EVIDENCE_ENABLED": {
+      "owner": "q12-speaker-evidence",
+      "review_by": "2026-11-30",
+      "registry": "config/feature-flags.yaml"
+    },
+    "LISTEN_BATCH_RECONNECT_ENABLED": {
+      "owner": "capture-quality / Release",
+      "review_by": "2026-11-20"
+    },
+    "LISTEN_BATCH_RECONNECT_GRACE_SECONDS": {
+      "owner": "capture-quality / Release",
+      "review_by": "2026-11-30"
+    },
+    "EPISODE_LIVE_MEMBER_CLOSE_ENABLED": {
+      "owner": "quality-lead",
+      "review_by": "2026-12-15",
+      "registry": "config/feature-flags.yaml"
     }
   },
   "retired_history": "docs/history/retired-pipeline-flags.json",
@@ -1152,6 +1264,10 @@
     },
     "MENTOR_PIPELINE": {
       "on": "2026-10-26",
+      "replaced_by": null
+    },
+    "BATCH_PIPELINE_PROVIDER_STT_SWEEP_MAX_AGE_DAYS": {
+      "on": "2026-11-16",
       "replaced_by": null
     }
   }

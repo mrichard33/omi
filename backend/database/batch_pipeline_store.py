@@ -17,6 +17,12 @@ from google.cloud import firestore
 from google.api_core.exceptions import AlreadyExists, FailedPrecondition, Aborted, InvalidArgument
 
 from config.firestore_read_levers import lever_enabled
+from config.batch_pipeline_protected_share import (
+    DEADLINE_SECONDS,
+    MAX_DURATION_SECONDS,
+    READY_PAGE_SIZE,
+    RETRY_PAGE_SIZE,
+)
 from config.batch_pipeline import (
     contention_retry_enabled,
     control_candidate_fanout,
@@ -57,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 class Transaction(Protocol):
     def get(self, table: str, key: str) -> dict: ...
+    def get_existing(self, table: str, key: str) -> dict | None: ...
     def put(self, table: str, key: str, value: dict) -> None: ...
     def patch(self, table: str, key: str, fields: dict) -> None: ...
     def first_pending(self, owner_key: str) -> dict | None: ...
@@ -64,6 +71,7 @@ class Transaction(Protocol):
     def fresh_first_pending(self, owner_key: str) -> dict | None: ...
     def fresh_first_ready_pending(self, owner_key: str) -> dict | None: ...
     def ready_predecessor(self, owner_key: str, priority: int, segment_id: str) -> dict | None: ...
+    def protected_ready(self, owner_key: str, priority: int, now: float, *, after=None) -> list[dict]: ...
     def service_frontier(self, priority: int) -> float: ...
     def check_privacy(self, uid: str, conversation_ids=(), expected_generation: int | None = None) -> int: ...
 
@@ -73,6 +81,7 @@ class Store(Protocol):
     def projection_finish_backfill_complete(self) -> bool: ...
     def projection_followup_backfill_complete(self) -> bool: ...
     def due(self, state: str, now: float, limit: int) -> list[str]: ...
+    def protected_retries(self, now: float, limit: int, *, after=None) -> list[dict]: ...
     def oldest(self, priority: int, *, ready_only: bool) -> float | None: ...
     def oldest_retry(self, priority: int) -> float | None: ...
     def ready_for_capacity(self, priority: int, now: float) -> int: ...
@@ -105,6 +114,7 @@ _DIRECT_READ_KINDS = {
     'fresh_first_pending': 'jobs_query',
     'fresh_first_ready_pending': 'jobs_query',
     'ready_predecessor': 'jobs_query',
+    'protected_ready': 'jobs_query',
     'service_frontier': 'control_query',
     'check_privacy': 'privacy',
 }
@@ -145,6 +155,7 @@ class FirestoreTransaction:
         self.transaction = transaction
         self.read_budget = read_budget
         self.cache: dict[tuple[str, str], dict] = {}
+        self.exists: dict[tuple[str, str], bool] = {}
         self.writes: dict[tuple[str, str], dict] = {}
         self.patches: dict[tuple[str, str], dict] = {}
         # Documents outside the batch tables that join this transaction (the provider-STT outbox row).
@@ -158,6 +169,11 @@ class FirestoreTransaction:
 
     def _note_hinted_activation(self, key: str, priority: int) -> None:
         self.hinted_activations.add((key, int(priority)))
+
+    @classmethod
+    def intake_reference(cls, client: Any, namespace: str, key: str):
+        """Join canonical intake storage to a raw transaction without doing IO."""
+        return cls(client, namespace, None)._ref('intakes', key)
 
     def _ref(self, table: str, key: str):
         if table == 'conversations':
@@ -180,8 +196,15 @@ class FirestoreTransaction:
             if self.read_budget is not None:
                 options = dict(timeout=self.read_budget.timeout(10), retry=None)
             snapshot = self._ref(table, key).get(transaction=self.transaction, **options)
+            self.exists[address] = snapshot.exists
             self.cache[address] = (snapshot.to_dict() or {}) if snapshot.exists else {}
         return deepcopy({**self.writes.get(address, self.cache[address]), **self.patches.get(address, {})})
+
+    def get_existing(self, table: str, key: str) -> dict | None:
+        """Preserve absence separately from an existing empty document, including buffered writes."""
+        row = self.get(table, key)
+        address = (table, key)
+        return row if address in self.writes or address in self.patches or self.exists[address] else None
 
     def put(self, table: str, key: str, value: dict) -> None:
         if table == 'conversations':
@@ -217,6 +240,19 @@ class FirestoreTransaction:
     def ready_predecessor(self, owner_key: str, priority: int, segment_id: str) -> dict | None:
         return ready_predecessor(
             self.client, self.namespace, owner_key, priority, segment_id, transaction=self.transaction
+        )
+
+    def protected_ready(self, owner_key: str, priority: int, now: float, *, after=None) -> list[dict]:
+        return protected_capture_page(
+            self.client,
+            self.namespace,
+            'ready',
+            now,
+            8,
+            owner_key=owner_key,
+            priority=priority,
+            after=after,
+            transaction=self.transaction,
         )
 
     def service_frontier(self, priority: int) -> float:
@@ -255,13 +291,20 @@ class FirestoreTransaction:
             if table not in {'jobs', 'results', 'coalesce_groups', 'coalesce_sources', 'coalesce_heads'}:
                 continue
             job = self.get('jobs', key) if table == 'results' else value
-            identity = (job['owner_id'], job.get('conversation_id'), job.get('privacy_generation'))
+            identity = (
+                job['owner_id'],
+                job.get('conversation_id'),
+                job.get('capture_source_conversation_id'),
+                job.get('privacy_generation'),
+            )
             if identity in guarded:
                 continue
             guarded.add(identity)
             generation = self.check_privacy(
                 job['owner_id'],
-                conversation_ids=(job['conversation_id'],) if job.get('conversation_id') else (),
+                conversation_ids=tuple(
+                    value for value in (job.get('conversation_id'), job.get('capture_source_conversation_id')) if value
+                ),
                 expected_generation=job.get('privacy_generation'),
             )
             if table == 'jobs' and value.get('privacy_generation') is None:
@@ -376,6 +419,9 @@ class FirestoreStore:
     def due(self, state: str, now: float, limit: int = 100) -> list[str]:
         return due(self.client, self.namespace, state, now, limit)
 
+    def protected_retries(self, now: float, limit: int, *, after=None) -> list[dict]:
+        return protected_capture_page(self.client, self.namespace, 'retry', now, limit, after=after)
+
     def oldest(self, priority: int, *, ready_only: bool = False) -> float | None:
         return oldest(self.client, self.namespace, priority, ready_only=ready_only)
 
@@ -433,6 +479,8 @@ class FirestoreStore:
             binding = normalized_binding(job['projection_binding'])
             ids = [value for value in (job.get('conversation_id'), binding.target_conversation_id) if value]
             ids.extend(job.get('conversation_ids') or [])
+            if job.get('capture_source_conversation_id'):
+                ids.append(job['capture_source_conversation_id'])
             try:
                 assert_batch_write_allowed(
                     self.client,
@@ -498,6 +546,7 @@ class FirestoreStore:
         after: tuple | None = None,
         states: tuple[str, ...] = PROJECTION_DISCOVERY_STATES,
         due_before: float | None = None,
+        exclude_async: bool = False,
         followup_due_before: float | None = None,
     ) -> tuple[list[str], Any]:
         return projection_page(
@@ -507,6 +556,7 @@ class FirestoreStore:
             after=after,
             states=states,
             due_before=due_before,
+            exclude_async=exclude_async,
             followup_due_before=followup_due_before,
         )
 
@@ -526,6 +576,7 @@ def projection_page(
     after: tuple | None = None,
     states: tuple[str, ...] = PROJECTION_DISCOVERY_STATES,
     due_before: float | None = None,
+    exclude_async: bool = False,
     followup_due_before: float | None = None,
 ) -> tuple[list[str], Any]:
     """Stable keyset page; the cursor survives removal of its source row.
@@ -544,7 +595,9 @@ def projection_page(
     ``projection_finish_due_at`` has passed. That field leads the ordering
     because Firestore serves a range filter on the first ordered field only, so
     the cursor becomes ``(due_at, committed_at, key)`` and a seed
-    ``(due_at,)`` starts at that clock.
+    ``(due_at,)`` starts at that clock. ``exclude_async`` adds a lower bound
+    on that same field, excluding negative async ownership hints. Without a
+    clock ordering the option is inert and the legacy page stays unchanged.
     """
     if not states or not set(states) <= set(PROJECTION_OBLIGATION_STATES):
         raise ValueError('projection discovery states must be drain states')
@@ -563,6 +616,8 @@ def projection_page(
             .order_by('committed_at')
             .order_by('__name__')
         )
+    if exclude_async and due_before is not None:
+        query = query.where(PROJECTION_FINISH_DUE_FIELD, '>=', 0.0)
     seeded = after is not None and len(after) == 2 and after[1] == ''
     if cutoff is not None:
         if after is not None and len(after) == 3:
@@ -773,6 +828,37 @@ def fresh_pending(client: Any, namespace: str, owner_key: str, limit: int) -> li
             doc.to_dict()
             for doc in base.order_by('capture_at').order_by('segment_id').limit(max(1, min(limit, 32))).stream()
         ]
+
+
+# A single indexed capture_at range plus LIMIT bounds discovery independently
+# of old retry stock. Check due time and immutable END locally; a second range
+# on available_at would allow an unbounded index scan before LIMIT.
+def protected_capture_page(
+    client, namespace, state, now, limit, *, owner_key=None, priority=None, after=None, transaction=None
+):
+    if state not in ('ready', 'retry'):
+        raise ValueError('protected discovery is ready/retry only')
+    if state == 'ready' and (owner_key is None or priority not in (1, 2)):
+        raise ValueError('ready discovery requires an owner and backfill priority')
+    query = (
+        client.collection(f'{namespace}_jobs')
+        .where('state', '==', state)
+        .where('compute_decision.outcome', 'in', ['unattempted', 'allowed'])
+    )
+    if owner_key is not None:
+        query = query.where('owner_key', '==', owner_key)
+    if priority is not None:
+        query = query.where('priority', '==', priority)
+    query = (
+        query.where('capture_at', '>=', now - DEADLINE_SECONDS - MAX_DURATION_SECONDS)
+        .where('capture_at', '<=', now)
+        .order_by('capture_at', direction='DESCENDING')
+        .order_by('segment_id', direction='DESCENDING')
+    )
+    if after is not None:
+        query = query.start_after({'capture_at': after[0], 'segment_id': after[1]})
+    bound = READY_PAGE_SIZE if state == 'ready' else RETRY_PAGE_SIZE
+    return [doc.to_dict() for doc in query.limit(max(1, min(limit, bound))).stream(transaction=transaction)]
 
 
 def ready_predecessor(

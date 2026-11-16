@@ -1406,6 +1406,8 @@ def test_sync_scrape_retains_exporter_and_direct_sentinel_consumers():
     # backend-integration runs the finish sweep, so a drop here makes both read 'no data'.
     assert kept('omi_batch_projection_finish_reads_total')
     assert kept('omi_batch_projection_finish_completed_total')
+    assert kept('omi_batch_projection_finish_classified_total')
+    assert kept('omi_batch_projection_finish_classification_failures_total')
     assert kept('omi_batch_projection_claim_busy_backoffs_total')
     assert kept('omi_batch_projection_privacy_blocked_stops_total')
     assert kept('omi_batch_projection_privacy_backoffs_total')
@@ -1519,11 +1521,13 @@ def test_sync_scrape_retains_exporter_and_direct_sentinel_consumers():
     assert shared['spec']['endpoints'][0]['interval'] == '60s'
     assert shared['spec']['endpoints'][0]['metricRelabeling'][0]['regex'] == (
         'omi_.*|omi_listen_server_batch_suppression_total|listen_quiet_check_.*|conversation_llm_input_dedupe_.*'
-        '|privacy_(checks|check_calls|check_reads|decision_mismatch|shadow_checks|memo_requests|memo_ineligible|ttl_cache|negative_lookup)_total'
+        '|privacy_(checks|check_calls|check_reads|decision_mismatch|decision_comparison|owner_comparison|shadow_checks|memo_requests|memo_ineligible|ttl_cache|negative_lookup)_total'
     )
     # The privacy shadow kill switch reads these from Cloud Run (cl2-infracost 2026-11-04).
     for name in (
         'privacy_decision_mismatch_total',
+        'privacy_decision_comparison_total',
+        'privacy_owner_comparison_total',
         'privacy_shadow_checks_total',
         'privacy_ttl_cache_total',
         'privacy_negative_lookup_total',

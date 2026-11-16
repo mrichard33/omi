@@ -121,6 +121,22 @@ class CustomerData:
         return False
 
 
+def protected_page(rows, state, now, limit, *, owner_key=None, priority=None, after=None):
+    selected = [
+        row
+        for (table, _), row in rows.items()
+        if table == 'jobs'
+        and row.get('state') == state
+        and (row.get('compute_decision') or {}).get('outcome') in ('unattempted', 'allowed')
+        and (owner_key is None or row.get('owner_key') == owner_key)
+        and (priority is None or row.get('priority') == priority)
+        and type(row.get('capture_at')) in (int, float)
+        and now - 14400 <= row['capture_at'] <= now
+        and (after is None or (row['capture_at'], row['segment_id']) < tuple(after))
+    ]
+    return deepcopy(sorted(selected, key=lambda row: (row['capture_at'], row['segment_id']), reverse=True)[:limit])
+
+
 class SimTransaction:
     def __init__(self, store: 'SimStore'):
         self.store = store
@@ -133,6 +149,12 @@ class SimTransaction:
         if base is None:
             base = self.store.rows.get(address, {})
         return deepcopy({**base, **self.patches.get(address, {})})
+
+    def get_existing(self, table: str, key: str) -> dict | None:
+        address = (table, key)
+        if address in self.writes or address in self.patches or address in self.store.rows:
+            return self.get(table, key)
+        return None
 
     def put(self, table: str, key: str, value: dict) -> None:
         # Same refusals as FirestoreTransaction.put/patch (conformance: tests/integration/test_store_conformance.py).
@@ -179,6 +201,9 @@ class SimTransaction:
 
     def first_ready_pending(self, owner_key: str) -> dict | None:
         return self.store.first_pending(owner_key, ready_only=True)
+
+    def protected_ready(self, owner_key, priority, now, *, after=None):
+        return protected_page(self.store.rows, 'ready', now, 8, owner_key=owner_key, priority=priority, after=after)
 
     def service_frontier(self, priority: int) -> float:
         return self.store.service_frontier(priority)
@@ -266,6 +291,9 @@ class SimStore:
                 candidates.append((value, segment_id))
         candidates.sort()
         return [segment_id for _, segment_id in candidates[: max(1, min(limit, 100))]]
+
+    def protected_retries(self, now, limit, *, after=None):
+        return protected_page(self.rows, 'retry', now, min(100, limit), after=after)
 
     def oldest(self, priority: int, *, ready_only: bool = False) -> float | None:
         if ready_only:
@@ -460,6 +488,7 @@ class SimStore:
         after: tuple | None = None,
         states: tuple[str, ...] = PROJECTION_DISCOVERY_STATES,
         due_before: float | None = None,
+        exclude_async: bool = False,
         followup_due_before: float | None = None,
     ) -> tuple[list[str], Any]:
         """Mirror Firestore's legacy or due-clock keyset scan, including inclusive seed cursors."""
@@ -476,6 +505,7 @@ class SimStore:
             if table == 'results'
             and row.get('projection_state') in wanted
             and 'committed_at' in row
+            and (not exclude_async or due_before is None or row.get('projection_finish_due_at', -1) >= 0)
             and (cutoff is None or row.get(clock_field) is not None and row[clock_field] <= float(cutoff))
         )
         if after is not None:

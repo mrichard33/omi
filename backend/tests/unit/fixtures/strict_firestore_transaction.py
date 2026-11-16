@@ -75,6 +75,14 @@ class StrictFirestoreSnapshot:
         self.exists = data is not None
         self.reference: Any = None
 
+    @property
+    def id(self) -> str:
+        return self._explicit_id if hasattr(self, '_explicit_id') else self.reference.id
+
+    @id.setter
+    def id(self, value: str) -> None:
+        self._explicit_id = value
+
     def to_dict(self) -> dict[str, Any] | None:
         return deepcopy(self._data)
 
@@ -114,7 +122,10 @@ class StrictFirestoreDocument:
             transaction._assert_read_allowed()
         data = self._database.rows.get(self.path)
         if field_paths is not None and data is not None:
-            if field_paths not in (
+            # Additive v3 classification metadata uses the same field-mask
+            # semantics as the already supported projection below.
+            supported_field_paths = [field for field in field_paths if field != 'recording']
+            if supported_field_paths not in (
                 ["is_locked"],
                 ["folder_id"],
                 ["language"],
@@ -170,6 +181,13 @@ class StrictFirestoreDocument:
                     'record_projection_revision',
                     'record_upload_failed',
                     'record_audio_partial',
+                    'record_transcription_empty',
+                    'episode_transcription_pending_at',
+                    'server_batch_audio_closed',
+                    'server_batch_audio_start',
+                    'server_batch_audio_end',
+                    'record_audio_closed',
+                    'record_upload_sessions',
                     'status',
                     'started_at',
                     'finished_at',
@@ -444,7 +462,7 @@ class StrictFirestore:
         references: list[StrictFirestoreDocument],
         *,
         field_paths: list[str] | None = None,
-        transaction: StrictFirestoreTransaction,
+        transaction: StrictFirestoreTransaction | None = None,
     ) -> list[StrictFirestoreSnapshot]:
         # Whole-document BatchGet (no field mask) and the folder-membership mask are modelled.
         if field_paths is not None and field_paths != ['folder_id']:
