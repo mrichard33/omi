@@ -9,6 +9,8 @@ from google.cloud import firestore
 
 from database._client import get_data_plane_firestore_client
 from database import batch_pipeline_privacy_queries as queries
+from database import record_wal_capacity
+from utils.batch_pipeline.record_wal_erasure import purge_record_wal_owner
 from database.batch_pipeline_privacy import advance_privacy_generation, finish_privacy_purge, privacy_owner_key
 from database.batch_pipeline_shadow_hook import mirror_refresh, purge_owner as purge_jobstore_owner
 from database.batch_pipeline_allowance_hold import STATE as ALLOWANCE_HELD, OWNERS as ALLOWANCE_OWNERS
@@ -28,6 +30,7 @@ def _belongs(data: dict, conversation_id: str | None) -> bool:
         (data.get('projection_binding') or {}).get('target_conversation_id'),
         *(data.get('conversation_ids') or []),
         *(data.get('source_conversation_ids') or []),
+        *((data.get('source_alias_fallback') or {}).get('prior_dependencies') or []),
     }
     if binding and 'capture_at' in data:
         from utils.sync.capture import chunk_identity
@@ -76,6 +79,8 @@ def _delete_job(
         key = job['owner_key']
         result_ref = client.collection(f'{namespace}_results').document(snapshot.id)
         result = result_ref.get(transaction=transaction).to_dict() or {}
+        if retain_ordering and not result:
+            result = (job.get('source_alias_fallback') or {}).get('log_slot') or {}
         owner_ref = client.collection(f'{namespace}_owners').document(key)
         owner = owner_ref.get(transaction=transaction).to_dict() or {}
         control_ref = client.collection(f'{namespace}_control').document(scheduler_control_key(key))
@@ -207,6 +212,10 @@ def purge_batch_owner(
         from utils.batch_pipeline.retention import delete_batch_object
 
         delete_uri = delete_batch_object
+    # Sweep before deleting reservations: crash orphans have no receipt URI.
+    # Failure leaves metadata and quota reachable and the purge incomplete.
+    if default_storage_cleanup:
+        purge_record_wal_owner(uid, conversation_id)
     deleted = 0
     for namespace in namespaces:
         segments = set()
@@ -238,7 +247,7 @@ def purge_batch_owner(
                         {**data, 'projection': result.get('projection') or data.get('projection')}, conversation_id
                     )
                     if not matched and not (
-                        (table == 'artifacts' and data.get('segment_id') in segments)
+                        (table in {'artifacts', 'projections'} and data.get('segment_id') in segments)
                         or (table == 'intakes' and segments.intersection(data.get('segment_ids') or []))
                     ):
                         continue
@@ -256,6 +265,8 @@ def purge_batch_owner(
                         _delete_job(client, namespace, snapshot, retain_ordering=conversation_id is not None)
                     elif table == 'results' and conversation_id is not None:
                         _erase_result(client, namespace, snapshot)
+                    elif table == 'intakes' and data.get('kind') in {'record_wal_file', 'record_wal_reservation'}:
+                        record_wal_capacity.erase_file(client, snapshot.reference, uid)
                     elif table == 'coalesce_groups':
                         from database.batch_pipeline_coalescing import purge_group
 

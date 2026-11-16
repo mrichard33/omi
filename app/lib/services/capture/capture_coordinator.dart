@@ -6,6 +6,7 @@ import 'package:omi/utils/batch_recording.dart';
 import 'package:omi/utils/enums.dart';
 import 'package:omi/utils/logger.dart';
 
+part 'capture_phone_discard_policy.dart';
 part 'capture_silence_policy.dart';
 
 /// Capture ownership coordinator: the single admission and ordering authority
@@ -1777,6 +1778,7 @@ CaptureTransition transitionCapture(CaptureCoordinatorState state, CaptureEvent 
     switch (event) {
       PhoneStartRequested() => _reducePhoneStart(state, event, env),
       PhoneStopRequested() => _reducePhoneStop(state, event),
+      PhoneDiscardRequested() => _reducePhoneDiscard(state),
       FinishRequested() => _rejectStaleTarget(state, event.target, env) ?? _reduceFinish(state),
       PauseCaptureRequested() => _rejectStaleTarget(state, event.target, env) ?? _reducePause(state, env),
       ResumeCaptureRequested() => _rejectStaleTarget(state, event.target, env) ?? _reduceResume(state, env),
@@ -2632,7 +2634,7 @@ CaptureTransition _reduceDeviceResume(CaptureCoordinatorState state, CaptureEnvi
   if (state.pendantSuspension != null) {
     return CaptureTransition(state.copyWith(suspended: _withPendantWasPaused(state.suspended, false)), const []);
   }
-  return CaptureTransition(state, const []);
+  return _reduceResume(state, env); // Idle muted pendant: unmute like the app's Resume, never a dead end.
 }
 
 CaptureTransition _reduceCall(CaptureCoordinatorState state, CaptureEnvironment env) {

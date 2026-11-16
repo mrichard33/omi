@@ -49,6 +49,14 @@ BUDGET_PATH = BACKEND_DIR / 'config' / 'flag_budget.json'
 FEATURE_FLAGS_PATH = BACKEND_DIR.parent / 'config' / 'feature-flags.yaml'
 SEED_BUDGET = 165  # 2026-10-25 seed; lower it when the surface shrinks, never raise it.
 HELPER_KILL_SWITCHES = {
+    'MCP_CONVERSATION_FETCH_DEFAULT_MAX_SEGMENTS',
+    'BATCH_ORIGINAL_IDENTITY_EVIDENCE_ENABLED',
+    'BATCH_PIPELINE_PROTECTED_SHARE_ENABLED',
+    'HOME_SETTLED_EMPTY_WIRE_ENABLED',
+    'EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED',
+    'EPISODE_COMPOSE_ANCHORED_WAIT_ENABLED',
+    'EPISODE_LIVE_MEMBER_CLOSE_ENABLED',
+    'EPISODE_COMPOSE_SETTLED_TERMINAL_ENABLED',
     'PUSHER_RECORD_CLOSE_NOTIFY_ENABLED',
     'PUSHER_RECORD_CLOSE_NOTIFY_ENABLED_SERVE_PERCENT',
     'PUSHER_RECORD_CLOSE_NOTIFY_ENABLED_SERVE_UID_SHA256S',
@@ -85,6 +93,7 @@ SCOPE = (
     'diarizer/batch_pipeline*.py',
     'config/batch_pipeline*.py',
     'config/batch_language_recovery.py',
+    'config/listen_reconnect.py',
     'utils/sync/**/*.py',
     'utils/stt/**/*.py',
     'parakeet/language_gate.py',
@@ -230,6 +239,7 @@ def test_helper_kill_switch_budget_entries_match_the_live_registry():
         'BATCH_PIPELINE_MERGE_TX_FRESH_GATE_ENABLED',
         'BATCH_PIPELINE_READY_DISCOVERY_CURSOR_ENABLED',
         'BATCH_PIPELINE_BACKLOG_RELEASE_METER_ENABLED',
+        'BATCH_SOURCE_REUSE_ENABLED',
     }
 
     # Keep this inventory check inside the fast-unit CPU budget; the C safe
@@ -278,9 +288,15 @@ def test_helper_kill_switch_budget_entries_match_the_live_registry():
         entry = names[name]
         flag = flags[name]
         assert entry['registry'] == 'config/feature-flags.yaml'
-        if name == 'BATCH_PIPELINE_FRESH_GUARD_ENABLED':
+        if name == 'BATCH_PIPELINE_PROTECTED_SHARE_ENABLED':
+            assert entry['owner'] == flag['owner'] == 'Pipeline / SCA-1894'
+            assert entry['review_by'] == '2026-11-23'
+        elif name == 'BATCH_PIPELINE_FRESH_GUARD_ENABLED':
             assert entry['owner'] == 'Goal: Pipeline'
             assert entry['review_by'] == '2026-12-13'
+        elif name == 'BATCH_ORIGINAL_IDENTITY_EVIDENCE_ENABLED':
+            assert entry['owner'] == flag['owner'] == 'q12-speaker-evidence'
+            assert entry['review_by'] == '2026-11-30'
         elif name == 'PROJECTION_PRIVACY_REFUSAL_RESUME':
             assert entry['owner'] == 'omi-pipeline / refusal-resume'
             assert entry['review_by'] == '2026-12-06'
@@ -310,6 +326,20 @@ def test_helper_kill_switch_budget_entries_match_the_live_registry():
         }:
             assert entry['owner'] == 'refactor-lead'
             assert entry['review_by'] == '2026-12-10'
+        elif name in {
+            'EPISODE_COMPOSE_SETTLED_TERMINAL_ENABLED',
+            'EPISODE_COMPOSE_ANCHORED_WAIT_ENABLED',
+            'EPISODE_LIVE_MEMBER_CLOSE_ENABLED',
+            'EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED',
+            'HOME_SETTLED_EMPTY_WIRE_ENABLED',
+        }:
+            assert entry['owner'] == flag['owner'] == 'quality-lead'
+            assert entry['review_by'] == (
+                '2026-11-22' if name == 'EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED' else '2026-12-15'
+            )
+        elif name == 'MCP_CONVERSATION_FETCH_DEFAULT_MAX_SEGMENTS':
+            assert entry['owner'] == flag['owner'] == 'quality-lead / q12-mcp-paging'
+            assert entry['review_by'] == '2026-12-15'
         elif name.startswith('RECORD_'):
             assert entry['owner'] == 'q12-post-seal'
             assert entry['review_by'] == '2026-12-14'
@@ -319,11 +349,29 @@ def test_helper_kill_switch_budget_entries_match_the_live_registry():
             assert entry['review_by'] == ('2026-12-06' if striped else '2026-11-28')
         assert flag['kind'] == 'env'
         assert 'backend' in flag['surfaces']
-        if name in {'RECORD_FRESH_MERGE_ENABLED', 'RECORD_NOTES_EAGER_ENABLED'}:
+        if name == 'BATCH_PIPELINE_PROTECTED_SHARE_ENABLED':
+            assert flag['lifecycle'] == 'rollout'
+            assert flag['fail'] == 'closed'
+            assert flag['summary'].startswith('Default off')
+            assert flag['review_by'] == entry['review_by']
+            assert 'separate lead' in flag['ramp']['expander']
+            assert 'READY indexes' in flag['ramp']['cohorts'][1]
+            assert 'FRESH' in flag['ramp']['clean_metric']
+        elif name in {'RECORD_FRESH_MERGE_ENABLED', 'RECORD_NOTES_EAGER_ENABLED'}:
             # Image-only GKE rolls do not install an explicit false binding.
             assert flag['lifecycle'] == 'config_switch'
             assert flag['fail'] == 'closed'
             assert flag['summary'].startswith('Default off')
+        elif name == 'MCP_CONVERSATION_FETCH_DEFAULT_MAX_SEGMENTS':
+            assert flag['lifecycle'] == 'config_switch'
+            assert flag['fail'] == 'open'
+            assert '500' in flag['summary'] and '120' in flag['summary']
+        elif name == 'EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED':
+            assert flag['lifecycle'] == 'config_switch'
+            assert flag['fail'] == 'closed'
+            assert flag['summary'].startswith('Default off')
+            assert 'read tolerance' in flag['notes']
+            assert '48 hours' in flag['notes']
         elif name.startswith('PUSHER_RECORD_CLOSE_NOTIFY_ENABLED'):
             default = (
                 'Default 100'
@@ -451,3 +499,18 @@ if __name__ == '__main__':
     for env_name, files in inventory.items():
         print(f'{env_name}\t{", ".join(files)}')
     print(f'{len(inventory)} names in scope', file=sys.stderr)
+
+
+def test_reconnect_dark_rollout_has_a_dated_release_ramp():
+    root = Path(__file__).resolve().parents[3]
+    budget = json.loads((root / 'backend/config/flag_budget.json').read_text())
+    # Same safe semantics as safe_load; the C loader keeps this inside the fast-unit CPU budget.
+    flags = yaml.load(
+        (root / 'config/feature-flags.yaml').read_text(), Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+    )
+    flag = next(item for item in flags['flags'] if item['key'] == 'LISTEN_BATCH_RECONNECT_ENABLED')
+    assert flag['lifecycle'] == 'rollout'
+    assert flag['fail'] == 'closed'
+    assert flag['review_by'] == budget['names'][flag['key']]['review_by'] == '2026-11-20'
+    assert flag['ramp']['done_by'] == '2026-11-20'
+    assert 'Release' in flag['ramp']['expander'] and 'Quality' in flag['ramp']['expander']

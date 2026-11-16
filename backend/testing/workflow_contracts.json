@@ -587,6 +587,7 @@
         "tests/unit/utils/test_listen_pusher_session.py",
         "tests/unit/test_transcribe_teardown_flush.py",
         "tests/unit/test_listen_pusher_stack_ci_wiring.py",
+        "tests/unit/test_listen_pusher_stack_emulator_retry.py",
         "testing/e2e/test_listen_stt.py",
         "testing/e2e/test_listen_pusher_wire_contract.py"
       ],
@@ -617,6 +618,52 @@
         "the Firebase ID token audience and issuer match the deployed backend's explicit Firebase auth project",
         "the bypass is explicit in the workflow log and is limited to an operator-declared upstream outage",
         "probe credentials and provider responses never appear in workflow output"
+      ]
+    },
+    {
+      "id": "runtime_env_composition",
+      "risk": "high",
+      "sources": [
+        "backend/deploy/compose_runtime_env.py",
+        "backend/deploy/runtime_env/**",
+        "backend/scripts/render_backend_runtime_env.py",
+        "backend/scripts/render_gke_backend_config.py"
+      ],
+      "tests": [
+        "tests/unit/test_runtime_env_sources.py",
+        "tests/unit/test_render_backend_runtime_env.py",
+        "tests/unit/test_render_gke_backend_config.py",
+        "tests/unit/test_cross_service_deploy_contract.py",
+        "tests/unit/test_backend_runtime_env_validator.py",
+        "tests/unit/test_runtime_env_manifest_compat.py"
+      ],
+      "checks": [],
+      "invariants": [
+        "source overlays compose exactly to the deployed runtime manifest",
+        "Cloud Run and GKE rendering preserve same-environment service bindings"
+      ]
+    },
+    {
+      "id": "integration_canary_transport",
+      "risk": "high",
+      "sources": [
+        "backend/scripts/integration_canary_controller.py",
+        "backend/scripts/integration_canary_metrics.py",
+        "backend/scripts/runtime_env_canary_ops.py",
+        "backend/scripts/runtime_env_validation/**"
+      ],
+      "tests": [
+        "tests/unit/test_integration_canary_imports.py",
+        "tests/unit/test_integration_canary_controller.py",
+        "tests/unit/test_integration_canary_workflow.py",
+        "tests/unit/test_backend_runtime_env_validator.py",
+        "tests/unit/test_runtime_env_manifest_compat.py"
+      ],
+      "checks": [],
+      "invariants": [
+        "controller mutations retain existing admission, exact-source, journal and rollback gates",
+        "canary composition preserves serving queue, secret and runtime environment bindings",
+        "manifest validation preserves released runtime schema compatibility"
       ]
     },
     {

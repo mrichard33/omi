@@ -1,6 +1,182 @@
 """Reviewed payload sites, including values/keys and duplicate sites. Never refresh in a test."""
 
 FIELD_SITES = {
+    # R40: own retained-audio fallback preserves its committed owner-log slot.
+    'database/batch_pipeline_source_fallback.py': [
+        (
+            'enqueue',
+            'state',
+            "'provider_pending'",
+            (
+                'attempt',
+                'available_at',
+                'lease_until',
+                'merge_pending',
+                'policy',
+                'protocol_version',
+                'requires_compute_admission',
+                'source_alias_fallback',
+                'source_conversation_ids',
+                'source_reuse_version',
+                'state',
+                'stt_route',
+                'token',
+            ),
+        ),
+        (
+            'merge_ready',
+            'projection_state',
+            "'pending'",
+            ('projection_redriven_at', 'projection_state', 'protocol_version', 'result', 'source_reuse_version'),
+        ),
+        ('merge_ready', 'state', "'committed'", ('merge_pending', 'state')),
+    ],
+    # Source aliases bypass paid work and enter the existing ordered result log.
+    'database/batch_pipeline_source_reuse.py': [
+        (
+            'enqueue_alias',
+            'state',
+            "'result_ready'",
+            (
+                'attempt',
+                'available_at',
+                'enqueued_at',
+                'fresh_capture',
+                'lease_until',
+                'merge_pending',
+                'owner_key',
+                'policy',
+                'policy_source',
+                'priority',
+                'protocol_version',
+                'ready_at',
+                'result',
+                'source_alias',
+                'source_alias_version',
+                'source_conversation_ids',
+                'state',
+                'token',
+            ),
+        ),
+    ],
+    # Fenced control gate only, never a batch job state. Validated open/closed
+    # config governs spending; absent/stale heartbeat closes within 180s.
+    'utils/batch_pipeline/backlog_heartbeat.py': [
+        (
+            'HeartbeatAuthority._tick.body',
+            'state',
+            "state; literal aliases=[('state', ('closed',))]",
+            (
+                'mode',
+                'owner_keys',
+                'rate_per_hour',
+                'reach_seconds',
+                'schema_version',
+                'state',
+                'tokens_used',
+                'updated_at',
+                'window',
+            ),
+        ),
+    ],
+    # Client polling adapter only; never writes conversation lifecycle status.
+    'database/record_wal_handoff.py': [
+        (
+            'status',
+            'status',
+            "'processing'",
+            (
+                'failed_segments',
+                'job_id',
+                'lane',
+                'poll_after_ms',
+                'processed_segments',
+                'reason_code',
+                'status',
+                'successful_segments',
+                'total_files',
+                'total_segments',
+            ),
+        ),
+    ],
+    # Reviewed v3 lease-fenced projection/processing payloads; no test-time refresh.
+    'database/conversations_v3_processing.py': [
+        (
+            'begin_processing.begin',
+            'status',
+            "'processing'",
+            (
+                'status',
+                'summary_retryable',
+                'tile_state',
+                'v3_process_attempts',
+                'v3_process_failed',
+                'v3_process_failure_reason',
+                'v3_process_fingerprint',
+                'v3_process_pending',
+            ),
+        ),
+        (
+            'failure_patch',
+            'status',
+            "'completed'",
+            (
+                'status',
+                'summary_retryable',
+                'tile_state',
+                'v3_process_failed',
+                'v3_process_failure_reason',
+                'v3_process_pending',
+            ),
+        ),
+    ],
+    'utils/conversations/v3/planner.py': [
+        (
+            'build',
+            'status',
+            "'processing' if window['finished'] else 'in_progress'",
+            (
+                'audio_files',
+                'created_at',
+                'data_protection_level',
+                'discarded',
+                'finished_at',
+                'home_hidden',
+                'home_hidden_reason',
+                'id',
+                'is_locked',
+                'kind',
+                'language',
+                'manual_end',
+                'outline_kind',
+                'private_cloud_sync_enabled',
+                'recording_pieces',
+                'source',
+                'started_at',
+                'status',
+                'structured',
+                'tile_state',
+                'title_locked',
+                'transcript_segments',
+                'uses_custom_stt',
+                'v3_derived',
+                'v3_recording_ids',
+            ),
+        )
+    ],
+    'utils/conversations/v3/service.py': [
+        ('reconcile', 'status', "prior['status']", ('status',)),
+        ('recording_short_path.guarded', 'status', 'ConversationStatus.completed', ('status',)),
+    ],
+    'utils/batch_pipeline/empty_transcription.py': [
+        (
+            'stamp',
+            'record_transcription_empty',
+            "{'version': 1, 'projection_revision': result['record_projection_revision'], 'pending_generation': "
+            "generation, 'spans': merged}",
+            ('record_transcription_empty',),
+        )
+    ],
     # Home visibility defaults and response metadata only; no lifecycle writes.
     'database/home_feed.py': [
         ('_visible', 'status', "'completed'", ('status',)),
@@ -1494,6 +1670,43 @@ FIELD_SITES = {
                 'updated_at',
             ),
         )
+    ],
+    # Live membership repair uses the existing episode states, under the
+    # recorded-timeline fence; it never changes conversation/audio status.
+    'database/episode_live_members.py': [
+        (
+            'place.commit',
+            'status',
+            "'closed'",
+            (
+                'close_reason',
+                'closed_at',
+                'home_needs_prepare',
+                'pending_boundary',
+                'provisional_items',
+                'recorded_end',
+                'state_version',
+                'status',
+                'summary_needs_regeneration',
+            ),
+        ),
+        ('place.commit', 'status', "'dropped'", ('status',)),
+        (
+            'place.commit',
+            'status',
+            "'live'",
+            (
+                'close_reason',
+                'closed_at',
+                'conversation_ids',
+                'id',
+                'last_activity_at',
+                'member_activity',
+                'started_at',
+                'state_version',
+                'status',
+            ),
+        ),
     ],
     'database/episode_recorded_components.py': [
         ('_state', 'status', "'closed'", ('closed_at', 'member_activity', 'recorded_end', 'state_version', 'status')),
@@ -3149,27 +3362,6 @@ FIELD_SITES = {
             "status; literal aliases=[('status', ('invalid_evidence',))]",
             ('key', 'kind', 'status'),
         ),
-        (
-            'run_session._state_pass',
-            'status',
-            "summary.get('status')",
-            (
-                'agree',
-                'arm',
-                'disagree',
-                'failure',
-                'judged',
-                'judged_harmful',
-                'profile_added',
-                'profile_rejected',
-                'profile_unsupported',
-                'rejected',
-                'rejected_top',
-                'status',
-                'unverified',
-                'would_serve',
-            ),
-        ),
         ('run_session.defect_sink', 'status', "'recorded'", ('status',)),
         ('run_session.defect_sink', 'status', "'recorded'", ('status',)),
     ],
@@ -3229,25 +3421,6 @@ FIELD_SITES = {
             ('processing_status', 'rationale', 'route', 'status', 'target_memory_id'),
         )
     ],
-    'utils/dream_state_pass.py': [
-        (
-            '_run',
-            'status',
-            "'ready'",
-            ('profile_lines', 'profile_ops', 'render_chars', 'stale_refs', 'status', 'total_tokens'),
-        ),
-        ('run', 'status', "'failed'", ('status',)),
-        ('run', 'status', "'failed'", ('status',)),
-        ('run', 'status', "'skipped_deadline'", ('status',)),
-        ('run', 'status', "'timeout'", ('status',)),
-        (
-            'run',
-            'status',
-            "{'written': 'complete', 'superseded': 'complete', 'expired': "
-            "'timeout'}.get(outcome, 'failed'); literal aliases=[('outcome', ('failed',))]",
-            ('status',),
-        ),
-    ],
     'utils/dream_telemetry.py': [
         (
             'pass_payload',
@@ -3297,6 +3470,19 @@ FIELD_SITES = {
                 'weighted_tokens',
             ),
         )
+    ],
+    # Per-blocker scheduling metadata only; no recording lifecycle transition.
+    'utils/episodes/compose_wait.py': [
+        (
+            'observation_updates',
+            'compose_transcript_wait_observations',
+            'merged',
+            (
+                'compose_transcript_wait_observations',
+                'compose_transcript_wait_started_at',
+                'compose_transcript_wait_until',
+            ),
+        ),
     ],
     'utils/episodes/composer.py': [
         (
@@ -3589,6 +3775,15 @@ FIELD_SITES = {
             ('date', 'generated_at', 'status', 'timezone'),
         )
     ],
+    # Read-only MCP card projection: reports the stored status; never written back.
+    'utils/mcp_server/helpers.py': [
+        (
+            'conversation_state_fields',
+            'status',
+            'status if isinstance(status, str) else None',
+            ('duration_seconds', 'status'),
+        )
+    ],
     'utils/mcp_server/oauth.py': [('mcp_authorize_consent', 'status', 'str(exc)', ('code', 'retryable', 'status'))],
     'utils/mcp_server/registry.py': [
         (
@@ -3602,6 +3797,27 @@ FIELD_SITES = {
             'status',
             "{'type': 'string'}",
             ('has_more', 'promoted', 'ready', 'retry_after_seconds', 'status'),
+        ),
+        # The conversation card's output schema (a JSON Schema, not a payload).
+        (
+            '<module>',
+            'status',
+            "{'type': ['string', 'null'], 'description': 'in_progress or processing means still being captured or written'}",
+            (
+                'calendar_event_id',
+                'call_platform',
+                'discarded',
+                'duration_seconds',
+                'is_call',
+                'kind',
+                'participants',
+                'participants_included',
+                'person_ids',
+                'shown_on_home',
+                'source',
+                'status',
+                'summary_covers_through',
+            ),
         ),
     ],
     'utils/memory/atom_keyword_index.py': [
@@ -4279,7 +4495,10 @@ FIELD_SITES = {
             ('duration', 'id', 'signed_url', 'status'),
         ),
         ('download_audio_file_response', 'status', "'pending'", ('poll_after_ms', 'status')),
+        ('download_audio_file_response', 'status', "entry['status']", ('poll_after_ms', 'status')),
+        ('get_audio_signed_urls', 'status', "entry['status']", ('duration', 'id', 'signed_url', 'status')),
         ('precache_audio_files', 'status', "'no_audio'", ('message', 'status')),
+        ('precache_audio_files', 'status', "'started'", ('audio_file_count', 'status')),
         ('precache_audio_files', 'status', "'started'", ('audio_file_count', 'status')),
         ('precache_audio_files', 'status', "'started'", ('audio_file_count', 'status')),
     ],
@@ -4409,7 +4628,13 @@ FIELD_SITES = {
     'utils/workers/consumer.py': [('http_response', 'status', 'result.outcome.value', ('reason', 'status'))],
     'utils/workers/retry.py': [('retry_response', 'status', "'retry'", ('reason', 'status'))],
     'utils/conversations/transcribing_hold.py': [
-        ('project', 'status', "'completed' if status == 'failed' else status", ('status', 'structured'))
+        ('project', 'status', "'completed' if status == 'failed' else status", ('status', 'structured')),
+        # API response only; never sent to a lifecycle persistence helper.
+        ('retry_wire', 'status', "'processing'", ('home_step', 'status', 'structured', 'summary_retryable')),
+    ],
+    'utils/conversations/empty_capture.py': [
+        # Expired-placeholder wire copy, not a stored terminal transition.
+        ('project', 'status', "'completed'", ('status', 'structured', 'summary_retryable')),
     ],
 }
 
@@ -4419,6 +4644,14 @@ FIELD_SITES = {
 # Unclassified sites remain visible pending the typed-outcome redesign.
 KNOWN_TERMINAL_WRITERS = {
     'conversation': {
+        (
+            'database/conversations_v3.py',
+            'commit_projection.commit',
+        ): 'known_extra_writer: lifecycle v3 projection; lease/revision/claim fenced',
+        (
+            'utils/conversations/v3/service.py',
+            'recording_short_path.guarded',
+        ): 'in-memory completion projection after lifecycle.complete',
         ('database/conversation_finalization_jobs.py', '_apply_snapshot_bound_projection'): 'unclassified',
         ('database/conversation_recorded_time.py', 'create_if_absent.create'): 'unclassified',
         ('database/conversations.py', 'release_share_email_recipients'): 'unclassified',

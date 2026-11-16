@@ -29,6 +29,37 @@ def _poll_skip_modes(client):
 def entries():
     namespaces = ['batch_pipeline_prod', 'batch_pipeline_dev']
     return (
+        CoveredByEntry(
+            'database.batch_pipeline_store.FirestoreStore.protected_retries',
+            covered_by=('database.batch_pipeline_store.protected_capture_page',),
+            reason='thin adapter forwards the bounded capture-clock builder with the owning namespace and transaction',
+            expect_observed=False,
+            body_digest='b55d2960c94057cb8df9b9cdd2e7728b6af63728bc0a2cb6f5bd333efed443a2',
+        ),
+        CoveredByEntry(
+            'database.batch_pipeline_store.FirestoreTransaction.protected_ready',
+            covered_by=('database.batch_pipeline_store.protected_capture_page',),
+            reason='thin adapter forwards the bounded capture-clock builder with the owning namespace and transaction',
+            expect_observed=False,
+            body_digest='c722019b927498cd74c6d5c4d3e52506c4e1318ef5ae74da4ddd17af978ae564',
+        ),
+        DriverEntry(
+            'database.batch_pipeline_store.protected_capture_page',
+            domains={'namespace': namespaces, 'after': [None, [2900000.0, 'previous']]},
+            profiles=(
+                CallerProfile('ready', {'state': ['ready'], 'owner_key': ['owner-hash'], 'priority': [1, 2]}),
+                CallerProfile('retry', {'state': ['retry'], 'owner_key': [None], 'priority': [None]}),
+            ),
+            neutrals={
+                'now': (3000000.0, 'capture window only'),
+                'limit': (25, 'bounded page only'),
+                'transaction': (None, 'transaction binding only'),
+            },
+        ),
+        DriverEntry(
+            'database.record_wal_handoff.pending_sample',
+            domains={'namespace': namespaces},
+        ),
         DriverEntry(
             'database.batch_pipeline_delivered_share.delivered_share_page',
             domains={'namespace': namespaces},
@@ -322,6 +353,7 @@ def entries():
                     ('persisted', 'ready'),
                     ('pending', 'persisted', 'ready', 'quarantine_held'),
                 ],
+                'exclude_async': [False, True],
             },
             profiles=(
                 CallerProfile('legacy', {'due_before': [None], 'followup_due_before': [None]}),
@@ -352,12 +384,12 @@ def entries():
         CoveredByEntry(
             'database.batch_pipeline_store.FirestoreStore.projection_page',
             covered_by=('database.batch_pipeline_store.projection_page',),
-            reason='store adapter forwards namespace, limit, keyset cursor, drain states and the optional finish clock unchanged',
+            reason='store adapter forwards namespace, limit, cursor, drain states, independent clock cutoffs and async exclusion unchanged',
             expect_observed=False,
-            # Re-reviewed 2026-11-11: the adapter gained the optional `due_before` finish clock and
-            # forwards it unchanged; the cursor is now typed `tuple | None`. No query, read or bound
-            # changed, and the forwarded shape is still the recorded `projection_page` driver.
-            body_digest='4d2bf50ebc80c25117858198bedfd687cc9a0bd042daa35bb6eaad2ec6d923ed',
+            # Re-reviewed for the scoped dual-clock composition: both clock cutoffs and
+            # async exclusion are forwarded unchanged to the recorded projection_page driver.
+            # Clock-order exclusivity and finish-only exclusion stay in the query builder.
+            body_digest='96f024578c9d338e4fb3a528f1c59801c928167da8ddf0d2747d686700b46ff5',
         ),
         CoveredByEntry(
             'database.batch_pipeline_store.FirestoreStore.projection_pending',
