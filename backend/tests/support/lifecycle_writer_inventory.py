@@ -141,6 +141,7 @@ FIELD_SITES = {
                 'data_protection_level',
                 'discarded',
                 'finished_at',
+                'geolocation',
                 'home_hidden',
                 'home_hidden_reason',
                 'id',
@@ -562,7 +563,7 @@ FIELD_SITES = {
         (
             'ProjectionSession.persist',
             'state',
-            "'ready' if superseded else 'persisted'",
+            "'ready' if superseded or silence else 'persisted'",
             (
                 'audio_required',
                 'conversation_id',
@@ -3111,6 +3112,7 @@ FIELD_SITES = {
             "'leased'",
             ('attempt', 'lease_until', 'shared_gpu_key', 'state', 'token'),
         ),
+        ('Scheduler._recover.recover_page.commit', 'state', "'ready'", ('state',)),
         ('Scheduler.complete.commit', 'state', "'result_ready'", ('ready_at', 'result', 'state')),
         ('Scheduler.defer.commit', 'state', "'retry'", ('attempt', 'available_at', 'lease_until', 'state', 'token')),
         (
@@ -3134,7 +3136,6 @@ FIELD_SITES = {
                 'token',
             ),
         ),
-        ('Scheduler.recover.commit', 'state', "'ready'", ('state',)),
         (
             'Scheduler.redrive_in_transaction',
             'state',

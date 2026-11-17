@@ -35,6 +35,9 @@ from database.privacy_check_metrics import (
     NEGATIVE_LOOKUPS,
     COMPARISONS,
     OWNER_COMPARISONS,
+    OWNER_SHADOW_ERRORS,
+    TTL_KILL,
+    TTL_SWITCH_READS,
     DECISION_MISMATCH,
     SHADOW_CHECKS,
     MEMO_REQUESTS,
@@ -161,13 +164,16 @@ def health_server(
         NEGATIVE_LOOKUPS,
         COMPARISONS,
         OWNER_COMPARISONS,
+        OWNER_SHADOW_ERRORS,
+        TTL_KILL,
+        TTL_SWITCH_READS,
         DECISION_MISMATCH,
         SHADOW_CHECKS,
         MEMO_REQUESTS,
     ):
         registry.register(collector)
     register_gpu_skip_counters(registry)  # diarization decisions + per-unit FP32-parity counters
-    for collector in shadow_parity_collectors():  # A2 shadow only; empty (no jobstore import) otherwise
+    for collector in shadow_parity_collectors():  # Caller denominator/freshness also export in primary-only mode.
         registry.register(collector)
 
     class Handler(BaseHTTPRequestHandler):
