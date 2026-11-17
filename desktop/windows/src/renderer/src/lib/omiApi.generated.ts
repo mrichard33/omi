@@ -8695,7 +8695,17 @@ export interface OmiApiPaths {
       responses: {
         "200": CreateConversationResponse;
         "401": void;
+        "404": void;
         "422": HTTPValidationError;
+        "500": {
+  detail: string;
+};
+        "503": {
+  detail: {
+  code: "conversation_processing_retryable";
+  message: string;
+};
+};
       };
     };
   };
@@ -9053,7 +9063,16 @@ export interface OmiApiPaths {
         "404": void;
         "409": void;
         "422": HTTPValidationError;
+        "500": {
+  detail: string;
+};
         "502": void;
+        "503": {
+  detail: {
+  code: "conversation_processing_retryable";
+  message: string;
+};
+};
       };
     };
   };
@@ -24288,4 +24307,4 @@ export async function get_speech_profile_v4_speech_profile_get(header: { authori
   return _res.status === 204 ? (undefined as any) : await _res.json();
 }
 
-// Total: 553 client methods generated.
+// Total: 554 client methods generated.

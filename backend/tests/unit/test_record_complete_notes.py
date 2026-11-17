@@ -14,7 +14,7 @@ from database.sync_ledger import sync_content_ledger_ref
 from tests.unit.fixtures.strict_firestore_transaction import StrictFirestore
 from utils.batch_pipeline.contracts import ProjectionBinding, WorkItem, Priority
 from utils.batch_pipeline.scheduler import owner_key
-from utils.sync import reprocess
+from utils.sync import capture_end, reprocess
 
 NOW = 100_000.0
 POLICY = ProjectionPolicy()
@@ -167,9 +167,35 @@ def test_large_output_set_checkpoints_without_repeating_notes_after_restart(reco
     outputs = ['capture', *(f'split-{i}' for i in range(128))]
     for cid in outputs[1:]:
         f.user.collection('conversations').document(cid).create({'status': 'completed'})
+    # Arrange ready fallback obligations in linear time. mark_enrichment's
+    # per-output producer walk is covered above; repeating that whole walk here
+    # rechecks all 129 privacy targets for each fallback (quadratic setup).
+    # This test keeps the real 128/129 completion boundary and strict guards.
+    f.store.mark_enrichment('first', f.binding, NOW, 'capture', 'en', policy=POLICY)
+    collection = f.client.collection(reprocess.COLLECTION)
+    fallback_due = collection.document(reprocess.key(f.binding.owner_id, 'capture')).get().to_dict()['due_at']
+    outbox = FirestoreEnrichmentOutbox(f.client)
+    for cid in outputs[1:]:
+        outbox.enqueue(
+            reprocess.key(f.binding.owner_id, cid),
+            f.binding.owner_id,
+            {
+                'conversation_id': cid,
+                'language': 'en',
+                'record_notes_producer': {'conversation_id': 'capture', 'revision': 1},
+            },
+            fallback_due,
+            tx=f.client.transaction(),
+            now=NOW,
+            coalesce='min',
+            snapshot_summary=True,
+            eager_if_unheld=True,
+        )
+    f.client.rows[f.ledger.path]['record_notes_fallback_outputs'] = sorted(outputs)
     entry = f.client.rows[f.store.ref('results', 'first').path]
     entry['projection']['size_rollover_outputs'] = [{'conversation_id': cid, 'created': False} for cid in outputs]
-    f.store.mark_enrichment('first', f.binding, NOW, 'capture', 'en', policy=POLICY)
+    initial_rows = [data for path, data in f.client.rows.items() if path[0] == reprocess.COLLECTION]
+    assert len(initial_rows) == 129 and all(row['version'] == 1 for row in initial_rows)
     assert f.store.complete('first', f.binding, NOW, f.accounting, policy=POLICY) is None
     assert len(f.ledger.get().to_dict()['record_notes_prepared_outputs']) == 128
     assert len([path for path in f.client.rows if path[0] == reprocess.COLLECTION]) == 129
@@ -364,6 +390,31 @@ def test_complete_record_uses_processing_hold_deadline_without_another_settle(re
     assert row.get().to_dict()['version'] == 2
     f.store.complete('first', f.binding, NOW + remaining + 1, f.accounting, policy=POLICY)
     assert row.get().to_dict()['version'] == 2
+
+
+@pytest.mark.parametrize('notes_written', [False, True])
+def test_sealed_live_record_completion_is_due_now_until_its_first_notes(recording, monkeypatch, notes_written):
+    f = recording
+    monkeypatch.setenv('SYNC_PROCESSING_QUIET_SECONDS', '600')
+    f.client.rows[f.conversation.path].update(
+        record_lane_owner='batch_live_v1',
+        private_cloud_sync_enabled=True,
+        record_projection_revision=1,
+        sync_processing_hold={'held': True, 'pending_since': NOW - 30, 'last_content_at': NOW - 20},
+        **({'summary_completed_at': NOW - 60} if notes_written else {}),
+    )
+    row = f.client.collection(reprocess.COLLECTION).document(reprocess.key(f.binding.owner_id, 'capture'))
+    # Unit 1 projected, its sibling still pending: completion cannot run, nothing is due now.
+    f.store.mark_enrichment('first', f.binding, NOW, 'capture', 'en', policy=POLICY)
+    assert f.store.complete('first', f.binding, NOW, f.accounting, policy=POLICY) is None
+    assert row.get().to_dict()['due_at'] == NOW + 120
+    f.store.mark_enrichment('last', f.binding, NOW, 'capture', 'en', policy=POLICY)
+    counted = Mock()
+    monkeypatch.setattr(capture_end, 'record_proof', counted)
+    assert f.store.complete('last', f.binding, NOW, f.accounting, policy=POLICY)
+    # Every unit landed: no quiet wait. After notes, a phone copy keeps it.
+    assert row.get().to_dict()['due_at'] == (NOW + 120 if notes_written else NOW)
+    assert counted.call_args_list == ([] if notes_written else [(('sealed',),)])
 
 
 @pytest.mark.parametrize('hold', ['sync_hold', 'merge_hold'])

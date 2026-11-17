@@ -26,6 +26,11 @@
   "seed_review_by": "2026-11-15",
   "budget": 161,
   "names": {
+    "BATCH_PIPELINE_SILENCE_READ_SKIP_ENABLED": {
+      "owner": "Goal: Margin / Sol",
+      "review_by": "2026-12-12",
+      "reason": "David R9 explicitly requires a reversible silence read optimization; SCA-1757"
+    },
     "MCP_CONVERSATION_FETCH_DEFAULT_MAX_SEGMENTS": {
       "owner": "quality-lead / q12-mcp-paging",
       "review_by": "2026-12-15",
@@ -247,6 +252,11 @@
     "BATCH_PIPELINE_PROJECTION_HOLD_RECOVERY_ENABLED": {
       "owner": "Goal: Pipeline",
       "review_by": "2026-12-14"
+    },
+    "BATCH_PIPELINE_PROJECTION_OVERLAP_DIAGNOSTICS": {
+      "owner": "firestore-cost / projection overlap source owner",
+      "review_by": "2026-11-24",
+      "reason": "Default-on diagnostic off switch requested by PR25596 review; review after the first qualified overlap readout. Does not change discovery or the seeded flag budget."
     },
     "BATCH_PIPELINE_PROJECTION_PREFETCH": {
       "seeded": "2026-10-25"
