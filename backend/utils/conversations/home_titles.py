@@ -22,8 +22,9 @@ def apply_user_title(row: dict[str, Any], user_title: str | None) -> None:
         structured['title'] = user_title
 
 
-# Loaded beside list rows so an owed summary is visible without transcripts.
-SUMMARY_DEBT_FIELDS = ('summary_due_at', 'summary_completed_at', 'summary_output_present')
+# Loaded beside list rows so an owed summary is visible without transcripts. The
+# row-level provenance is the only stand-in marker a batch projection stamps.
+SUMMARY_DEBT_FIELDS = ('summary_due_at', 'summary_completed_at', 'summary_output_present', 'summary_title_provenance')
 
 
 def summary_owed(row: Mapping[str, Any]) -> bool:
@@ -85,17 +86,18 @@ def untitled_pending(structured: Any) -> bool:
     return not str(title or '').strip() or notes_pending(structured)
 
 
-def display_title(title: Any, preview: Any) -> Any:
-    """The Home card title: a bare fallback label with no preview is served as untitled."""
-    return '' if is_fallback_title(title) and not (isinstance(preview, str) and preview.strip()) else title
+def display_title(title: Any, preview: Any, *, label_recording: bool = False) -> Any:
+    """Replace a bare fallback with a neutral label only for eligible Home cards."""
+    if is_fallback_title(title) and not (isinstance(preview, str) and preview.strip()):
+        return fallback_title(None) if label_recording else ''
+    return title
 
 
-def placeholder_title_wire(row: dict[str, Any]) -> dict[str, Any]:
-    """Serve a row that carries only a deterministic placeholder as untitled.
+def placeholder_title_wire(row: dict[str, Any], *, label_recording: bool = False) -> dict[str, Any]:
+    """Hide a bare fallback label and keep ready recordings identifiable.
 
-    Capture stubs written 2026-11-16..17 were stamped "Discussion notes" before
-    any notes existed. Read-only: clients keep their own untitled presentation,
-    a user title or any summary keeps the stored title, and nothing is rewritten.
+    The legacy Home list first applies home_step.project. Other readers
+    that do not project a step still serve a bare fallback as untitled.
     """
     structured = row.get('structured')
     if not isinstance(structured, Mapping):
@@ -106,7 +108,12 @@ def placeholder_title_wire(row: dict[str, Any]) -> dict[str, Any]:
         or not notes_pending(structured)
     ):
         return row
-    return {**row, 'structured': {**structured, 'title': ''}}
+    title = display_title(
+        structured.get('title'),
+        '',
+        label_recording=bool(label_recording and row.get('record_projection_revision') and not row.get('is_locked')),
+    )
+    return {**row, 'structured': {**structured, 'title': title}}
 
 
 def is_deferred_preview_title(row: Any) -> bool:

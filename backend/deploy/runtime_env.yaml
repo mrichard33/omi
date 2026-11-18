@@ -1415,6 +1415,9 @@ environments:
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
               category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
+              category: reliability
         backend-sync:
           capabilities:
           - conversation.finalize.persisted
@@ -1823,6 +1826,9 @@ environments:
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
               category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
+              category: reliability
           forbidden_env:
           - DEEPGRAM_SELF_HOSTED_ENABLED
           - DEEPGRAM_SELF_HOSTED_URL
@@ -2215,6 +2221,9 @@ environments:
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
               category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
+              category: reliability
           provisional: true
           forbidden_env:
           - DEEPGRAM_SELF_HOSTED_ENABLED
@@ -2580,6 +2589,9 @@ environments:
               category: config
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
+              category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
               category: reliability
           forbidden_env:
           - DEEPGRAM_SELF_HOSTED_ENABLED
@@ -3256,6 +3268,9 @@ environments:
           BATCH_PIPELINE_ASYNC_PROJECTION_ENABLED: {value: 'true', category: rollout}
           BATCH_PIPELINE_RECOVERY_MODE: {value: 'off', category: rollout}
           BATCH_PIPELINE_RECOVERY_UID_ALLOWLIST: {value: '', category: rollout}
+          MEDIA_NOISE_MODE: {value: shadow, category: rollout}
+          MEDIA_NOISE_MODE_SERVE_PERCENT: {value: '0', category: rollout}
+          NOTES_SHORT_CLIP_FLOOR: {value: 'true', category: rollout}
           BATCH_PIPELINE_SILENCE_READ_SKIP_ENABLED:
             value: 'false'
             category: ops_kill
@@ -3613,6 +3628,12 @@ environments:
           CONVERSATION_RELEVANCE_JEV_PERCENT:
             category: ops_kill
             value: '100'
+          SYNC_TASKS_PROJECT:
+            value: based-hardware
+            category: reliability
+          SYNC_TASKS_LOCATION:
+            value: us-central1
+            category: reliability
           PUSHER_RECORD_CLOSE_NOTIFY_ENABLED: {value: 'false', category: rollout}
           PUSHER_RECORD_CLOSE_NOTIFY_ENABLED_SERVE_PERCENT: {value: '100', category: rollout}
           PUSHER_RECORD_CLOSE_NOTIFY_ENABLED_SERVE_UID_SHA256S: {value: '', category: rollout}
@@ -3851,6 +3872,9 @@ environments:
             source: environment
           SYNC_TASKS_INVOKER_SA:
             source: environment
+          CONVERSATIONS_V3:
+            source: literal
+            value: 'on'
           CONVERSATIONS_V3_STAGE:
             source: literal
             value: beta
@@ -4391,7 +4415,7 @@ environments:
               value: 'true'
               category: ops_kill
             BATCH_HELD_POLL_SKIP_ENABLED:
-              value: 'true'
+              value: 'false'
               category: ops_kill
             QUIET_EMPTY_EXIT_ENABLED: {value: 'true', category: rollout}
             HOME_TRANSCRIPTION_PRESENTATION_GATE:
@@ -4566,12 +4590,18 @@ environments:
               env_var: SYNC_TASKS_HANDLER_URL
               default: https://backend-sync-hhibjajaja-uc.a.run.app/v2/sync-jobs/run
               category: reliability
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
               category: config
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
+              category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
               category: reliability
           service_account: backend-runtime@based-hardware.iam.gserviceaccount.com
         backend-sync:
@@ -4884,6 +4914,9 @@ environments:
             BATCH_PIPELINE_PROJECTION_PAGINATION_ENABLED: {value: 'true', category: rollout}
             BATCH_PIPELINE_ASYNC_PROJECTION_ENABLED: {value: 'true', category: rollout}
             BATCH_PIPELINE_RECOVERY_MODE: {value: 'off', category: rollout}
+            CONVERSATIONS_V3_BACKFILL:
+              value: 'on'
+              category: ops_kill
             BATCH_PIPELINE_SILENCE_READ_SKIP_ENABLED:
               value: 'false'
               category: ops_kill
@@ -4939,7 +4972,7 @@ environments:
               value: 'true'
               category: ops_kill
             BATCH_HELD_POLL_SKIP_ENABLED:
-              value: 'true'
+              value: 'false'
               category: ops_kill
             BATCH_PIPELINE_UPLOAD_COALESCING_ENABLED:
               value: 'true'
@@ -5125,12 +5158,18 @@ environments:
             SYNC_TASKS_QUEUE:
               value: sync-jobs-fresh
               category: reliability
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
               category: config
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
+              category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
               category: reliability
           flags:
             --timeout: 3600s
@@ -5482,7 +5521,7 @@ environments:
               value: 'true'
               category: ops_kill
             BATCH_HELD_POLL_SKIP_ENABLED:
-              value: 'true'
+              value: 'false'
               category: ops_kill
             QUIET_EMPTY_EXIT_ENABLED: {value: 'true', category: rollout}
             OMI_FLAGS_FIRESTORE_PROJECT:
@@ -5649,12 +5688,18 @@ environments:
             SYNC_TASKS_QUEUE:
               value: sync-backfill-fresh
               category: reliability
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
               category: config
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
+              category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
               category: reliability
           provisional: true
           forbidden_env:
@@ -5973,7 +6018,7 @@ environments:
               value: 'true'
               category: ops_kill
             BATCH_HELD_POLL_SKIP_ENABLED:
-              value: 'true'
+              value: 'false'
               category: ops_kill
             BATCH_PIPELINE_UPLOAD_COALESCING_ENABLED:
               value: 'true'
@@ -6121,12 +6166,18 @@ environments:
               value: based-hardware
             OMI_LLM_GATEWAY_ALLOW_PROD_FEATURE_MODE: {value: 'true', category: rollout}
             SYNC_ASSIGNMENT_CONTENTION_RETRY_ENABLED: {value: 'true', category: rollout}
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
               category: config
             CONVERSATIONS_V3_TASKS_QUEUE:
               value: conversations-v3
+              category: reliability
+            CONVERSATIONS_V3_BACKFILL_QUEUE:
+              value: conversations-v3-backfill
               category: reliability
           forbidden_env:
           - DEEPGRAM_SELF_HOSTED_ENABLED
@@ -6197,6 +6248,9 @@ environments:
             DEMAND_PROCESSING_PERCENT: {value: '0', category: rollout}
             OMI_CUSTOMER_DATA_PROJECT:
               value: based-hardware
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
@@ -6271,6 +6325,9 @@ environments:
               value: 'on'
             OMI_CUSTOMER_DATA_PROJECT:
               value: based-hardware
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
@@ -6318,6 +6375,9 @@ environments:
               value: based-hardware
             GOOGLE_CLOUD_PROJECT:
               value: based-hardware
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
@@ -6376,6 +6436,9 @@ environments:
               value: based-hardware
             BASE_API_URL:
               value: https://api.omi.me
+            CONVERSATIONS_V3:
+              value: 'on'
+              category: ops_kill
             CONVERSATIONS_V3_STAGE: {value: beta, category: rollout}
             CONVERSATIONS_V3_FIRST_APP_BUILD:
               value: ''
