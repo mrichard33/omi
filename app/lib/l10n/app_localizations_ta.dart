@@ -9156,7 +9156,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'இந்தப் பதிவு பதிவேற்றப்பட்டது, ஆனால் Omi இன்னும் உரையாடலை உருவாக்குகிறது. இப்போது நீக்கி செயலாக்கம் தோல்வியடைந்தால், மீட்டெடுக்க முடியாது. அப்படியும் நீக்கவா?';
+      'இந்தப் பதிவு ஏற்கனவே பதிவேற்றப்பட்டது, Omi அதைச் செயலாக்குகிறது. இங்கே நீக்கினால் ஃபோனில் உள்ள நகல் நீக்கப்படும். செயலாக்கம் தோல்வியடைந்தால், Omi இந்த ஃபோனிலிருந்து மீண்டும் முயற்சிக்க முடியாது.';
 
   @override
   String get syncCardAllBackedUp => 'எல்லா பதிவுகளும் ஒத்திசைக்கப்பட்டன';
@@ -14591,14 +14591,6 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'சமீபத்தில்';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return '$duration இணைப்பு துண்டிக்கப்பட்டது';
-  }
-
-  @override
   String get deviceControls => 'கட்டுப்பாடுகள்';
 
   @override
@@ -15538,6 +15530,11 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'புதுப்பிப்பு நிறுவப்படவில்லை. உங்கள் பதக்கம் தற்போதைய ஃபர்ம்வேரில் ($version) தொடர்ந்து இயங்குகிறது. புதுப்பிப்பை மீண்டும் முயற்சிப்பதற்குப் பதிலாக ஆதரவைத் தொடர்பு கொள்ளவும்.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15580,7 +15577,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15664,4 +15661,23 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'சேவையகம் தெரிவித்த பணி';
+
+  @override
+  String get finishNothingToProcess => 'இன்னும் செயலாக்க எதுவும் இல்லை.';
+
+  @override
+  String get finishStillProcessing => 'இன்னும் செயலாக்கப்படுகிறது. இது முகப்பில் தோன்றும்.';
+
+  @override
+  String get finishBackToHome => 'முகப்புக்குத் திரும்பு';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'இந்த உரையாடல் முடிந்ததும் சுருக்கம்';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'சேவையகத்தில் காத்திருக்கும் பதிவேற்றங்கள்';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle =>
+      'உங்கள் ஆடியோ உங்கள் சாதனத்தில் அல்லது தொலைபேசியில் பாதுகாப்பாக உள்ளது';
 }

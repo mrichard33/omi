@@ -9127,7 +9127,7 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Această înregistrare a fost încărcată, dar Omi încă creează conversația. Dacă o ștergi acum și procesarea eșuează, nu poate fi recuperată. Ștergi oricum?';
+      'Această înregistrare este deja încărcată și Omi o procesează. Ștergerea de aici elimină copia de pe telefon. Dacă procesarea eșuează, Omi nu va putea reîncerca de pe acest telefon.';
 
   @override
   String get syncCardAllBackedUp => 'Toate înregistrările sincronizate';
@@ -14554,14 +14554,6 @@ class AppLocalizationsRo extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Recent';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Deconectat timp de $duration';
-  }
-
-  @override
   String get deviceControls => 'Comenzi';
 
   @override
@@ -15500,6 +15492,11 @@ class AppLocalizationsRo extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Actualizarea nu s-a instalat. Pandantivul tău funcționează în continuare cu firmware-ul actual ($version). Te rugăm să contactezi asistența în loc să reîncerci actualizarea.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15541,7 +15538,7 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15625,4 +15622,22 @@ class AppLocalizationsRo extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Activitate raportată de server';
+
+  @override
+  String get finishNothingToProcess => 'Încă nu este nimic de procesat.';
+
+  @override
+  String get finishStillProcessing => 'Încă se procesează. Va apărea pe pagina principală.';
+
+  @override
+  String get finishBackToHome => 'Înapoi la pagina principală';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Rezumat când se încheie această conversație';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Încărcări în așteptare pe server';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Audioul tău este în siguranță pe dispozitiv sau pe telefon';
 }

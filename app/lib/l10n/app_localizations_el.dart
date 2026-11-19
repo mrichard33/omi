@@ -9148,7 +9148,7 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Αυτή η ηχογράφηση μεταφορτώθηκε, αλλά το Omi δημιουργεί ακόμη τη συνομιλία. Αν τη διαγράψετε τώρα και η επεξεργασία αποτύχει, δεν θα μπορεί να ανακτηθεί. Διαγραφή ούτως ή άλλως;';
+      'Αυτή η εγγραφή έχει ήδη μεταφορτωθεί και το Omi την επεξεργάζεται. Η διαγραφή εδώ αφαιρεί το αντίγραφο του τηλεφώνου. Αν η επεξεργασία αποτύχει, το Omi δεν θα μπορεί να ξαναδοκιμάσει από αυτό το τηλέφωνο.';
 
   @override
   String get syncCardAllBackedUp => 'Όλες οι ηχογραφήσεις συγχρονίστηκαν';
@@ -14587,14 +14587,6 @@ class AppLocalizationsEl extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Πρόσφατα';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Αποσυνδεδεμένο για $duration';
-  }
-
-  @override
   String get deviceControls => 'Χειριστήρια';
 
   @override
@@ -15537,6 +15529,11 @@ class AppLocalizationsEl extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Η ενημέρωση δεν εγκαταστάθηκε. Το μενταγιόν σας συνεχίζει να λειτουργεί με το τρέχον υλικολογισμικό ($version). Επικοινωνήστε με την υποστήριξη αντί να δοκιμάσετε ξανά την ενημέρωση.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15578,7 +15575,7 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15662,4 +15659,22 @@ class AppLocalizationsEl extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Εργασία που αναφέρει ο διακομιστής';
+
+  @override
+  String get finishNothingToProcess => 'Δεν υπάρχει ακόμα κάτι για επεξεργασία.';
+
+  @override
+  String get finishStillProcessing => 'Ακόμα σε επεξεργασία. Θα εμφανιστεί στην Αρχική.';
+
+  @override
+  String get finishBackToHome => 'Πίσω στην Αρχική';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Σύνοψη όταν τελειώσει αυτή η συζήτηση';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Μεταφορτώσεις που περιμένουν στον διακομιστή';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Ο ήχος σας είναι ασφαλής στη συσκευή ή στο τηλέφωνό σας';
 }

@@ -9123,7 +9123,7 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Ezt a felvételt feltöltöttük, de az Omi még készíti a beszélgetést. Ha most törli és a feldolgozás meghiúsul, nem állítható vissza. Mégis törli?';
+      'Ez a felvétel már fel van töltve, és az Omi feldolgozza. Az itteni törlés eltávolítja a telefonon lévő másolatot. Ha a feldolgozás sikertelen, az Omi erről a telefonról nem tudja újrapróbálni.';
 
   @override
   String get syncCardAllBackedUp => 'Minden felvétel szinkronizálva';
@@ -14549,14 +14549,6 @@ class AppLocalizationsHu extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Nemrég';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return '$duration szétkapcsolva';
-  }
-
-  @override
   String get deviceControls => 'Vezérlők';
 
   @override
@@ -15494,6 +15486,11 @@ class AppLocalizationsHu extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'A frissítés nem települt. A medál továbbra is működik a jelenlegi firmware-rel ($version). A frissítés újrapróbálása helyett kérjük, fordulj az ügyfélszolgálathoz.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15535,7 +15532,7 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15619,4 +15616,22 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'A szerver által jelzett munka';
+
+  @override
+  String get finishNothingToProcess => 'Még nincs mit feldolgozni.';
+
+  @override
+  String get finishStillProcessing => 'Még feldolgozás alatt. Megjelenik a Kezdőlapon.';
+
+  @override
+  String get finishBackToHome => 'Vissza a Kezdőlapra';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Összefoglaló, amikor ez a beszélgetés véget ér';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Feltöltések várakoznak a szerveren';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'A hanganyagod biztonságban van az eszközödön vagy telefonodon';
 }

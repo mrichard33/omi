@@ -9020,7 +9020,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'تم رفع هذا التسجيل لكن Omi لا يزال ينشئ المحادثة. إذا حذفته الآن وفشلت المعالجة، فلن يمكن استرداده. هل تريد الحذف على أي حال؟';
+      'تم رفع هذا التسجيل بالفعل ويعالجه Omi الآن. الحذف هنا يزيل النسخة الموجودة على الهاتف. إذا فشلت المعالجة، فلن يتمكن Omi من إعادة المحاولة من هذا الهاتف.';
 
   @override
   String get syncCardAllBackedUp => 'تمت مزامنة كل التسجيلات';
@@ -14408,14 +14408,6 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'مؤخرًا';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'انقطع الاتصال لمدة $duration';
-  }
-
-  @override
   String get deviceControls => 'عناصر التحكم';
 
   @override
@@ -15347,6 +15339,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'لم يتم تثبيت التحديث. لا تزال قلادتك تعمل على البرنامج الثابت الحالي ($version). يرجى التواصل مع الدعم بدلاً من إعادة محاولة التحديث.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15388,7 +15385,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15472,4 +15469,22 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'عمل أبلغ عنه الخادم';
+
+  @override
+  String get finishNothingToProcess => 'لا يوجد شيء لمعالجته بعد.';
+
+  @override
+  String get finishStillProcessing => 'لا تزال المعالجة جارية. ستظهر على الشاشة الرئيسية.';
+
+  @override
+  String get finishBackToHome => 'العودة إلى الرئيسية';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'الملخص عند انتهاء هذه المحادثة';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'عمليات الرفع بانتظار الخادم';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'الصوت الخاص بك آمن على جهازك أو هاتفك';
 }

@@ -9088,7 +9088,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Bản ghi này đã được tải lên nhưng Omi vẫn đang tạo cuộc trò chuyện. Nếu bạn xóa ngay bây giờ và quá trình xử lý thất bại, sẽ không thể khôi phục. Vẫn xóa?';
+      'Bản ghi này đã được tải lên và Omi đang xử lý. Xóa ở đây sẽ xóa bản sao trên điện thoại. Nếu xử lý thất bại, Omi không thể thử lại từ điện thoại này.';
 
   @override
   String get syncCardAllBackedUp => 'Tất cả bản ghi đã đồng bộ';
@@ -14491,14 +14491,6 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Gần đây';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Mất kết nối $duration';
-  }
-
-  @override
   String get deviceControls => 'Điều khiển';
 
   @override
@@ -15436,6 +15428,11 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Bản cập nhật chưa được cài đặt. Mặt dây của bạn vẫn hoạt động với firmware hiện tại ($version). Vui lòng liên hệ hỗ trợ thay vì thử cập nhật lại.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15477,7 +15474,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15561,4 +15558,23 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Công việc do máy chủ báo cáo';
+
+  @override
+  String get finishNothingToProcess => 'Chưa có gì để xử lý.';
+
+  @override
+  String get finishStillProcessing => 'Vẫn đang xử lý. Nó sẽ xuất hiện ở Trang chủ.';
+
+  @override
+  String get finishBackToHome => 'Về Trang chủ';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Bản tóm tắt khi cuộc trò chuyện này kết thúc';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Các bản tải lên đang chờ trên máy chủ';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle =>
+      'Âm thanh của bạn vẫn an toàn trên thiết bị hoặc điện thoại của bạn';
 }

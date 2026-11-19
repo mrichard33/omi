@@ -9,13 +9,17 @@ from database import conversations_v3_leases as leases
 from database import conversations_v3_processing as writers
 
 import asyncio
+import hashlib
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from uuid import NAMESPACE_URL, uuid5
 
 from google.cloud.firestore_v1 import FieldFilter
 
+from config.conversations_v3 import stretch_cohesion_enabled
 from utils.conversations.v3.triggers import enqueue, changed
 from utils.conversations.v3.renewal import renew_until_done, leased_work
 from database import conversations as conversations_db, conversations_v3 as store, conversations_v3_fence as fence
@@ -45,12 +49,48 @@ BLOCKED = frozenset(
         'recording_decode_unavailable',
         'account_deletion',
         'document_too_large',
+        'request_too_large',
         'backfill_partition_budget',
         'remove_not_backfilled',
         'rederive_mixed_runs',
         'backfill_source_unreadable',
     }
 )
+
+
+# A blocked owner's earlier passes may have committed windows that still owe notes; draining them is
+# safe for every reason except a pending account deletion.
+NO_DRAIN = frozenset({'account_deletion'})
+
+
+def owner_tag(uid):
+    return hashlib.sha256(str(uid).encode()).hexdigest()[:12]
+
+
+def redacted_cause(error):
+    """The blocking error's cause: its type, plus the size limit and byte counts for a Firestore size error.
+
+    Never the raw message: Firestore names the document path (owner and conversation ids).
+    """
+    cause = getattr(error, '__cause__', None)
+    if cause is None:
+        return '-'
+    text = str(cause)
+    # Pure string checks (store.size_error's markers): this runs on the event loop.
+    kind = 'document' if store.DOCUMENT_TOO_LARGE in text else 'request' if store.REQUEST_TOO_LARGE in text else None
+    if not kind:
+        return type(cause).__name__
+    sizes = ','.join(re.findall(r'\(?(\d+) bytes', text)) or '-'
+    return f'{type(cause).__name__} limit={kind} bytes={sizes}'
+
+
+async def _drain_blocked(uid, reason):
+    if reason in NO_DRAIN:
+        return
+    try:
+        await drain_processing(uid)
+    except Exception as error:
+        logger.warning('v3 reconcile blocked drain failed exception_type=%s', type(error).__name__)
 
 
 def recording_short_path(fn):
@@ -91,17 +131,19 @@ def recording_short_path(fn):
 
 def _match(window, existing, used):
     start, end = window['lines'][0]['start'], window['lines'][-1]['end']
+    published = window.get('_published_ids', ())
     candidates = [
         r
         for r in existing.values()
         if r['id'] not in used
+        and (r['id'] not in published or r.get('deleted'))
         and r.get('started_at')
         and r.get('finished_at')
         and r['started_at'] <= end
         and r['finished_at'] >= start
     ]
-    # First resulting split retains the live id. Deleted targets also retain
-    # their identity, so rebuilds cannot resurrect a deleted time window.
+    # Published claimants are assigned by the planner. Time matching is the fallback
+    # for live rows, legacy rows without claims or playback, and deletion tombstones.
     return min(candidates, key=lambda r: r['started_at']) if candidates else None
 
 
@@ -137,12 +179,16 @@ async def reconcile(
     """
     report = {} if report is None else report
     key = store.BACKFILL_LEASE if derive else 'builder'
+    blocked = None
+    moved = set()
     # Live passes call the outline-cache writers exactly as before; only a backfill names its lease.
     keyed = {'key': key} if derive else {}
     if not on_open and not derive:
-        backoff = await run_blocking(db_executor, store.backoff_until, uid)
+        backoff, parked = await run_blocking(db_executor, store.backoff_state, uid)
         if backoff and backoff > datetime.now(timezone.utc):
             metrics.RECONCILES.labels('backoff').inc()
+            # Rows earlier passes committed still owe notes while the builder is parked.
+            await _drain_blocked(uid, parked)
             return 'backoff'
     token = await run_blocking(db_executor, leases.acquire, uid, key)
     if token is None:
@@ -168,6 +214,7 @@ async def reconcile(
             )
         now = datetime.now(timezone.utc)
         eligible = [r for r in recordings.values() if policy.builder_eligible(r)]
+        cohesion = stretch_cohesion_enabled()
         groups = outline.stretches(eligible, now)
         if on_open and conversation_id:
             target = existing.get(conversation_id)
@@ -189,7 +236,7 @@ async def reconcile(
         background = await run_blocking(db_executor, context.outline_sources, uid, groups)
         for group in groups:
             await run_blocking(db_executor, leases.renew, uid, key, token)
-            messages = outline.messages(group, timezone.utc)
+            messages = outline.messages(group, timezone.utc, cohesion=cohesion)
             messages.append(
                 (
                     'human',
@@ -240,8 +287,16 @@ async def reconcile(
                 cache.append({'fingerprint': fingerprint, 'entries': entries})
 
         async def plan():
-            rows, used = [], set()
-            windows = planner.preserve_finished_windows(planner.windows(groups, outlines), existing, recordings)
+            windows = planner.preserve_finished_windows(
+                planner.windows(groups, outlines, cohesion=cohesion), existing, recordings
+            )
+            # A retained finished conversation owns its id by claim evidence; a fresh window that sorts
+            # before it (late speech overlapping its start) must not time-match the same id. Two planned
+            # rows with one id each re-add the source's held claims, doubling them every pass until the
+            # recording outgrows Firestore's 1 MiB document limit (document_too_large).
+            rows, used = [], {window['existing_id'] for window in windows if window.get('existing_id')}
+            taken = set()
+            allocated = {}
             await run_blocking(db_executor, visibility.hydrate_recognition, uid, recordings, windows)
             for window in windows:
                 # An affirmative transcription failure is terminal even before the silence deadline.
@@ -250,7 +305,21 @@ async def reconcile(
                 prior = existing.get(window.get('existing_id')) or _match(window, existing, used)
                 if prior:
                     used.add(prior['id'])
-                row = planner.build(uid, window, recordings, prior)
+                row = planner.build(uid, window, recordings, prior, allocated=allocated)
+                published_ids = window.get('_published_ids', ())
+                if not prior and (row['id'] in used | taken or row['id'] in published_ids):
+                    first = window['lines'][0]['conversation_id']
+                    seed = f"v3:{uid}:{row['started_at'].isoformat()}:{first}"
+                    blocked_ids = used | taken | set(published_ids)
+                    # Preserve the recording-qualified ID when free. Same-clock windows can also
+                    # share a recording, so probe deterministic suffixes in planner order.
+                    identifier = str(uuid5(NAMESPACE_URL, seed))
+                    suffix = 0
+                    while identifier in blocked_ids:
+                        suffix += 1
+                        identifier = str(uuid5(NAMESPACE_URL, f'{seed}:{suffix}'))
+                    row['id'] = identifier
+                taken.add(row['id'])
                 contributing = _backfill_runs(window, recordings)
                 if derive and len(contributing) > 1:
                     # Undo is scoped to one run; a re-derive never merges rows that different runs own.
@@ -342,6 +411,8 @@ async def reconcile(
                     row['v3_process_pending'] = False
                     row['v3_backfill_process_pending'] = True
                 rows.append(row)
+                for rid, claims in row['_v3_claims'].items():
+                    allocated.setdefault(rid, []).extend((claim['start'], claim['end']) for claim in claims)
             return rows
 
         rows = await plan()
@@ -437,17 +508,24 @@ async def reconcile(
         # retry storm through the shared queue) and back this owner off; v3_pending stays owed.
         metrics.RECONCILES.labels('blocked').inc()
         metrics.BLOCKED.labels(reason).inc()
-        logger.warning('v3 reconcile blocked reason=%s', reason)
+        logger.warning(
+            'v3 reconcile blocked reason=%s owner=%s cause=%s', reason, owner_tag(uid), redacted_cause(error)
+        )
         report['blocked_reason'] = reason
         if not derive:
             # A backfill conflict must not park the owner's live builder.
             await run_blocking(db_executor, store.record_blocked, uid, token, reason)
-        return 'blocked'
+        blocked = reason
     except Exception:
         metrics.RECONCILES.labels('error').inc()
         raise
     finally:
         await run_blocking(db_executor, leases.release, uid, key, token)
+    if blocked is not None:
+        if not derive and not on_open:
+            # Windows earlier passes (or earlier batches) committed still owe their notes.
+            await _drain_blocked(uid, blocked)
+        return 'blocked'
     if on_open:
         await run_blocking(db_executor, enqueue, uid, at=datetime.now(timezone.utc) + timedelta(minutes=1))
         return 'committed'
@@ -475,10 +553,13 @@ def _commit(uid, token, recordings, existing, rows, cache, *, clear_pending=True
             uid, token, recordings, existing, rows, cache, clear_pending=clear_pending, remove=remove, key=key
         )
     except InvalidArgument as error:
-        # A copied window whose inline transcript exceeds Firestore's 1 MiB document limit fails the same
-        # way on every retry; park the owner instead of cycling the shared queue.
-        if 'exceeds the maximum allowed size' in str(error):
+        # A document over Firestore's 1 MiB limit, or a commit request over its payload limit, fails the
+        # same way on every retry; park the owner instead of cycling the shared queue with 500s.
+        kind = store.size_error(error)
+        if kind == 'document':
             raise Conflict('document_too_large') from error
+        if kind == 'request':
+            raise Conflict('request_too_large') from error
         raise
 
 

@@ -9094,7 +9094,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Bu kayıt yüklendi ancak Omi hâlâ konuşmayı oluşturuyor. Şimdi silerseniz ve işleme başarısız olursa kurtarılamaz. Yine de silinsin mi?';
+      'Bu kayıt zaten yüklendi ve Omi onu işliyor. Burada silmek telefondaki kopyayı kaldırır. İşleme başarısız olursa Omi bu telefondan yeniden deneyemez.';
 
   @override
   String get syncCardAllBackedUp => 'Tüm kayıtlar eşitlendi';
@@ -14503,14 +14503,6 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Son zamanlarda';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return '$duration bağlantı kesildi';
-  }
-
-  @override
   String get deviceControls => 'Kontroller';
 
   @override
@@ -15446,6 +15438,11 @@ class AppLocalizationsTr extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Güncelleme yüklenmedi. Kolyeniz mevcut yazılımıyla ($version) çalışmaya devam ediyor. Güncellemeyi yeniden denemek yerine lütfen destekle iletişime geçin.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15487,7 +15484,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15571,4 +15568,22 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Sunucunun bildirdiği işler';
+
+  @override
+  String get finishNothingToProcess => 'Henüz işlenecek bir şey yok.';
+
+  @override
+  String get finishStillProcessing => 'Hâlâ işleniyor. Ana sayfada görünecek.';
+
+  @override
+  String get finishBackToHome => 'Ana Sayfaya Dön';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Bu konuşma bittiğinde özet';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Sunucuda bekleyen yüklemeler';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Sesiniz cihazınızda veya telefonunuzda güvende';
 }

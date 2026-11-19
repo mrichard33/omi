@@ -9104,7 +9104,7 @@ class AppLocalizationsBs extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Ovaj snimak je otpremljen, ali Omi još kreira razgovor. Ako ga sada izbrišete i obrada ne uspije, ne može se vratiti. Svejedno izbrisati?';
+      'Ovaj snimak je već otpremljen i Omi ga obrađuje. Brisanje ovdje uklanja kopiju s telefona. Ako obrada ne uspije, Omi neće moći ponovo pokušati s ovog telefona.';
 
   @override
   String get syncCardAllBackedUp => 'Sve snimke su sinkronizovane';
@@ -14519,14 +14519,6 @@ class AppLocalizationsBs extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Nedavno';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Bez veze $duration';
-  }
-
-  @override
   String get deviceControls => 'Kontrole';
 
   @override
@@ -15464,6 +15456,11 @@ class AppLocalizationsBs extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Ažuriranje se nije instaliralo. Vaš privjesak i dalje radi na trenutnom firmveru ($version). Kontaktirajte podršku umjesto ponovnog pokušaja ažuriranja.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15505,7 +15502,7 @@ class AppLocalizationsBs extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15589,4 +15586,22 @@ class AppLocalizationsBs extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Rad prijavljen sa servera';
+
+  @override
+  String get finishNothingToProcess => 'Još nema ništa za obradu.';
+
+  @override
+  String get finishStillProcessing => 'Još se obrađuje. Pojavit će se na početnoj.';
+
+  @override
+  String get finishBackToHome => 'Nazad na početnu';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Sažetak kada se ovaj razgovor završi';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Otpremanja koja čekaju na serveru';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Vaš audio je siguran na vašem uređaju ili telefonu';
 }
