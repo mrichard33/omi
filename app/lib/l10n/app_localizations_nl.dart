@@ -9106,7 +9106,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Deze opname is geüpload maar Omi maakt het gesprek nog aan. Als je hem nu verwijdert en de verwerking mislukt, kan hij niet worden hersteld. Toch verwijderen?';
+      'Deze opname is al geüpload en Omi verwerkt hem. Hier verwijderen wist de kopie op de telefoon. Als de verwerking mislukt, kan Omi het niet opnieuw proberen vanaf deze telefoon.';
 
   @override
   String get syncCardAllBackedUp => 'Alle opnames gesynchroniseerd';
@@ -14530,14 +14530,6 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Recent';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return '$duration niet verbonden';
-  }
-
-  @override
   String get deviceControls => 'Bediening';
 
   @override
@@ -15474,6 +15466,11 @@ class AppLocalizationsNl extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'De update is niet geïnstalleerd. Je hanger werkt nog steeds op de huidige firmware ($version). Neem contact op met support in plaats van de update opnieuw te proberen.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15516,7 +15513,7 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15600,4 +15597,22 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Door de server gemeld werk';
+
+  @override
+  String get finishNothingToProcess => 'Nog niets om te verwerken.';
+
+  @override
+  String get finishStillProcessing => 'Wordt nog verwerkt. Het verschijnt op Home.';
+
+  @override
+  String get finishBackToHome => 'Terug naar Home';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Samenvatting wanneer dit gesprek eindigt';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Uploads die op de server wachten';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Je audio is veilig op je apparaat of telefoon';
 }

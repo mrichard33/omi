@@ -9073,7 +9073,7 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Táto nahrávka je nahraná, ale Omi ešte vytvára konverzáciu. Ak ju teraz odstránite a spracovanie zlyhá, nebude sa dať obnoviť. Napriek tomu odstrániť?';
+      'Tento záznam je už nahraný a Omi ho spracováva. Odstránením tu vymažete kópiu v telefóne. Ak spracovanie zlyhá, Omi to z tohto telefónu nebude môcť skúsiť znova.';
 
   @override
   String get syncCardAllBackedUp => 'Všetky nahrávky synchronizované';
@@ -14486,14 +14486,6 @@ class AppLocalizationsSk extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Nedávno';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Odpojené na $duration';
-  }
-
-  @override
   String get deviceControls => 'Ovládanie';
 
   @override
@@ -15431,6 +15423,11 @@ class AppLocalizationsSk extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Aktualizácia sa nenainštalovala. Prívesok naďalej funguje na súčasnom firmvéri ($version). Namiesto opakovania aktualizácie kontaktujte podporu.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15472,7 +15469,7 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15556,4 +15553,22 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Práca hlásená serverom';
+
+  @override
+  String get finishNothingToProcess => 'Zatiaľ nie je čo spracovať.';
+
+  @override
+  String get finishStillProcessing => 'Stále sa spracúva. Zobrazí sa na domovskej stránke.';
+
+  @override
+  String get finishBackToHome => 'Späť domov';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Zhrnutie po skončení tohto rozhovoru';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Nahrávky čakajúce na serveri';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Vaše zvukové nahrávky sú v bezpečí na zariadení alebo telefóne';
 }

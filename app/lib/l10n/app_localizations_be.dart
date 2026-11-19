@@ -9107,7 +9107,7 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Гэты запіс запампаваны, але Omi яшчэ стварае размову. Калі выдаліць зараз і апрацоўка не атрымаецца, аднавіць будзе немагчыма. Усё роўна выдаліць?';
+      'Гэты запіс ужо запампаваны, і Omi яго апрацоўвае. Выдаленне тут прыбірае копію на тэлефоне. Калі апрацоўка не атрымаецца, Omi не зможа паўтарыць спробу з гэтага тэлефона.';
 
   @override
   String get syncCardAllBackedUp => 'Усе запісы сінхранізаваны';
@@ -14525,14 +14525,6 @@ class AppLocalizationsBe extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Нядаўна';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Адключаны на $duration';
-  }
-
-  @override
   String get deviceControls => 'Кіраванне';
 
   @override
@@ -15471,6 +15463,11 @@ class AppLocalizationsBe extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Абнаўленне не ўсталявалася. Ваш кулон працуе на бягучай прашыўцы ($version). Звярніцеся ў службу падтрымкі, а не паўтарайце абнаўленне.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15512,7 +15509,7 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15596,4 +15593,22 @@ class AppLocalizationsBe extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Праца паводле сервера';
+
+  @override
+  String get finishNothingToProcess => 'Пакуль няма чаго апрацоўваць.';
+
+  @override
+  String get finishStillProcessing => 'Яшчэ апрацоўваецца. З\'явіцца на галоўнай.';
+
+  @override
+  String get finishBackToHome => 'На галоўную';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Рэзюмэ, калі гэтая размова скончыцца';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Загрузкі, якія чакаюць на серверы';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Ваш аўдыё ў бяспецы на вашай прыладзе або тэлефоне';
 }

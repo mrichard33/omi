@@ -295,6 +295,22 @@ class PersonVoiceQualityReason(StrEnum):
     INCOMPATIBLE_PERSON_VOICEPRINT = 'incompatible_person_voiceprint'
 
 
+class RecordingRotationOutcome(StrEnum):
+    """Disposition of one listen v3 recording rotation step."""
+
+    UNKNOWN = 'unknown'
+    ROTATED = 'rotated'
+    SAME_ROW = 'same_row'
+    CREATE_FAILED = 'create_failed'
+    SEAL_FAILED = 'seal_failed'
+    SEAL_RETRY = 'seal_retry'
+    HANDED_OFF = 'handed_off'
+    OTHER_OWNER = 'other_owner'
+    POINTER_FAILED = 'pointer_failed'
+    SKIPPED_PRODUCER = 'skipped_producer'
+    SUCCESSOR_KEPT = 'successor_kept'
+
+
 class StaleRecoveryOutcome(StrEnum):
     """Disposition of one reconnect stale-row finalization attempt."""
 
@@ -913,6 +929,28 @@ def reason_values(enum: type[StrEnum]) -> frozenset[str]:
 def reason_label(family: ReasonFamily, value: object, enum: type[StrEnum]) -> str:
     """Normalize and count through the single shared reason telemetry core."""
     return _reason_label(family, value, enum)
+
+
+class HistoricalSummaryOpenOutcome(StrEnum):
+    """``omi_historical_summary_open_total{outcome}``: one per summary-on-open request (T1+)."""
+
+    UNKNOWN = 'unknown'
+    EXISTING = 'existing'
+    GENERATED = 'generated'
+    NOT_FOUND = 'not_found'
+    LOCKED = 'locked'
+    DISCARDED = 'discarded'
+    NOT_HISTORICAL = 'not_historical'
+    DISABLED = 'disabled'
+    RATE_LIMITED = 'rate_limited'
+    GLOBAL_LIMITED = 'global_limited'
+    BYOK_REQUIRED = 'byok_keys_required'
+    BUDGET = 'budget'
+    ATTEMPTS_EXHAUSTED = 'attempts_exhausted'
+    BUSY = 'busy'
+    EMPTY = 'empty'
+    TRANSIENT = 'transient'
+    FENCED = 'fenced'
 
 
 class RecurringProfileOutcome(StrEnum):

@@ -9111,7 +9111,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Esta grabación se subió, pero Omi todavía está creando la conversación. Si la eliminas ahora y el procesamiento falla, no se podrá recuperar. ¿Eliminar de todos modos?';
+      'Esta grabación ya se subió y Omi la está procesando. Eliminarla aquí borra la copia del teléfono. Si el procesamiento falla, Omi no podrá reintentarlo desde este teléfono.';
 
   @override
   String get syncCardAllBackedUp => 'Todas las grabaciones sincronizadas';
@@ -14536,14 +14536,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Recientemente';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Desconectado durante $duration';
-  }
-
-  @override
   String get deviceControls => 'Controles';
 
   @override
@@ -15479,6 +15471,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'La actualización no se instaló. Tu colgante sigue funcionando con el firmware actual ($version). Contacta con soporte en lugar de volver a intentar la actualización.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15520,7 +15517,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15604,4 +15601,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Trabajo indicado por el servidor';
+
+  @override
+  String get finishNothingToProcess => 'Todavía no hay nada que procesar.';
+
+  @override
+  String get finishStillProcessing => 'Todavía se está procesando. Aparecerá en Inicio.';
+
+  @override
+  String get finishBackToHome => 'Volver a Inicio';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Resumen cuando termine esta conversación';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Subidas pendientes en el servidor';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Tu audio está seguro en tu dispositivo o teléfono';
 }

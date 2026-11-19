@@ -9074,7 +9074,7 @@ class AppLocalizationsDa extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Denne optagelse er uploadet, men Omi opretter stadig samtalen. Hvis du sletter den nu, og behandlingen mislykkes, kan den ikke gendannes. Slet alligevel?';
+      'Denne optagelse er allerede uploadet, og Omi behandler den. Sletning her fjerner telefonens kopi. Hvis behandlingen mislykkes, kan Omi ikke prøve igen fra denne telefon.';
 
   @override
   String get syncCardAllBackedUp => 'Alle optagelser synkroniseret';
@@ -14480,14 +14480,6 @@ class AppLocalizationsDa extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'For nylig';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Afbrudt i $duration';
-  }
-
-  @override
   String get deviceControls => 'Betjening';
 
   @override
@@ -15426,6 +15418,11 @@ class AppLocalizationsDa extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Opdateringen blev ikke installeret. Dit vedhæng virker stadig på den nuværende firmware ($version). Kontakt support i stedet for at prøve opdateringen igen.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15467,7 +15464,7 @@ class AppLocalizationsDa extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15551,4 +15548,22 @@ class AppLocalizationsDa extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Arbejde rapporteret af serveren';
+
+  @override
+  String get finishNothingToProcess => 'Intet at behandle endnu.';
+
+  @override
+  String get finishStillProcessing => 'Behandles stadig. Den vises på Hjem.';
+
+  @override
+  String get finishBackToHome => 'Tilbage til Hjem';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Resumé, når denne samtale slutter';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Uploads, der venter på serveren';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Din lyd er i sikkerhed på din enhed eller telefon';
 }

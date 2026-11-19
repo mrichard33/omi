@@ -9082,7 +9082,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'این ضبط بارگذاری شده اما Omi هنوز در حال ساخت مکالمه است. اگر اکنون آن را حذف کنید و پردازش ناموفق شود، قابل بازیابی نخواهد بود. به‌هرحال حذف شود؟';
+      'این ضبط قبلاً آپلود شده و Omi در حال پردازش آن است. حذف در اینجا نسخهٔ روی گوشی را پاک می‌کند. اگر پردازش ناموفق باشد، Omi نمی‌تواند از این گوشی دوباره تلاش کند.';
 
   @override
   String get syncCardAllBackedUp => 'همهٔ ضبط‌ها همگام شدند';
@@ -14485,14 +14485,6 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'اخیراً';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'قطع اتصال به مدت $duration';
-  }
-
-  @override
   String get deviceControls => 'کنترل‌ها';
 
   @override
@@ -15428,6 +15420,11 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'به‌روزرسانی نصب نشد. آویز شما همچنان با میان‌افزار فعلی ($version) کار می‌کند. لطفاً به‌جای تلاش دوباره برای به‌روزرسانی، با پشتیبانی تماس بگیرید.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15469,7 +15466,7 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15553,4 +15550,22 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'کار گزارش‌شده توسط سرور';
+
+  @override
+  String get finishNothingToProcess => 'هنوز چیزی برای پردازش نیست.';
+
+  @override
+  String get finishStillProcessing => 'هنوز در حال پردازش است. در صفحه اصلی نمایش داده می‌شود.';
+
+  @override
+  String get finishBackToHome => 'بازگشت به صفحه اصلی';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'خلاصه پس از پایان این گفتگو';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'بارگذاری‌های در انتظار در سرور';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'صدای شما روی دستگاه یا گوشی شما در امان است';
 }

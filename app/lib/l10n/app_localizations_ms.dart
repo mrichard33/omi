@@ -9103,7 +9103,7 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Rakaman ini telah dimuat naik tetapi Omi masih mencipta perbualan. Jika anda padam sekarang dan pemprosesan gagal, ia tidak dapat dipulihkan. Padam juga?';
+      'Rakaman ini sudah dimuat naik dan sedang diproses oleh Omi. Memadamnya di sini membuang salinan pada telefon. Jika pemprosesan gagal, Omi tidak boleh mencuba semula dari telefon ini.';
 
   @override
   String get syncCardAllBackedUp => 'Semua rakaman tersegerak';
@@ -14526,14 +14526,6 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Baru-baru ini';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Terputus selama $duration';
-  }
-
-  @override
   String get deviceControls => 'Kawalan';
 
   @override
@@ -15472,6 +15464,11 @@ class AppLocalizationsMs extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Kemas kini tidak dipasang. Loket anda masih berfungsi dengan perisian tegar semasa ($version). Sila hubungi sokongan dan bukannya mencuba kemas kini sekali lagi.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15513,7 +15510,7 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15597,4 +15594,22 @@ class AppLocalizationsMs extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Kerja yang dilaporkan pelayan';
+
+  @override
+  String get finishNothingToProcess => 'Belum ada apa-apa untuk diproses.';
+
+  @override
+  String get finishStillProcessing => 'Masih diproses. Ia akan muncul di Laman Utama.';
+
+  @override
+  String get finishBackToHome => 'Kembali ke Laman Utama';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Ringkasan apabila perbualan ini tamat';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Fail yang dimuat naik sedang menunggu pada pelayan';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Audio anda selamat pada peranti atau telefon anda';
 }

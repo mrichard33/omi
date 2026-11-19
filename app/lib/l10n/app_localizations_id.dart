@@ -9087,7 +9087,7 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get deleteWhileProcessingMessage =>
-      'Rekaman ini sudah diunggah tetapi Omi masih membuat percakapan. Jika dihapus sekarang dan pemrosesan gagal, rekaman tidak dapat dipulihkan. Tetap hapus?';
+      'Rekaman ini sudah diunggah dan sedang diproses Omi. Menghapusnya di sini menghapus salinan di ponsel. Jika pemrosesan gagal, Omi tidak dapat mencoba lagi dari ponsel ini.';
 
   @override
   String get syncCardAllBackedUp => 'Semua rekaman tersinkron';
@@ -14504,14 +14504,6 @@ class AppLocalizationsId extends AppLocalizations {
   }
 
   @override
-  String get deviceRecently => 'Baru-baru ini';
-
-  @override
-  String deviceDisconnectedFor(String duration) {
-    return 'Terputus selama $duration';
-  }
-
-  @override
   String get deviceControls => 'Kontrol';
 
   @override
@@ -15450,6 +15442,11 @@ class AppLocalizationsId extends AppLocalizations {
   }
 
   @override
+  String firmwareUpdateNotInstalledCv1Message(String version) {
+    return 'Pembaruan tidak terpasang. Liontin Anda tetap berfungsi dengan firmware saat ini ($version). Hubungi dukungan alih-alih mencoba pembaruan lagi.';
+  }
+
+  @override
   String get firmwareUpdateUnconfirmedMessage =>
       'Couldn\'t confirm the update. Your pendant hasn\'t reconnected yet. Keep it nearby and check its firmware version before trying again.';
 
@@ -15491,7 +15488,7 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get syncTooOldExplanation =>
-      'This recording is over 30 days old, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
+      'This recording is older than Omi\'s sync window, so Omi can\'t transcribe it. Download the audio to keep it, then delete it here.';
 
   @override
   String freeCapTitle(int minutes) {
@@ -15575,4 +15572,22 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get onTheWayServerWork => 'Pekerjaan yang dilaporkan server';
+
+  @override
+  String get finishNothingToProcess => 'Belum ada yang perlu diproses.';
+
+  @override
+  String get finishStillProcessing => 'Masih diproses. Ini akan muncul di Beranda.';
+
+  @override
+  String get finishBackToHome => 'Kembali ke Beranda';
+
+  @override
+  String get conversationSummaryWhenItEnds => 'Ringkasan saat percakapan ini berakhir';
+
+  @override
+  String get deviceUploadsWaitingOnServer => 'Unggahan menunggu di server';
+
+  @override
+  String get deviceUploadsWaitingOnServerSubtitle => 'Audio Anda aman di perangkat atau ponsel Anda';
 }
