@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 import importlib
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -704,3 +705,57 @@ def test_scoped_preview_commit_sets_wake_without_delaying_pending_speech(strict,
 
     assert strict.rows[R]['v3_pending'] is True
     assert strict.rows[R]['v3_pending_since'] == (AT if already_pending else due)
+
+
+@pytest.mark.parametrize('engine', ['pending', 'go'])
+def test_processing_writers_refuse_foreign_snapshot(strict, monkeypatch, engine):
+    uid, cid = 'synthetic', 'c'
+    path = ('users', uid, 'conversations', cid)
+    prior = {'id': cid, 'status': 'processing', 'sync_content_revision': 1, 'v3_process_pending': True}
+    stored = {
+        **prior,
+        'finalization_engine': engine,
+        'finalization_owner_epoch': 1,
+        'v3_backfill_process_pending': True,
+    }
+    strict.rows[path] = stored.copy()
+    token = leases.acquire(uid, 'summary-c', firestore_client=strict)
+    monkeypatch.setattr(store.conversations, 'db', strict)
+
+    assert not writers.begin_processing(uid, prior, token, firestore_client=strict)
+    assert not writers.fail_processing(uid, cid, token, 1, firestore_client=strict)
+    assert not writers.settle_processing(uid, cid, token, 1, AT, notes=True, firestore_client=strict)
+    assert (
+        writers.settle_backfill_processing(uid, cid, failed=True, max_attempts=1, firestore_client=strict) == 'absent'
+    )
+    with pytest.raises(service.Conflict, match='summary_source_changed'):
+        writers.store_summary(uid, cid, token, 1, {'title': 'Synthetic'}, AT, firestore_client=strict)
+    assert not lifecycle.complete(uid, cid)
+    assert strict.rows[path] == stored
+
+
+@pytest.fixture
+def created_delivery(monkeypatch):
+    # Load the integration graph in fixture setup. This test exercises the
+    # drain's ownership check before any lease or integration work.
+    created = importlib.import_module('utils.conversations.v3.created')
+    deliver = AsyncMock()
+    monkeypatch.setattr(created, 'deliver', deliver)
+    return deliver
+
+
+@pytest.mark.asyncio
+async def test_queued_processing_skips_foreign_candidate_before_lease(monkeypatch, created_delivery):
+    async def run_inline(_executor, fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    pending = Mock(return_value=[{'id': 'c', 'finalization_engine': 'go', 'finalization_owner_epoch': 1}])
+    acquire = Mock(side_effect=AssertionError('foreign row acquired a processing lease'))
+    monkeypatch.setattr(service, 'run_blocking', run_inline)
+    monkeypatch.setattr(service, 'pending_processing', pending)
+    monkeypatch.setattr(leases, 'acquire', acquire)
+
+    await service.drain_processing('synthetic')
+    pending.assert_called_once_with('synthetic')
+    acquire.assert_not_called()
+    created_delivery.assert_awaited_once_with('synthetic')
