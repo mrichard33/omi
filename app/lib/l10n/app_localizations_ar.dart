@@ -555,10 +555,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get hardwareSection => 'الأجهزة';
 
   @override
-  String get v2Undetected => 'لم يتم اكتشاف V2';
+  String get v2Undetected => 'المزامنة دون اتصال غير متاحة';
 
   @override
-  String get v2UndetectedMessage => 'نرى أن لديك جهاز V1 أو أن جهازك غير متصل. وظيفة بطاقة SD متاحة فقط لأجهزة V2.';
+  String get v2UndetectedMessage =>
+      'تحتاج المزامنة دون اتصال إلى جهاز Omi متصل مع بطاقة SD للتخزين. جهازك الحالي لا يدعم هذه الميزة.';
 
   @override
   String get endConversation => 'إنهاء المحادثة';
@@ -15631,4 +15632,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stillWorkingOnIt => 'ما زلنا نعمل عليه.';
+
+  @override
+  String get firmwareUpdateFirmwareTooOld =>
+      'البرنامج الثابت لجهازك قديم جدًا لهذا التحديث. تواصل مع الدعم للمساعدة في تحديث جهازك.';
+
+  @override
+  String get firmwareUpdateAppRequired =>
+      'يتطلب تحديث البرنامج الثابت هذا إصدارًا أحدث من تطبيق Omi. حدّث التطبيق من متجر التطبيقات لديك، ثم تحقّق مرة أخرى.';
 }
