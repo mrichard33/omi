@@ -561,11 +561,11 @@ class AppLocalizationsMk extends AppLocalizations {
   String get hardwareSection => 'Хардвер';
 
   @override
-  String get v2Undetected => 'V2 не е детектирано';
+  String get v2Undetected => 'Офлајн синхронизацијата не е достапна';
 
   @override
   String get v2UndetectedMessage =>
-      'Видиме дека имате V1 уред или вашиот уред не е поврзан. Функционалност на SD картичка е достапна само за V2 уреди.';
+      'За офлајн синхронизација е потребен поврзан уред Omi со меморија на SD-картичка. Вашиот тековен уред не го поддржува тоа.';
 
   @override
   String get endConversation => 'Крај разговор';
@@ -15784,4 +15784,12 @@ class AppLocalizationsMk extends AppLocalizations {
 
   @override
   String get stillWorkingOnIt => 'Сè уште се работи на тоа.';
+
+  @override
+  String get firmwareUpdateFirmwareTooOld =>
+      'Фирмверот на вашиот уред е премногу стар за ова ажурирање. Контактирајте со поддршката за помош при ажурирањето на уредот.';
+
+  @override
+  String get firmwareUpdateAppRequired =>
+      'Ова ажурирање на фирмверот бара понова верзија на апликацијата Omi. Ажурирајте ја апликацијата од вашата продавница за апликации, па проверете повторно.';
 }

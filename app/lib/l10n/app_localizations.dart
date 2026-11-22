@@ -24297,7 +24297,7 @@ abstract class AppLocalizations {
   /// **'Retry all'**
   String get activityRetryAll;
 
-  /// Activity capture attention row title when the free-space probe itself failed (reason disk_space_unknown); the disk may not actually be full.
+  /// Title for an unresolved storage check in capture attention or Offline Sync.
   ///
   /// In en, this message translates to:
   /// **'Can\'t check storage'**
@@ -27602,6 +27602,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Still working on it.'**
   String get stillWorkingOnIt;
+
+  /// Firmware update unavailable because the device is below the release minimum firmware version.
+  ///
+  /// In en, this message translates to:
+  /// **'Your device\'s firmware is too old for this update. Contact support for help updating your device.'**
+  String get firmwareUpdateFirmwareTooOld;
+
+  /// Firmware update unavailable because the installed Omi app does not meet the release app version or build requirement.
+  ///
+  /// In en, this message translates to:
+  /// **'This firmware update needs a newer Omi app. Update the app from your app store, then check again.'**
+  String get firmwareUpdateAppRequired;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
