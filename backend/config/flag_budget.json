@@ -75,6 +75,11 @@
       "owner": "overflow / two-lane lead",
       "review_by": "2026-11-29"
     },
+    "BATCH_PARKED_JOB_SWEEPER_ENABLED": {
+      "owner": "omi-pipeline",
+      "review_by": "2026-12-18",
+      "registry": "config/feature-flags.yaml"
+    },
     "BATCH_PIPELINE_API_URL": {
       "seeded": "2026-10-25"
     },
@@ -208,6 +213,11 @@
       "review_by": "2026-12-18",
       "registry": "config/feature-flags.yaml"
     },
+    "BATCH_PIPELINE_MERGE_AGED_GPU_RELEASE_ENABLED": {
+      "owner": "Goal: Pipeline",
+      "review_by": "2026-12-07",
+      "registry": "config/feature-flags.yaml"
+    },
     "BATCH_PIPELINE_MERGE_STALE_HEAD_UID_ALLOWLIST": {
       "owner": "q12-post-seal",
       "review_by": "2026-12-18",
@@ -274,8 +284,16 @@
     },
     "BATCH_PIPELINE_PROJECTION_OVERLAP_DIAGNOSTICS": {
       "owner": "firestore-cost / projection overlap source owner",
-      "review_by": "2026-11-24",
-      "reason": "Default-on diagnostic off switch requested by PR25596 review; review after the first qualified overlap readout. Does not change discovery or the seeded flag budget."
+      "review_by": "2026-12-01",
+      "reason": "SCA-3850: give firestore-cost one week to review the off switch against its first qualified overlap readout"
+    },
+    "BATCH_PIPELINE_PROJECTION_PHASE_SAMPLE_ENABLED": {
+      "owner": "Margin (SCA-3664)",
+      "review_by": "2026-12-07"
+    },
+    "BATCH_PIPELINE_PROJECTION_PHASE_SAMPLE_PERCENT": {
+      "owner": "Margin (SCA-3664)",
+      "review_by": "2026-12-07"
     },
     "BATCH_PIPELINE_PROJECTION_PREFETCH": {
       "seeded": "2026-10-25"
@@ -305,12 +323,14 @@
     },
     "BATCH_PIPELINE_PROTECTED_SHARE_ENABLED": {
       "owner": "Pipeline / SCA-1894",
-      "review_by": "2026-11-23",
-      "registry": "config/feature-flags.yaml"
+      "review_by": "2026-11-30",
+      "registry": "config/feature-flags.yaml",
+      "reason": "SCA-3850: align with the approved registry extension; qualify synthetic load and obtain lead approval before the first CPU scheduler step"
     },
     "BATCH_PIPELINE_PROTECTED_SHARE_PERCENT": {
       "owner": "Pipeline / SCA-1894",
-      "review_by": "2026-11-23"
+      "review_by": "2026-11-30",
+      "reason": "SCA-3850: review the share limit with the protected-share scheduler canary decision"
     },
     "BATCH_PIPELINE_PROVIDER_BACKLOG_RELEASE_ENABLED": {
       "owner": "provider-stt drain",
@@ -437,7 +457,8 @@
     },
     "BATCH_PIPELINE_UPLOAD_COALESCING_ENABLED": {
       "owner": "margin / SCA-1800",
-      "review_by": "2026-11-26"
+      "review_by": "2026-12-03",
+      "reason": "SCA-1800: retain the rollback switch for upload coalescing on backend-integration and backend-sync. Margin to review Release's effective-setting and safe-drain evidence and identify a permanent budget slot by 2026-12-03."
     },
     "BATCH_PIPELINE_VAD_SEGMENTATION_REUSE_ENABLED": {
       "owner": "planscost / gpu efficiency sprint",
@@ -683,8 +704,8 @@
     },
     "EPISODE_EMPTY_MEMBER_CLEANUP_ENABLED": {
       "owner": "quality-lead",
-      "review_by": "2026-11-22",
-      "reason": "2026-11-16 renewed: default-off opt-in detach (gated off in d4dcd04); quality lead decides keep-and-ramp or delete by 2026-11-22",
+      "review_by": "2026-11-30",
+      "reason": "SCA-3850: decision overdue, tracked on this issue",
       "registry": "config/feature-flags.yaml"
     },
     "EPISODE_HARD_CAP_ACROSS_CONVERSATIONS": {
@@ -876,7 +897,8 @@
     },
     "PRERECORDED_SONIOX_FAILOVER_ENABLED": {
       "owner": "refactor-lead",
-      "review_by": "2026-11-24"
+      "review_by": "2026-12-01",
+      "reason": "SCA-3850: give refactor-lead one week to decide the failover gate disposition"
     },
     "PROCESSING_ATTENTION_NON_RETRYABLE_EXPIRY_ENABLED": {
       "owner": "refactor-lead",
@@ -1048,7 +1070,8 @@
     },
     "STT_IDLE_REOPEN_COST_RESELECT_ENABLED": {
       "owner": "idlereopen / two-lane lead",
-      "review_by": "2026-11-26"
+      "review_by": "2026-12-03",
+      "reason": "SCA-3850: retain the default-off operations switch recorded in the registry after the first-text regression. Review the longer-term budget disposition with the two-lane lead by 2026-12-03."
     },
     "STT_NON_EN_MULTI_PREFER_HINTABLE_PERCENT": {
       "seeded": "2026-10-25"
@@ -1125,13 +1148,13 @@
     },
     "SYNC_BACKFILL_WORKER_API_URL": {
       "owner": "infracost / syncsplit",
-      "review_by": "2026-11-23",
-      "reason": "2026-11-10 renewed by flagrulings: review_by expiry failed every backend unit shard; owner to confirm keep or delete"
+      "review_by": "2026-11-30",
+      "reason": "SCA-3850: worker service URL; review a permanent budget slot with syncsplit"
     },
     "SYNC_BACKFILL_WORKER_AUDIENCE": {
       "owner": "infracost / syncsplit",
-      "review_by": "2026-11-23",
-      "reason": "2026-11-10 renewed by flagrulings: review_by expiry failed every backend unit shard; owner to confirm keep or delete"
+      "review_by": "2026-11-30",
+      "reason": "SCA-3850: worker service token audience; review a permanent budget slot with syncsplit"
     },
     "SYNC_CAPTURE_END_SILENCE_SECONDS": {
       "owner": "lifecycle-owner (SCA-1766)",
@@ -1254,8 +1277,8 @@
     },
     "LISTEN_BATCH_RECONNECT_ENABLED": {
       "owner": "capture-quality / Release",
-      "review_by": "2026-11-23",
-      "reason": "Aligned 2026-11-21 to the registry extension (until 2026-11-23, David's 2026-11-17 bulk ruling: extend); ramp not expanded by 2026-11-20 and the lapsed date turned main's unit tests red"
+      "review_by": "2026-11-30",
+      "reason": "SCA-3682: Release decision by November 27 after listen drains; target gate removal by November 30 or relabel the registry entry if the go-ahead slips"
     },
     "LISTEN_BATCH_RECONNECT_GRACE_SECONDS": {
       "owner": "capture-quality / Release",

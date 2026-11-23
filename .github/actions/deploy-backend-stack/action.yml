@@ -1547,8 +1547,10 @@ runs:
     - name: Accept no-traffic Cloud Run candidate
       id: verify-cloud-run-candidate
       shell: bash
+      # A legitimate receiver URL change fails closed until this pin changes in a reviewed PR.
       run: |
         python3 "$DEPLOY_CONTROL_SCRIPTS/verify_backend_release_vector.py" \
+          ${{ inputs.runtime_env == 'prod' && inputs.integration_only != 'true' && (inputs.cloud_run_service == 'all' || inputs.cloud_run_service == 'backend-sync-backfill') && '--backfill-binding-sha256 3a180b6e241438dbc43a7292b07de3866e95a35af1bb08210be1d05e80017ceb' || '' }} \
           ${{ inputs.integration_only == 'true' && '--integration-only' || '' }} \
           --candidate \
           --cloud-run-only \
@@ -1732,10 +1734,32 @@ runs:
         ${{ inputs.integration_only != 'true' && (success()) }}
       id: shift-cloud-run-traffic
       shell: bash
+      env:
+        PROMOTION_PROJECT: ${{ inputs.project_id }}
+        PROMOTION_REGION: ${{ inputs.region }}
+        PROMOTION_SOURCE: ${{ inputs.admitted_sha }}
+        PROMOTION_CONTROL: ${{ github.workflow_sha }}
+        PROMOTION_CANDIDATE: ${{ steps.capture-backend-revision.outputs.revision }}
+        PROMOTION_INVERSE: ${{ inputs.rollback_revision }}
       run: |
         set -euo pipefail
         if [[ " $SELECTED_CLOUD_RUN_SERVICES " == *" backend "* ]]; then
-          gcloud run services update-traffic backend --project=${{ inputs.project_id }} --region=${{ inputs.region }} --to-revisions=${{ steps.capture-backend-revision.outputs.revision }}=100 --quiet
+          if [[ "${{ inputs.deploy_profile }}" == manual && "${{ inputs.environment }}" == prod ]]; then
+            promotion_args=(--scope "${{ inputs.cloud_run_service }}")
+            if [[ "${{ inputs.cloud_run_service }}" == backend ]]; then
+              test "$SELECTED_CLOUD_RUN_SERVICES" = backend
+              promotion_args+=(--inverse "$PROMOTION_INVERSE")
+            fi
+            python3 "$DEPLOY_CONTROL_SCRIPTS/promote_selected_backend.py" \
+              "${promotion_args[@]}" \
+              --project "$PROMOTION_PROJECT" --region "$PROMOTION_REGION" \
+              --candidate "$PROMOTION_CANDIDATE" \
+              --source "$PROMOTION_SOURCE" --control "$PROMOTION_CONTROL" \
+              --snapshot artifacts/backend-cloud-run-pre-promotion-traffic-snapshot.json \
+              --receipt artifacts/backend-promotion-stages.json
+          else
+            gcloud run services update-traffic backend --project=${{ inputs.project_id }} --region=${{ inputs.region }} --to-revisions=${{ steps.capture-backend-revision.outputs.revision }}=100 --quiet
+          fi
         fi
         if [[ " $SELECTED_CLOUD_RUN_SERVICES " == *" backend-sync "* ]]; then
           gcloud run services update-traffic backend-sync --project=${{ inputs.project_id }} --region=${{ inputs.region }} --to-revisions=${{ steps.capture-backend-sync-revision.outputs.revision }}=100 --quiet
@@ -1791,12 +1815,8 @@ runs:
           --secret-project "$PROBE_SECRET_PROJECT" \
           --firebase-project "$FIREBASE_AUTH_PROJECT_ID" \
           --token-output "$token_file"
-        reservation_timeouts=()
-        if [[ "$SMOKE_CLOUD_RUN_SERVICE" == backend ]]; then
-          reservation_timeouts=(--connect-timeout 5 --max-time 10)
-        fi
         reservation_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-          "${reservation_timeouts[@]}" \
+          --connect-timeout 5 --max-time 10 \
           --request POST https://api.omi.me/v2/desktop/beta/candidates/reserve \
           --header 'Content-Type: application/json' --data '{"tag":"v0.0.0+1-macos"}')"
         # A schema-valid inert tag reaches the authorization wall without reserving a real candidate.
@@ -1871,22 +1891,8 @@ runs:
             token_file.unlink(missing_ok=True)
         PY
 
-    - name: Smoke What Matters Now datastore query
-      id: smoke-what-matters-now-datastore-query
-      if: >-
-        ${{ inputs.integration_only != 'true' && (inputs.deploy_profile == 'manual' && inputs.environment == 'development') }}
-      shell: bash
-      env:
-        PROJECT_ID: ${{ inputs.project_id }}
-      run: |
-        set -euo pipefail
-        ADMIN_KEY="$(gcloud secrets versions access latest --secret=ADMIN_KEY --project="$PROJECT_ID")"
-        export ADMIN_KEY
-        trap 'unset ADMIN_KEY' EXIT
-        # api.omi.dev has never resolved (NXDOMAIN), so this smoke could not reach
-        # anything; api.omiapi.com is development's real public API host, matching
-        # the rest of the dev domain family (parakeet/nllb/pusher.omiapi.com).
-        python3 "$DEPLOY_CONTROL_SCRIPTS/smoke_what_matters_now.py" --base-url https://api.omiapi.com
+    # SCA-3681: The manual dev datastore smoke is suspended pending a verified
+    # dev endpoint. api.omiapi.com forwards Beta clients to production.
 
     - name: Restore Cloud Run traffic snapshot after failed promotion
       if: >-
@@ -1906,7 +1912,7 @@ runs:
 
     - name: Restore Cloud Run traffic snapshot after failed promotion
       if: >-
-        ${{ inputs.integration_only != 'true' && (inputs.deploy_profile == 'manual' && (failure() || cancelled()) && steps.cloud-run-traffic-snapshot.outcome == 'success' && (steps.shift-cloud-run-traffic.outcome == 'failure' || steps.shift-cloud-run-traffic.outcome == 'cancelled' || steps.verify-serving-release-vector.outcome == 'failure' || steps.verify-serving-release-vector.outcome == 'cancelled' || steps.smoke-promoted-production-serving-api.outcome == 'failure' || steps.smoke-promoted-production-serving-api.outcome == 'cancelled' || steps.smoke-what-matters-now-datastore-query.outcome == 'failure' || steps.smoke-what-matters-now-datastore-query.outcome == 'cancelled')) }}
+        ${{ inputs.integration_only != 'true' && (inputs.deploy_profile == 'manual' && (failure() || cancelled()) && steps.cloud-run-traffic-snapshot.outcome == 'success' && (steps.shift-cloud-run-traffic.outcome == 'failure' || steps.shift-cloud-run-traffic.outcome == 'cancelled' || steps.verify-serving-release-vector.outcome == 'failure' || steps.verify-serving-release-vector.outcome == 'cancelled' || steps.smoke-promoted-production-serving-api.outcome == 'failure' || steps.smoke-promoted-production-serving-api.outcome == 'cancelled')) }}
       shell: bash
       run: |
         set -euo pipefail
@@ -2071,6 +2077,7 @@ runs:
           ${{ inputs.deploy_profile == 'auto-dev' && 'artifacts/dev-backend-candidate-status.json' || '' }}
           ${{ inputs.deploy_profile == 'auto-dev' && 'artifacts/dev-backend-cloud-run-traffic-restore.json' || 'artifacts/backend-cloud-run-traffic-restore.json' }}
           artifacts/integration-canary-receipt.json
+          artifacts/backend-promotion-stages.json
         if-no-files-found: warn
 
     - name: Show Output
