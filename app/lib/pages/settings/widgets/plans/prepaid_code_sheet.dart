@@ -1,5 +1,5 @@
 // "Have a code?": redeem a fully prepaid Omi Pro code with no card and no checkout.
-// Shown only while the server switch is on (UsageProvider.canRedeemPrepaidCode). No price or payment here.
+// Shown while the server offers it: its switch, or any Google Play build (UsageProvider.canRedeemPrepaidCode). No price or payment here.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -80,8 +80,8 @@ Future<bool> showPrepaidCodeSheet(
       onRedeemed: () {
         redeemed = true;
         // The Stripe webhook grants Pro a moment after the subscription exists: read now and once more.
-        unawaited(usage.fetchSubscription());
-        Future.delayed(const Duration(seconds: 4), () => unawaited(usage.fetchSubscription()));
+        unawaited(usage.fetchSubscription(fresh: true));
+        Future.delayed(const Duration(seconds: 4), () => unawaited(usage.fetchSubscription(fresh: true)));
       },
       onDiscountCode: onDiscountCode == null
           ? null
